@@ -1,0 +1,87 @@
+<?php
+/**
+ * Admin page for Divi to Gutenberg Converter.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+class D2G_Admin {
+
+    private static $instance = null;
+
+    public static function instance() {
+        if ( null === self::$instance ) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    /**
+     * Render the admin tools page.
+     */
+    public function render_page() {
+        ?>
+        <div class="wrap d2g-wrap">
+            <h1><?php esc_html_e( 'Divi to Gutenberg Converter', 'divi2gutenberg' ); ?></h1>
+            <p class="d2g-description">
+                <?php esc_html_e( 'Scan your site for pages built with the Divi Builder and convert them to native Gutenberg blocks.', 'divi2gutenberg' ); ?>
+            </p>
+
+            <div class="d2g-toolbar">
+                <button type="button" id="d2g-scan" class="button button-primary">
+                    <?php esc_html_e( 'Scan for Divi Pages', 'divi2gutenberg' ); ?>
+                </button>
+                <label class="d2g-backup-label">
+                    <input type="checkbox" id="d2g-backup" checked />
+                    <?php esc_html_e( 'Create backup before converting', 'divi2gutenberg' ); ?>
+                </label>
+            </div>
+
+            <div id="d2g-status" class="d2g-status" style="display:none;"></div>
+
+            <table id="d2g-results" class="widefat d2g-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th class="check-column"><input type="checkbox" id="d2g-select-all" /></th>
+                        <th><?php esc_html_e( 'Title', 'divi2gutenberg' ); ?></th>
+                        <th><?php esc_html_e( 'Type', 'divi2gutenberg' ); ?></th>
+                        <th><?php esc_html_e( 'Status', 'divi2gutenberg' ); ?></th>
+                        <th><?php esc_html_e( 'Actions', 'divi2gutenberg' ); ?></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <div id="d2g-batch-bar" class="d2g-batch-bar" style="display:none;">
+                <button type="button" id="d2g-convert-selected" class="button button-primary">
+                    <?php esc_html_e( 'Convert Selected', 'divi2gutenberg' ); ?>
+                </button>
+                <span id="d2g-batch-progress"></span>
+            </div>
+
+            <div id="d2g-preview-modal" class="d2g-modal" style="display:none;">
+                <div class="d2g-modal-content">
+                    <div class="d2g-modal-header">
+                        <h2><?php esc_html_e( 'Conversion Preview', 'divi2gutenberg' ); ?></h2>
+                        <button type="button" class="d2g-modal-close">&times;</button>
+                    </div>
+                    <div class="d2g-modal-body">
+                        <div class="d2g-preview-panes">
+                            <div class="d2g-pane">
+                                <h3><?php esc_html_e( 'Original (Divi)', 'divi2gutenberg' ); ?></h3>
+                                <pre id="d2g-preview-original"></pre>
+                            </div>
+                            <div class="d2g-pane">
+                                <h3><?php esc_html_e( 'Converted (Gutenberg)', 'divi2gutenberg' ); ?></h3>
+                                <pre id="d2g-preview-converted"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+}
