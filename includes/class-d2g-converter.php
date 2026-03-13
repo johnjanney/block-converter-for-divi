@@ -332,6 +332,12 @@ class D2G_Converter {
             return '';
         }
 
+        // If the content contains iframes (YouTube/Vimeo embeds, etc.) or embed/object/video tags,
+        // extract them first and convert separately so they aren't lost by DOMDocument.
+        if ( preg_match( '#<(?:iframe|embed|object|video)[\s>]#i', $content ) ) {
+            return $this->convert_text_with_embeds( $content, $attrs, $style, $align );
+        }
+
         // If the content already contains block-level HTML (h1-h6, ul, ol, table, etc.),
         // render as an HTML block to preserve formatting.
         if ( preg_match( '#<(?:h[1-6]|ul|ol|table|blockquote|pre|dl|figure)[>\s]#i', $content ) ) {
@@ -358,10 +364,101 @@ class D2G_Converter {
     }
 
     /**
+     * Convert text content that contains embedded media (iframes, video, embeds).
+     * Splits around embed tags so text becomes paragraphs and embeds become embed/html blocks.
+     */
+    private function convert_text_with_embeds( string $content, array $attrs, string $style, string $align ): string {
+        $output = '';
+
+        // Split content around iframe/embed/object/video tags, keeping the tags.
+        $parts = preg_split(
+            '#(<(?:iframe|embed|object|video)\b[^>]*(?:/>|>(?:.*?)</(?:iframe|embed|object|video)>))#is',
+            $content,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY
+        );
+
+        foreach ( $parts as $part ) {
+            $part = trim( $part );
+            if ( '' === $part ) {
+                continue;
+            }
+
+            // Check if this part is an embed tag.
+            if ( preg_match( '#^<(iframe|embed|object|video)\b#i', $part, $m ) ) {
+                $output .= $this->convert_embed_tag( $part );
+            } else {
+                // Regular HTML/text — use the normal text conversion path.
+                $stripped = trim( strip_tags( $part ) );
+                if ( '' === $stripped && '' === trim( $part ) ) {
+                    continue;
+                }
+
+                if ( preg_match( '#<(?:h[1-6]|ul|ol|table|blockquote|pre|dl|figure)[>\s]#i', $part ) ) {
+                    if ( $style ) {
+                        $part = '<div style="' . esc_attr( $style ) . '">' . $part . '</div>';
+                    }
+                    $output .= $this->convert_rich_html( $part, $attrs );
+                } else {
+                    $part = preg_replace( '#^<p[^>]*>(.*)</p>$#s', '$1', $part );
+                    $cls = $align ? ' class="' . $align . '"' : '';
+                    $st  = $style ? ' style="' . esc_attr( $style ) . '"' : '';
+                    $output .= $this->gutenberg_block( 'paragraph', [], '<p' . $cls . $st . '>' . $part . '</p>' );
+                }
+            }
+        }
+
+        return $output;
+    }
+
+    /**
+     * Convert an iframe/embed/object/video HTML tag into the appropriate Gutenberg block.
+     */
+    private function convert_embed_tag( string $tag_html ): string {
+        // Try to extract src from iframe.
+        if ( preg_match( '#<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $tag_html, $m ) ) {
+            $src = $m[1];
+
+            // YouTube embed.
+            if ( preg_match( '#(?:youtube\.com/embed/|youtube-nocookie\.com/embed/)([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
+                $watch_url = 'https://www.youtube.com/watch?v=' . $ym[1];
+                $html = '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $watch_url ) . "\n" . '</div></figure>';
+                return $this->gutenberg_block( 'embed', [ 'url' => $watch_url, 'type' => 'video', 'providerNameSlug' => 'youtube' ], $html );
+            }
+
+            // Vimeo embed.
+            if ( preg_match( '#vimeo\.com/(?:video/)?(\d+)#', $src, $vm ) ) {
+                $vimeo_url = 'https://vimeo.com/' . $vm[1];
+                $html = '<figure class="wp-block-embed is-type-video is-provider-vimeo wp-block-embed-vimeo"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $vimeo_url ) . "\n" . '</div></figure>';
+                return $this->gutenberg_block( 'embed', [ 'url' => $vimeo_url, 'type' => 'video', 'providerNameSlug' => 'vimeo' ], $html );
+            }
+
+            // Other iframe embeds — preserve as HTML block.
+            return $this->gutenberg_block( 'html', [], $tag_html );
+        }
+
+        // Video tag with src.
+        if ( preg_match( '#<video\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $tag_html, $m ) ) {
+            $src = $m[1];
+            $html = '<figure class="wp-block-video"><video controls src="' . esc_url( $src ) . '"></video></figure>';
+            return $this->gutenberg_block( 'video', [ 'src' => $src ], $html );
+        }
+
+        // Fallback: preserve as custom HTML block.
+        return $this->gutenberg_block( 'html', [], $tag_html );
+    }
+
+    /**
      * Convert rich HTML content (headings, lists, etc.) into appropriate Gutenberg blocks.
      */
     private function convert_rich_html( string $html, array $attrs ): string {
         $output = '';
+
+        // If the HTML contains iframes/embeds, extract and convert them first
+        // before DOM parsing, which can corrupt iframe tags.
+        if ( preg_match( '#<(?:iframe|embed|object)\b#i', $html ) ) {
+            return $this->convert_text_with_embeds( $html, $attrs, D2G_Style_Mapper::build_inline_style( $attrs ), D2G_Style_Mapper::text_align_class( $attrs ) );
+        }
 
         // Split HTML by block-level elements and convert each.
         $dom = new DOMDocument();
@@ -550,14 +647,41 @@ class D2G_Converter {
         $attrs = $node['attrs'];
         $src   = $attrs['src'] ?? '';
 
+        // Fallback to alternative source attributes.
+        if ( '' === $src ) {
+            $src = $attrs['src_webm'] ?? '';
+        }
+
+        // Check if the inner content contains an iframe embed (common in Divi).
+        $content = $this->get_inner_content( $node );
+        if ( '' === $src && preg_match( '#<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $content, $m ) ) {
+            return $this->convert_embed_tag( $content );
+        }
+
+        if ( '' === $src ) {
+            // Last resort: check if content itself is a URL.
+            $content = trim( $content );
+            if ( preg_match( '#^https?://#', $content ) ) {
+                $src = $content;
+            }
+        }
+
         if ( '' === $src ) {
             return '';
         }
 
-        // Check if it's a YouTube/Vimeo embed URL.
+        // Normalize YouTube embed URLs to watch URLs.
+        if ( preg_match( '#youtube\.com/embed/([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
+            $src = 'https://www.youtube.com/watch?v=' . $ym[1];
+        } elseif ( preg_match( '#youtube-nocookie\.com/embed/([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
+            $src = 'https://www.youtube.com/watch?v=' . $ym[1];
+        }
+
+        // Check if it's a YouTube/Vimeo URL.
         if ( preg_match( '#(?:youtube\.com|youtu\.be|vimeo\.com)#', $src ) ) {
-            $html = '<figure class="wp-block-embed is-type-video"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $src ) . "\n" . '</div></figure>';
             $provider = strpos( $src, 'vimeo' ) !== false ? 'vimeo' : 'youtube';
+            $provider_class = 'is-provider-' . $provider . ' wp-block-embed-' . $provider;
+            $html = '<figure class="wp-block-embed is-type-video ' . $provider_class . '"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $src ) . "\n" . '</div></figure>';
             return $this->gutenberg_block( 'embed', [ 'url' => $src, 'type' => 'video', 'providerNameSlug' => $provider ], $html );
         }
 
@@ -761,8 +885,8 @@ class D2G_Converter {
         // Build individual wp:image inner blocks for each gallery image.
         $images_markup = '';
         foreach ( $ids as $id ) {
-            $url = function_exists( 'wp_get_attachment_url' ) ? wp_get_attachment_url( $id ) : false;
-            $alt = function_exists( 'get_post_meta' ) ? get_post_meta( $id, '_wp_attachment_image_alt', true ) : '';
+            $url     = $this->resolve_attachment_url( $id );
+            $alt     = function_exists( 'get_post_meta' ) ? (string) get_post_meta( $id, '_wp_attachment_image_alt', true ) : '';
             $caption = ( $show_cap && function_exists( 'wp_get_attachment_caption' ) ) ? wp_get_attachment_caption( $id ) : '';
 
             $img_attrs = [
@@ -774,8 +898,9 @@ class D2G_Converter {
             if ( $url ) {
                 $img_tag = '<img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" class="wp-image-' . $id . '"/>';
             } else {
-                // Attachment not found in media library — leave a reference so the user can fix it.
-                $img_tag = '<!-- attachment ID ' . $id . ' not found --><img src="" alt="" class="wp-image-' . $id . '"/>';
+                // Attachment not found — skip this image entirely rather than
+                // producing a broken <img src=""> that shows nothing.
+                continue;
             }
 
             $fig_html = '<figure class="wp-block-image size-large">' . $img_tag;
@@ -1625,5 +1750,41 @@ class D2G_Converter {
             return 0;
         }
         return (int) attachment_url_to_postid( $url );
+    }
+
+    /**
+     * Resolve an attachment ID to its URL using multiple strategies.
+     *
+     * 1. wp_get_attachment_url() — standard WordPress lookup.
+     * 2. Attachment metadata _wp_attached_file — constructs URL from uploads dir.
+     * 3. GUID field — last resort, stored in wp_posts.guid.
+     */
+    private function resolve_attachment_url( int $id ): string {
+        // Strategy 1: standard function.
+        if ( function_exists( 'wp_get_attachment_url' ) ) {
+            $url = wp_get_attachment_url( $id );
+            if ( $url ) {
+                return $url;
+            }
+        }
+
+        // Strategy 2: reconstruct from _wp_attached_file meta + upload dir.
+        if ( function_exists( 'get_post_meta' ) && function_exists( 'wp_get_upload_dir' ) ) {
+            $file = get_post_meta( $id, '_wp_attached_file', true );
+            if ( $file ) {
+                $uploads = wp_get_upload_dir();
+                return $uploads['baseurl'] . '/' . $file;
+            }
+        }
+
+        // Strategy 3: use the post GUID (often contains the original URL).
+        if ( function_exists( 'get_post' ) ) {
+            $post = get_post( $id );
+            if ( $post && ! empty( $post->guid ) ) {
+                return $post->guid;
+            }
+        }
+
+        return '';
     }
 }
