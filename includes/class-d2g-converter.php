@@ -733,28 +733,62 @@ class D2G_Converter {
     private function convert_gallery( array $node ): string {
         $attrs     = $node['attrs'];
         $ids_str   = $attrs['gallery_ids'] ?? '';
-        $columns   = (int) ( $attrs['posts_number'] ?? $attrs['gallery_columns'] ?? 3 );
+        $columns   = (int) ( $attrs['gallery_columns'] ?? $attrs['columns_number'] ?? 3 );
         $show_cap  = ( $attrs['show_title_and_caption'] ?? '' ) !== 'off';
 
         if ( '' === $ids_str ) {
             return $this->gutenberg_block( 'paragraph', [], '<p>[Gallery — no images specified]</p>' );
         }
 
-        $ids = array_map( 'intval', explode( ',', $ids_str ) );
-        $block_attrs = [ 'columns' => $columns ];
+        // Map Divi gallery_link to Gutenberg linkTo / linkDestination.
+        $link_map = [
+            'off'        => 'none',
+            'lightbox'   => 'media',
+            'file'       => 'media',
+            'attachment' => 'attachment',
+        ];
+        $divi_link   = $attrs['gallery_link'] ?? 'lightbox';
+        $link_to     = $link_map[ $divi_link ] ?? 'none';
 
-        $images_html = '';
+        $ids = array_map( 'intval', explode( ',', $ids_str ) );
+        $columns = max( 1, min( $columns, 8 ) );
+
+        $gallery_attrs = [
+            'columns' => $columns,
+            'linkTo'  => $link_to,
+        ];
+
+        // Build individual wp:image inner blocks for each gallery image.
+        $images_markup = '';
         foreach ( $ids as $id ) {
-            $url = wp_get_attachment_url( $id );
-            if ( ! $url ) {
-                $url = '';
+            $url = function_exists( 'wp_get_attachment_url' ) ? wp_get_attachment_url( $id ) : false;
+            $alt = function_exists( 'get_post_meta' ) ? get_post_meta( $id, '_wp_attachment_image_alt', true ) : '';
+            $caption = ( $show_cap && function_exists( 'wp_get_attachment_caption' ) ) ? wp_get_attachment_caption( $id ) : '';
+
+            $img_attrs = [
+                'id'              => $id,
+                'sizeSlug'        => 'large',
+                'linkDestination' => $link_to,
+            ];
+
+            if ( $url ) {
+                $img_tag = '<img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" class="wp-image-' . $id . '"/>';
+            } else {
+                // Attachment not found in media library — leave a reference so the user can fix it.
+                $img_tag = '<!-- attachment ID ' . $id . ' not found --><img src="" alt="" class="wp-image-' . $id . '"/>';
             }
-            $alt = get_post_meta( $id, '_wp_attachment_image_alt', true );
-            $images_html .= '<figure class="wp-block-image"><img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" class="wp-image-' . $id . '"/></figure>' . "\n";
+
+            $fig_html = '<figure class="wp-block-image size-large">' . $img_tag;
+            if ( $caption ) {
+                $fig_html .= '<figcaption class="wp-element-caption">' . esc_html( $caption ) . '</figcaption>';
+            }
+            $fig_html .= '</figure>';
+
+            $images_markup .= $this->gutenberg_block( 'image', $img_attrs, $fig_html );
         }
 
-        $html = '<figure class="wp-block-gallery has-nested-images columns-' . $columns . ' is-cropped">' . "\n" . $images_html . '</figure>';
-        return $this->gutenberg_block( 'gallery', $block_attrs, $html );
+        $gallery_html = '<figure class="wp-block-gallery has-nested-images columns-' . $columns . ' is-cropped">' . "\n" . $images_markup . '</figure>';
+        return $this->gutenberg_block( 'gallery', $gallery_attrs, $gallery_html, true );
     }
 
     // =========================================================================
