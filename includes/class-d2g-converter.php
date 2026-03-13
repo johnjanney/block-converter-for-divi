@@ -265,7 +265,10 @@ class D2G_Converter {
 
         $inner = $this->render_nodes( $node['children'] );
 
-        if ( $col_count >= 2 ) {
+        // A core/column block must be nested inside core/columns.
+        // Divi rows commonly have a single column (type 4_4), so we still
+        // need a columns wrapper to avoid Gutenberg block validation errors.
+        if ( $col_count >= 1 ) {
             $columns_html = '<div class="wp-block-columns">' . "\n" . $inner . "\n" . '</div>';
             return $this->gutenberg_block( 'columns', [], $columns_html, true );
         }
