@@ -230,28 +230,26 @@ class D2G_Converter {
     private function convert_section( array $node ): string {
         $attrs = $node['attrs'];
         $is_fullwidth = ( $attrs['fullwidth'] ?? '' ) === 'on';
-        $is_specialty = ( $attrs['specialty'] ?? '' ) === 'on';
 
         $inner = $this->render_nodes( $node['children'] );
-        $style = D2G_Style_Mapper::wrapper_style( $attrs );
-
-        // Use a Group block to wrap sections.
-        $block_attrs = [];
-        if ( ! empty( $attrs['background_color'] ) ) {
-            $block_attrs['backgroundColor'] = $attrs['background_color'];
-        }
 
         $layout = $is_fullwidth ? 'full' : 'constrained';
-        $block_attrs['layout'] = [ 'type' => $layout ];
+        $block_attrs = [ 'layout' => [ 'type' => $layout ] ];
 
-        $json = wp_json_encode( $block_attrs );
+        $classes = [ 'wp-block-group' ];
+        $style_parts = [];
 
-        if ( $style || ! empty( $attrs['background_color'] ) || ! empty( $attrs['background_image'] ) ) {
-            $inner_html = '<div class="wp-block-group"' . $style . '>' . "\n" . $inner . "\n" . '</div>';
-            return $this->gutenberg_block( 'group', $block_attrs, $inner_html, true );
+        if ( ! empty( $attrs['background_color'] ) ) {
+            $block_attrs['style'] = [ 'color' => [ 'background' => $attrs['background_color'] ] ];
+            $classes[] = 'has-background';
+            $style_parts[] = 'background-color:' . $attrs['background_color'];
         }
 
-        return $this->gutenberg_block( 'group', $block_attrs, $inner, true );
+        $class_str = implode( ' ', $classes );
+        $style_str = $style_parts ? ' style="' . esc_attr( implode( ';', $style_parts ) ) . '"' : '';
+
+        $inner_html = '<div class="' . $class_str . '"' . $style_str . '>' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', $block_attrs, $inner_html, true );
     }
 
     private function convert_row( array $node ): string {
@@ -266,17 +264,10 @@ class D2G_Converter {
         }
 
         $inner = $this->render_nodes( $node['children'] );
-        $style = D2G_Style_Mapper::wrapper_style( $attrs );
 
         if ( $col_count >= 2 ) {
-            // Use wp:columns block.
-            $columns_html = '<div class="wp-block-columns"' . $style . '>' . "\n" . $inner . "\n" . '</div>';
+            $columns_html = '<div class="wp-block-columns">' . "\n" . $inner . "\n" . '</div>';
             return $this->gutenberg_block( 'columns', [], $columns_html, true );
-        }
-
-        if ( $style ) {
-            $html = '<div class="wp-block-group"' . $style . '>' . "\n" . $inner . "\n" . '</div>';
-            return $this->gutenberg_block( 'group', [], $html, true );
         }
 
         return $inner;
@@ -285,18 +276,18 @@ class D2G_Converter {
     private function convert_column( array $node ): string {
         $attrs = $node['attrs'];
         $inner = $this->render_nodes( $node['children'] );
-        $style = D2G_Style_Mapper::wrapper_style( $attrs );
 
         // Map Divi column type to width.
         $type  = $attrs['type'] ?? '';
         $width = $this->column_type_to_width( $type );
         $block_attrs = [];
+        $style_str = '';
         if ( $width ) {
             $block_attrs['width'] = $width;
+            $style_str = ' style="flex-basis:' . esc_attr( $width ) . '"';
         }
 
-        // Check if parent is a multi-column row (rendered as wp:columns).
-        $col_html = '<div class="wp-block-column"' . $style . '>' . "\n" . $inner . "\n" . '</div>';
+        $col_html = '<div class="wp-block-column"' . $style_str . '>' . "\n" . $inner . "\n" . '</div>';
         return $this->gutenberg_block( 'column', $block_attrs, $col_html, true );
     }
 
@@ -325,29 +316,30 @@ class D2G_Converter {
     private function convert_text( array $node ): string {
         $attrs   = $node['attrs'];
         $content = $this->get_inner_content( $node );
-        $style   = D2G_Style_Mapper::build_inline_style( $attrs );
         $align   = D2G_Style_Mapper::text_align_class( $attrs );
 
         if ( '' === trim( strip_tags( $content ) ) && '' === trim( $content ) ) {
             return '';
         }
 
+        // If the content contains iframes (YouTube/Vimeo embeds, etc.) or embed/object/video tags,
+        // extract them first and convert separately so they aren't lost by DOMDocument.
+        if ( preg_match( '#<(?:iframe|embed|object|video)[\s>]#i', $content ) ) {
+            return $this->convert_text_with_embeds( $content, $attrs, $align );
+        }
+
         // If the content already contains block-level HTML (h1-h6, ul, ol, table, etc.),
         // render as an HTML block to preserve formatting.
         if ( preg_match( '#<(?:h[1-6]|ul|ol|table|blockquote|pre|dl|figure)[>\s]#i', $content ) ) {
-            if ( $style ) {
-                $content = '<div style="' . esc_attr( $style ) . '">' . $content . '</div>';
-            }
             return $this->convert_rich_html( $content, $attrs );
         }
 
         // Simple paragraph content.
         $classes = $align ? ' class="' . $align . '"' : '';
-        $st      = $style ? ' style="' . esc_attr( $style ) . '"' : '';
 
         // Strip wrapping <p> tags if already present, then re-wrap.
         $content = preg_replace( '#^<p[^>]*>(.*)</p>$#s', '$1', trim( $content ) );
-        $html    = '<p' . $classes . $st . '>' . $content . '</p>';
+        $html    = '<p' . $classes . '>' . $content . '</p>';
 
         $block_attrs = [];
         if ( $align ) {
@@ -358,10 +350,97 @@ class D2G_Converter {
     }
 
     /**
+     * Convert text content that contains embedded media (iframes, video, embeds).
+     * Splits around embed tags so text becomes paragraphs and embeds become embed/html blocks.
+     */
+    private function convert_text_with_embeds( string $content, array $attrs, string $align = '' ): string {
+        $output = '';
+
+        // Split content around iframe/embed/object/video tags, keeping the tags.
+        $parts = preg_split(
+            '#(<(?:iframe|embed|object|video)\b[^>]*(?:/>|>(?:.*?)</(?:iframe|embed|object|video)>))#is',
+            $content,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY
+        );
+
+        foreach ( $parts as $part ) {
+            $part = trim( $part );
+            if ( '' === $part ) {
+                continue;
+            }
+
+            // Check if this part is an embed tag.
+            if ( preg_match( '#^<(iframe|embed|object|video)\b#i', $part, $m ) ) {
+                $output .= $this->convert_embed_tag( $part );
+            } else {
+                // Regular HTML/text — use the normal text conversion path.
+                $stripped = trim( strip_tags( $part ) );
+                if ( '' === $stripped && '' === trim( $part ) ) {
+                    continue;
+                }
+
+                if ( preg_match( '#<(?:h[1-6]|ul|ol|table|blockquote|pre|dl|figure)[>\s]#i', $part ) ) {
+                    $output .= $this->convert_rich_html( $part, $attrs );
+                } else {
+                    $part = preg_replace( '#^<p[^>]*>(.*)</p>$#s', '$1', $part );
+                    $cls = $align ? ' class="' . $align . '"' : '';
+                    $output .= $this->gutenberg_block( 'paragraph', [], '<p' . $cls . '>' . $part . '</p>' );
+                }
+            }
+        }
+
+        return $output;
+    }
+
+    /**
+     * Convert an iframe/embed/object/video HTML tag into the appropriate Gutenberg block.
+     */
+    private function convert_embed_tag( string $tag_html ): string {
+        // Try to extract src from iframe.
+        if ( preg_match( '#<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $tag_html, $m ) ) {
+            $src = $m[1];
+
+            // YouTube embed.
+            if ( preg_match( '#(?:youtube\.com/embed/|youtube-nocookie\.com/embed/)([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
+                $watch_url = 'https://www.youtube.com/watch?v=' . $ym[1];
+                $html = '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $watch_url ) . "\n" . '</div></figure>';
+                return $this->gutenberg_block( 'embed', [ 'url' => $watch_url, 'type' => 'video', 'providerNameSlug' => 'youtube' ], $html );
+            }
+
+            // Vimeo embed.
+            if ( preg_match( '#vimeo\.com/(?:video/)?(\d+)#', $src, $vm ) ) {
+                $vimeo_url = 'https://vimeo.com/' . $vm[1];
+                $html = '<figure class="wp-block-embed is-type-video is-provider-vimeo wp-block-embed-vimeo"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $vimeo_url ) . "\n" . '</div></figure>';
+                return $this->gutenberg_block( 'embed', [ 'url' => $vimeo_url, 'type' => 'video', 'providerNameSlug' => 'vimeo' ], $html );
+            }
+
+            // Other iframe embeds — preserve as HTML block.
+            return $this->gutenberg_block( 'html', [], $tag_html );
+        }
+
+        // Video tag with src.
+        if ( preg_match( '#<video\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $tag_html, $m ) ) {
+            $src = $m[1];
+            $html = '<figure class="wp-block-video"><video controls src="' . esc_url( $src ) . '"></video></figure>';
+            return $this->gutenberg_block( 'video', [ 'src' => $src ], $html );
+        }
+
+        // Fallback: preserve as custom HTML block.
+        return $this->gutenberg_block( 'html', [], $tag_html );
+    }
+
+    /**
      * Convert rich HTML content (headings, lists, etc.) into appropriate Gutenberg blocks.
      */
     private function convert_rich_html( string $html, array $attrs ): string {
         $output = '';
+
+        // If the HTML contains iframes/embeds, extract and convert them first
+        // before DOM parsing, which can corrupt iframe tags.
+        if ( preg_match( '#<(?:iframe|embed|object)\b#i', $html ) ) {
+            return $this->convert_text_with_embeds( $html, $attrs, D2G_Style_Mapper::text_align_class( $attrs ) );
+        }
 
         // Split HTML by block-level elements and convert each.
         $dom = new DOMDocument();
@@ -441,13 +520,14 @@ class D2G_Converter {
             return '';
         }
 
-        $alt    = $attrs['alt'] ?? '';
-        $title  = $attrs['title_text'] ?? '';
-        $url    = $attrs['url'] ?? '';
-        $align  = $attrs['align'] ?? '';
-        $width  = $attrs['max_width'] ?? '';
+        $alt   = $attrs['alt'] ?? '';
+        $url   = $attrs['url'] ?? '';
+        $align = $attrs['align'] ?? '';
 
-        $block_attrs = [];
+        $block_attrs = [
+            'sizeSlug'        => 'large',
+            'linkDestination' => $url ? 'custom' : 'none',
+        ];
 
         // Try to resolve WordPress attachment ID.
         $attach_id = $this->url_to_attachment_id( $src );
@@ -461,9 +541,6 @@ class D2G_Converter {
 
         $img  = '<img src="' . esc_url( $src ) . '"';
         $img .= ' alt="' . esc_attr( $alt ) . '"';
-        if ( $title ) {
-            $img .= ' title="' . esc_attr( $title ) . '"';
-        }
         if ( $attach_id ) {
             $img .= ' class="wp-image-' . $attach_id . '"';
         }
@@ -474,20 +551,15 @@ class D2G_Converter {
             $img = '<a href="' . esc_url( $url ) . '"' . $target . '>' . $img . '</a>';
         }
 
-        $figure_class = 'wp-block-image';
+        $figure_class = 'wp-block-image size-large';
         if ( $align ) {
             $figure_class .= ' align' . $align;
-        }
-        $style_attr = '';
-        if ( $width ) {
-            $block_attrs['width'] = $width;
-            $style_attr = ' style="max-width:' . esc_attr( $width ) . '"';
         }
 
         $caption = $this->get_inner_content( $node );
         $caption = trim( strip_tags( $caption, '<a><em><strong><br>' ) );
 
-        $figure  = '<figure class="' . $figure_class . '"' . $style_attr . '>' . $img;
+        $figure = '<figure class="' . $figure_class . '">' . $img;
         if ( $caption ) {
             $figure .= '<figcaption class="wp-element-caption">' . $caption . '</figcaption>';
         }
@@ -509,37 +581,43 @@ class D2G_Converter {
         $bg_color   = $attrs['button_bg_color'] ?? '';
         $text_color = $attrs['button_text_color'] ?? '';
 
-        $style_parts = [];
-        if ( $bg_color ) {
-            $style_parts[] = 'background-color:' . esc_attr( $bg_color );
-        }
-        if ( $text_color ) {
-            $style_parts[] = 'color:' . esc_attr( $text_color );
-        }
-        if ( ! empty( $attrs['button_border_radius'] ) ) {
-            $style_parts[] = 'border-radius:' . esc_attr( $attrs['button_border_radius'] );
-        }
-
-        $style = $style_parts ? ' style="' . implode( ';', $style_parts ) . '"' : '';
-
         $align = $attrs['button_alignment'] ?? $attrs['text_orientation'] ?? '';
         $wrapper_class = 'wp-block-buttons';
         if ( $align ) {
             $wrapper_class .= ' is-content-justification-' . $align;
         }
 
-        $block_attrs = [];
+        $buttons_attrs = [];
         if ( $align ) {
-            $block_attrs['layout'] = [
+            $buttons_attrs['layout'] = [
                 'type'           => 'flex',
                 'justifyContent' => $align,
             ];
         }
 
-        $inner_block = $this->gutenberg_block( 'button', [], '<div class="wp-block-button"><a class="wp-block-button__link wp-element-button"' . $style . ' href="' . esc_url( $url ) . '"' . $target . '>' . esc_html( $text ) . '</a></div>' );
+        // Build button inner block with optional color attributes.
+        $btn_attrs = [];
+        $link_classes = [ 'wp-block-button__link', 'wp-element-button' ];
+        $link_style_parts = [];
+
+        if ( $bg_color ) {
+            $btn_attrs['style']['color']['background'] = $bg_color;
+            $link_classes[] = 'has-background';
+            $link_style_parts[] = 'background-color:' . $bg_color;
+        }
+        if ( $text_color ) {
+            $btn_attrs['style']['color']['text'] = $text_color;
+            $link_classes[] = 'has-text-color';
+            $link_style_parts[] = 'color:' . $text_color;
+        }
+
+        $link_class = implode( ' ', $link_classes );
+        $link_style = $link_style_parts ? ' style="' . esc_attr( implode( ';', $link_style_parts ) ) . '"' : '';
+
+        $inner_block = $this->gutenberg_block( 'button', $btn_attrs, '<div class="wp-block-button"><a class="' . $link_class . '"' . $link_style . ' href="' . esc_url( $url ) . '"' . $target . '>' . esc_html( $text ) . '</a></div>' );
 
         $html = '<div class="' . $wrapper_class . '">' . "\n" . $inner_block . "\n" . '</div>';
-        return $this->gutenberg_block( 'buttons', $block_attrs, $html, true );
+        return $this->gutenberg_block( 'buttons', $buttons_attrs, $html, true );
     }
 
     // =========================================================================
@@ -550,14 +628,41 @@ class D2G_Converter {
         $attrs = $node['attrs'];
         $src   = $attrs['src'] ?? '';
 
+        // Fallback to alternative source attributes.
+        if ( '' === $src ) {
+            $src = $attrs['src_webm'] ?? '';
+        }
+
+        // Check if the inner content contains an iframe embed (common in Divi).
+        $content = $this->get_inner_content( $node );
+        if ( '' === $src && preg_match( '#<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $content, $m ) ) {
+            return $this->convert_embed_tag( $content );
+        }
+
+        if ( '' === $src ) {
+            // Last resort: check if content itself is a URL.
+            $content = trim( $content );
+            if ( preg_match( '#^https?://#', $content ) ) {
+                $src = $content;
+            }
+        }
+
         if ( '' === $src ) {
             return '';
         }
 
-        // Check if it's a YouTube/Vimeo embed URL.
+        // Normalize YouTube embed URLs to watch URLs.
+        if ( preg_match( '#youtube\.com/embed/([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
+            $src = 'https://www.youtube.com/watch?v=' . $ym[1];
+        } elseif ( preg_match( '#youtube-nocookie\.com/embed/([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
+            $src = 'https://www.youtube.com/watch?v=' . $ym[1];
+        }
+
+        // Check if it's a YouTube/Vimeo URL.
         if ( preg_match( '#(?:youtube\.com|youtu\.be|vimeo\.com)#', $src ) ) {
-            $html = '<figure class="wp-block-embed is-type-video"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $src ) . "\n" . '</div></figure>';
             $provider = strpos( $src, 'vimeo' ) !== false ? 'vimeo' : 'youtube';
+            $provider_class = 'is-provider-' . $provider . ' wp-block-embed-' . $provider;
+            $html = '<figure class="wp-block-embed is-type-video ' . $provider_class . '"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $src ) . "\n" . '</div></figure>';
             return $this->gutenberg_block( 'embed', [ 'url' => $src, 'type' => 'video', 'providerNameSlug' => $provider ], $html );
         }
 
@@ -576,14 +681,9 @@ class D2G_Converter {
         $url     = $attrs['url'] ?? '';
         $image   = $attrs['image'] ?? '';
         $content = $this->get_inner_content( $node );
-        $style   = D2G_Style_Mapper::build_inline_style( $attrs );
         $header_level = $attrs['header_level'] ?? 'h4';
 
-        $output = '';
-
-        // Wrap with styling if present.
-        $style_attr = $style ? ' style="' . esc_attr( $style ) . '"' : '';
-        $group_open = '<div class="wp-block-group d2g-blurb"' . $style_attr . '>';
+        $group_open = '<div class="wp-block-group">';
 
         $inner = '';
 
@@ -594,7 +694,7 @@ class D2G_Converter {
                 $target = ( $attrs['url_new_window'] ?? '' ) === 'on' ? ' target="_blank" rel="noopener noreferrer"' : '';
                 $img_html = '<a href="' . esc_url( $url ) . '"' . $target . '>' . $img_html . '</a>';
             }
-            $inner .= $this->gutenberg_block( 'image', [], '<figure class="wp-block-image">' . $img_html . '</figure>' );
+            $inner .= $this->gutenberg_block( 'image', [ 'sizeSlug' => 'large', 'linkDestination' => $url ? 'custom' : 'none' ], '<figure class="wp-block-image size-large">' . $img_html . '</figure>' );
         }
 
         // Title.
@@ -620,7 +720,7 @@ class D2G_Converter {
         }
 
         $html = $group_open . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-blurb' ], $html, true );
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     // =========================================================================
@@ -633,7 +733,6 @@ class D2G_Converter {
         $btn_text = $attrs['button_text'] ?? '';
         $btn_url  = $attrs['button_url'] ?? '#';
         $content = $this->get_inner_content( $node );
-        $style   = D2G_Style_Mapper::build_inline_style( $attrs );
 
         $inner = '';
         if ( $title ) {
@@ -647,10 +746,21 @@ class D2G_Converter {
             $inner .= $this->gutenberg_block( 'buttons', [], '<div class="wp-block-buttons">' . "\n" . $btn_inner . "\n" . '</div>', true );
         }
 
-        $style_attr = $style ? ' style="' . esc_attr( $style ) . '"' : '';
-        $html = '<div class="wp-block-cover d2g-cta"' . $style_attr . '><div class="wp-block-cover__inner-container">' . "\n" . $inner . "\n" . '</div></div>';
+        $block_attrs = [];
+        $classes = [ 'wp-block-group' ];
+        $style_parts = [];
 
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-cta' ], $html, true );
+        if ( ! empty( $attrs['background_color'] ) ) {
+            $block_attrs['style'] = [ 'color' => [ 'background' => $attrs['background_color'] ] ];
+            $classes[] = 'has-background';
+            $style_parts[] = 'background-color:' . $attrs['background_color'];
+        }
+
+        $class_str = implode( ' ', $classes );
+        $style_str = $style_parts ? ' style="' . esc_attr( implode( ';', $style_parts ) ) . '"' : '';
+        $html = '<div class="' . $class_str . '"' . $style_str . '>' . "\n" . $inner . "\n" . '</div>';
+
+        return $this->gutenberg_block( 'group', $block_attrs, $html, true );
     }
 
     // =========================================================================
@@ -661,14 +771,16 @@ class D2G_Converter {
         $attrs = $node['attrs'];
         $color = $attrs['color'] ?? '';
         $block_attrs = [];
-        $style = '';
+        $classes = [ 'wp-block-separator', 'has-alpha-channel-opacity' ];
+        $style_str = '';
 
         if ( $color ) {
-            $block_attrs['customColor'] = $color;
-            $style = ' style="border-top-color:' . esc_attr( $color ) . '"';
+            $block_attrs['style'] = [ 'color' => [ 'background' => $color ] ];
+            $classes[] = 'has-background';
+            $style_str = ' style="background-color:' . esc_attr( $color ) . '"';
         }
 
-        return $this->gutenberg_block( 'separator', $block_attrs, '<hr class="wp-block-separator has-alpha-channel-opacity"' . $style . '/>' );
+        return $this->gutenberg_block( 'separator', $block_attrs, '<hr class="' . implode( ' ', $classes ) . '"' . $style_str . '/>' );
     }
 
     // =========================================================================
@@ -682,11 +794,10 @@ class D2G_Converter {
         $content = $this->get_inner_content( $node );
         $bg_img  = $attrs['background_image'] ?? '';
         $bg_color = $attrs['background_color'] ?? '';
-        $style   = D2G_Style_Mapper::build_inline_style( $attrs );
 
         $inner = '';
         if ( $title ) {
-            $inner .= $this->gutenberg_block( 'heading', [ 'level' => 1 ], '<h1 class="has-text-align-center">' . esc_html( $title ) . '</h1>' );
+            $inner .= $this->gutenberg_block( 'heading', [ 'level' => 1, 'textAlign' => 'center' ], '<h1 class="has-text-align-center">' . esc_html( $title ) . '</h1>' );
         }
         if ( $subhead ) {
             $inner .= $this->gutenberg_block( 'paragraph', [ 'align' => 'center', 'fontSize' => 'large' ], '<p class="has-text-align-center has-large-font-size">' . esc_html( $subhead ) . '</p>' );
@@ -715,15 +826,14 @@ class D2G_Converter {
         if ( $bg_img ) {
             $cover_attrs = [ 'url' => $bg_img ];
             if ( $bg_color ) {
-                $cover_attrs['overlayColor'] = $bg_color;
+                $cover_attrs['customOverlayColor'] = $bg_color;
             }
-            $html = '<div class="wp-block-cover"><span class="wp-block-cover__background"></span><img class="wp-block-cover__image-background" src="' . esc_url( $bg_img ) . '" alt=""/><div class="wp-block-cover__inner-container">' . "\n" . $inner . "\n" . '</div></div>';
+            $html = '<div class="wp-block-cover"><span class="wp-block-cover__background has-background-dim"></span><img class="wp-block-cover__image-background" alt="" src="' . esc_url( $bg_img ) . '" data-object-fit="cover"/><div class="wp-block-cover__inner-container">' . "\n" . $inner . "\n" . '</div></div>';
             return $this->gutenberg_block( 'cover', $cover_attrs, $html, true );
         }
 
-        $style_attr = $style ? ' style="' . esc_attr( $style ) . '"' : '';
-        $html = '<div class="wp-block-group d2g-header"' . $style_attr . '>' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-header' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     // =========================================================================
@@ -761,8 +871,8 @@ class D2G_Converter {
         // Build individual wp:image inner blocks for each gallery image.
         $images_markup = '';
         foreach ( $ids as $id ) {
-            $url = function_exists( 'wp_get_attachment_url' ) ? wp_get_attachment_url( $id ) : false;
-            $alt = function_exists( 'get_post_meta' ) ? get_post_meta( $id, '_wp_attachment_image_alt', true ) : '';
+            $url     = $this->resolve_attachment_url( $id );
+            $alt     = function_exists( 'get_post_meta' ) ? (string) get_post_meta( $id, '_wp_attachment_image_alt', true ) : '';
             $caption = ( $show_cap && function_exists( 'wp_get_attachment_caption' ) ) ? wp_get_attachment_caption( $id ) : '';
 
             $img_attrs = [
@@ -774,8 +884,9 @@ class D2G_Converter {
             if ( $url ) {
                 $img_tag = '<img src="' . esc_url( $url ) . '" alt="' . esc_attr( $alt ) . '" class="wp-image-' . $id . '"/>';
             } else {
-                // Attachment not found in media library — leave a reference so the user can fix it.
-                $img_tag = '<!-- attachment ID ' . $id . ' not found --><img src="" alt="" class="wp-image-' . $id . '"/>';
+                // Attachment not found — skip this image entirely rather than
+                // producing a broken <img src=""> that shows nothing.
+                continue;
             }
 
             $fig_html = '<figure class="wp-block-image size-large">' . $img_tag;
@@ -806,8 +917,8 @@ class D2G_Converter {
             }
         }
 
-        $html = '<div class="wp-block-group d2g-accordion">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-accordion' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     // =========================================================================
@@ -844,8 +955,8 @@ class D2G_Converter {
             }
         }
 
-        $html = '<div class="wp-block-group d2g-tabs">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-tabs' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     private function convert_tab( array $node ): string {
@@ -859,8 +970,8 @@ class D2G_Converter {
             $body = $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
         }
 
-        $html = '<div class="wp-block-group d2g-tab">' . "\n" . $heading . $body . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-tab' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $heading . $body . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     // =========================================================================
@@ -877,8 +988,8 @@ class D2G_Converter {
             }
         }
 
-        $html = '<div class="wp-block-group d2g-slider">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-slider' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     private function convert_slide( array $node ): string {
@@ -903,12 +1014,12 @@ class D2G_Converter {
         }
 
         if ( $bg_img ) {
-            $html = '<div class="wp-block-cover"><span class="wp-block-cover__background"></span><img class="wp-block-cover__image-background" src="' . esc_url( $bg_img ) . '" alt=""/><div class="wp-block-cover__inner-container">' . "\n" . $inner . "\n" . '</div></div>';
+            $html = '<div class="wp-block-cover"><span class="wp-block-cover__background has-background-dim"></span><img class="wp-block-cover__image-background" alt="" src="' . esc_url( $bg_img ) . '" data-object-fit="cover"/><div class="wp-block-cover__inner-container">' . "\n" . $inner . "\n" . '</div></div>';
             return $this->gutenberg_block( 'cover', [ 'url' => $bg_img ], $html, true );
         }
 
-        $html = '<div class="wp-block-group d2g-slide">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-slide' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     // =========================================================================
@@ -925,7 +1036,7 @@ class D2G_Converter {
 
         $inner = '';
         if ( $portrait ) {
-            $inner .= $this->gutenberg_block( 'image', [], '<figure class="wp-block-image is-style-rounded"><img src="' . esc_url( $portrait ) . '" alt="' . esc_attr( $author ) . '"/></figure>' );
+            $inner .= $this->gutenberg_block( 'image', [ 'sizeSlug' => 'large', 'linkDestination' => 'none', 'className' => 'is-style-rounded' ], '<figure class="wp-block-image size-large is-style-rounded"><img src="' . esc_url( $portrait ) . '" alt="' . esc_attr( $author ) . '"/></figure>' );
         }
 
         $cite_parts = [];
@@ -950,8 +1061,8 @@ class D2G_Converter {
 
         $inner .= $this->gutenberg_block( 'quote', [], '<blockquote class="wp-block-quote">' . $quote_inner . '</blockquote>' );
 
-        $html = '<div class="wp-block-group d2g-testimonial">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-testimonial' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     // =========================================================================
@@ -967,7 +1078,7 @@ class D2G_Converter {
 
         $inner = '';
         if ( $image ) {
-            $inner .= $this->gutenberg_block( 'image', [], '<figure class="wp-block-image"><img src="' . esc_url( $image ) . '" alt="' . esc_attr( $name ) . '"/></figure>' );
+            $inner .= $this->gutenberg_block( 'image', [ 'sizeSlug' => 'large', 'linkDestination' => 'none' ], '<figure class="wp-block-image size-large"><img src="' . esc_url( $image ) . '" alt="' . esc_attr( $name ) . '"/></figure>' );
         }
         if ( $name ) {
             $inner .= $this->gutenberg_block( 'heading', [ 'level' => 3 ], '<h3>' . esc_html( $name ) . '</h3>' );
@@ -985,8 +1096,8 @@ class D2G_Converter {
             $inner .= $this->build_social_links_block( $socials );
         }
 
-        $html = '<div class="wp-block-group d2g-team-member">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-team-member' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     private function extract_social_links( array $attrs ): array {
@@ -1013,8 +1124,8 @@ class D2G_Converter {
             }
         }
 
-        $html = '<div class="wp-block-columns d2g-pricing-tables">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'columns', [ 'className' => 'd2g-pricing-tables' ], $html, true );
+        $html = '<div class="wp-block-columns">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'columns', [], $html, true );
     }
 
     private function convert_pricing_table( array $node ): string {
@@ -1056,9 +1167,8 @@ class D2G_Converter {
             $inner .= $this->gutenberg_block( 'buttons', [ 'layout' => [ 'type' => 'flex', 'justifyContent' => 'center' ] ], '<div class="wp-block-buttons is-content-justification-center">' . "\n" . $btn_inner . "\n" . '</div>', true );
         }
 
-        $class = 'd2g-pricing-table' . ( $featured ? ' d2g-featured' : '' );
-        $html = '<div class="wp-block-column ' . esc_attr( $class ) . '">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'column', [ 'className' => $class ], $html, true );
+        $html = '<div class="wp-block-column">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'column', [], $html, true );
     }
 
     // =========================================================================
@@ -1072,8 +1182,8 @@ class D2G_Converter {
                 $inner .= $this->convert_counter( $child );
             }
         }
-        $html = '<div class="wp-block-group d2g-counters">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-counters' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     private function convert_counter( array $node ): string {
@@ -1102,8 +1212,8 @@ class D2G_Converter {
             $inner .= $this->gutenberg_block( 'paragraph', [ 'align' => 'center' ], '<p class="has-text-align-center">' . esc_html( $title ) . '</p>' );
         }
 
-        $html = '<div class="wp-block-group d2g-number-counter">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-number-counter' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     private function convert_circle_counter( array $node ): string {
@@ -1154,7 +1264,7 @@ class D2G_Converter {
             $inner .= $this->gutenberg_block( 'social-link', [ 'url' => $url, 'service' => $network ] );
         }
 
-        $html = '<ul class="wp-block-social-links is-style-default">' . "\n" . $inner . '</ul>';
+        $html = '<ul class="wp-block-social-links">' . "\n" . $inner . '</ul>';
         return $this->gutenberg_block( 'social-links', [], $html, true );
     }
 
@@ -1191,7 +1301,7 @@ class D2G_Converter {
         }
 
         if ( $map_content ) {
-            return $this->gutenberg_block( 'group', [ 'className' => 'd2g-map' ], '<div class="wp-block-group d2g-map">' . "\n" . $this->gutenberg_block( 'html', [], $map_content ) . "\n" . '</div>', true );
+            return $this->gutenberg_block( 'group', [], '<div class="wp-block-group">' . "\n" . $this->gutenberg_block( 'html', [], $map_content ) . "\n" . '</div>', true );
         }
 
         return '';
@@ -1242,7 +1352,7 @@ class D2G_Converter {
             }
             $f_attrs  = $child['attrs'];
             $f_title  = $f_attrs['field_title'] ?? ( $f_attrs['field_id'] ?? 'Field' );
-            $f_id     = $f_attrs['field_id'] ?? sanitize_title( $f_title );
+            $f_id     = $f_attrs['field_id'] ?? ( function_exists( 'sanitize_title' ) ? sanitize_title( $f_title ) : strtolower( str_replace( ' ', '-', $f_title ) ) );
             $f_type   = $f_attrs['field_type'] ?? 'input';
             $required = ( $f_attrs['required_mark'] ?? 'on' ) === 'on';
 
@@ -1313,7 +1423,7 @@ class D2G_Converter {
 
         $inner = '';
         if ( $image ) {
-            $inner .= $this->gutenberg_block( 'image', [], '<figure class="wp-block-image"><img src="' . esc_url( $image ) . '" alt="' . esc_attr( $title ) . '"/></figure>' );
+            $inner .= $this->gutenberg_block( 'image', [ 'sizeSlug' => 'large', 'linkDestination' => 'none' ], '<figure class="wp-block-image size-large"><img src="' . esc_url( $image ) . '" alt="' . esc_attr( $title ) . '"/></figure>' );
         }
         if ( $title ) {
             $inner .= $this->gutenberg_block( 'heading', [ 'level' => 4 ], '<h4>' . esc_html( $title ) . '</h4>' );
@@ -1325,8 +1435,8 @@ class D2G_Converter {
         $inner .= $this->gutenberg_block( 'audio', [ 'src' => $src ], '<figure class="wp-block-audio"><audio controls src="' . esc_url( $src ) . '"></audio></figure>' );
 
         if ( $title || $artist || $image ) {
-            $html = '<div class="wp-block-group d2g-audio">' . "\n" . $inner . "\n" . '</div>';
-            return $this->gutenberg_block( 'group', [ 'className' => 'd2g-audio' ], $html, true );
+            $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+            return $this->gutenberg_block( 'group', [], $html, true );
         }
 
         return $inner;
@@ -1358,7 +1468,8 @@ class D2G_Converter {
             }, explode( ',', $categories ) );
         }
 
-        $json = wp_json_encode( $block_attrs );
+        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+        $json = $encode( $block_attrs, JSON_UNESCAPED_SLASHES );
         return "<!-- wp:latest-posts $json /-->\n\n";
     }
 
@@ -1380,8 +1491,8 @@ class D2G_Converter {
         }
         $inner .= $this->gutenberg_block( 'paragraph', [], '<p><em>[Email signup form — configure with your email marketing plugin.]</em></p>' );
 
-        $html = '<div class="wp-block-group d2g-signup">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-signup' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     private function convert_login( array $node ): string {
@@ -1407,7 +1518,11 @@ class D2G_Converter {
         if ( $menu_id ) {
             $block_attrs['menuId'] = (int) $menu_id;
         }
-        $json = wp_json_encode( $block_attrs );
+        if ( empty( $block_attrs ) ) {
+            return "<!-- wp:navigation /-->\n\n";
+        }
+        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+        $json = $encode( $block_attrs, JSON_UNESCAPED_SLASHES );
         return "<!-- wp:navigation $json /-->\n\n";
     }
 
@@ -1430,7 +1545,11 @@ class D2G_Converter {
         if ( $placeholder ) {
             $block_attrs['placeholder'] = $placeholder;
         }
-        $json = wp_json_encode( $block_attrs );
+        if ( empty( $block_attrs ) ) {
+            return "<!-- wp:search /-->\n\n";
+        }
+        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+        $json = $encode( $block_attrs, JSON_UNESCAPED_SLASHES );
         return "<!-- wp:search $json /-->\n\n";
     }
 
@@ -1495,8 +1614,8 @@ class D2G_Converter {
             return '';
         }
 
-        $html = '<div class="wp-block-group d2g-video-slider">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-video-slider' ], $html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        return $this->gutenberg_block( 'group', [], $html, true );
     }
 
     // =========================================================================
@@ -1625,5 +1744,41 @@ class D2G_Converter {
             return 0;
         }
         return (int) attachment_url_to_postid( $url );
+    }
+
+    /**
+     * Resolve an attachment ID to its URL using multiple strategies.
+     *
+     * 1. wp_get_attachment_url() — standard WordPress lookup.
+     * 2. Attachment metadata _wp_attached_file — constructs URL from uploads dir.
+     * 3. GUID field — last resort, stored in wp_posts.guid.
+     */
+    private function resolve_attachment_url( int $id ): string {
+        // Strategy 1: standard function.
+        if ( function_exists( 'wp_get_attachment_url' ) ) {
+            $url = wp_get_attachment_url( $id );
+            if ( $url ) {
+                return $url;
+            }
+        }
+
+        // Strategy 2: reconstruct from _wp_attached_file meta + upload dir.
+        if ( function_exists( 'get_post_meta' ) && function_exists( 'wp_get_upload_dir' ) ) {
+            $file = get_post_meta( $id, '_wp_attached_file', true );
+            if ( $file ) {
+                $uploads = wp_get_upload_dir();
+                return $uploads['baseurl'] . '/' . $file;
+            }
+        }
+
+        // Strategy 3: use the post GUID (often contains the original URL).
+        if ( function_exists( 'get_post' ) ) {
+            $post = get_post( $id );
+            if ( $post && ! empty( $post->guid ) ) {
+                return $post->guid;
+            }
+        }
+
+        return '';
     }
 }

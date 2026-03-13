@@ -176,16 +176,13 @@ class D2G_Parser {
                 $inner = substr( $content, $next['content_start'], $close['content_end'] - $next['content_start'] );
                 $children = $this->parse_nodes( $inner );
 
-                // If no child shortcodes were found, the inner content is the text content.
-                $text_content = $inner;
-                if ( ! empty( $children ) && $children[0]['tag'] !== '__text__' ) {
-                    $text_content = '';
-                }
-
+                // Always preserve the raw inner content so that modules
+                // like et_pb_text can access HTML (iframes, embeds, images)
+                // that may be mixed with or without child shortcodes.
                 $nodes[] = [
                     'tag'      => $tag,
                     'attrs'    => $attrs,
-                    'content'  => $text_content,
+                    'content'  => $inner,
                     'children' => $children,
                 ];
 
