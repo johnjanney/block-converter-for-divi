@@ -849,6 +849,12 @@ class D2G_Converter {
         $columns   = (int) ( $attrs['gallery_columns'] ?? $attrs['columns_number'] ?? 3 );
         $show_cap  = ( $attrs['show_title_and_caption'] ?? '' ) !== 'off';
 
+        // Divi gallery modules can render as either a grid or a slider/carousel.
+        // Preserve that intent by carrying the format through to the converted block.
+        $layout_hint  = strtolower( (string) ( $attrs['gallery_layout'] ?? $attrs['layout'] ?? $attrs['type'] ?? '' ) );
+        $is_carousel  = ( $attrs['fullwidth'] ?? '' ) === 'on' || in_array( $layout_hint, [ 'slider', 'carousel' ], true );
+        $gallery_view = $is_carousel ? 'carousel' : 'grid';
+
         if ( '' === $ids_str ) {
             return $this->gutenberg_block( 'paragraph', [], '<p>[Gallery — no images specified]</p>' );
         }
@@ -869,6 +875,9 @@ class D2G_Converter {
         $gallery_attrs = [
             'columns' => $columns,
             'linkTo'  => $link_to,
+            // Keep gallery format for block variations that expose Grid/Carousel.
+            'layout'  => [ 'type' => $gallery_view ],
+            'className' => 'is-style-' . $gallery_view,
         ];
 
         // Build individual wp:image inner blocks for each gallery image.
@@ -901,7 +910,8 @@ class D2G_Converter {
             $images_markup .= $this->gutenberg_block( 'image', $img_attrs, $fig_html );
         }
 
-        $gallery_html = '<figure class="wp-block-gallery has-nested-images columns-' . $columns . ' is-cropped">' . "\n" . $images_markup . '</figure>';
+        $gallery_classes = 'wp-block-gallery has-nested-images columns-' . $columns . ' is-cropped is-style-' . $gallery_view;
+        $gallery_html    = '<figure class="' . esc_attr( $gallery_classes ) . '">' . "\n" . $images_markup . '</figure>';
         return $this->gutenberg_block( 'gallery', $gallery_attrs, $gallery_html, true );
     }
 
