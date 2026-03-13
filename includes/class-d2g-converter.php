@@ -982,11 +982,7 @@ class D2G_Converter {
         // Social links from attrs.
         $socials = $this->extract_social_links( $attrs );
         if ( $socials ) {
-            $links = '';
-            foreach ( $socials as $network => $link ) {
-                $links .= '<li class="wp-social-link wp-social-link-' . esc_attr( $network ) . '"><a href="' . esc_url( $link ) . '">' . esc_html( ucfirst( $network ) ) . '</a></li>';
-            }
-            $inner .= $this->gutenberg_block( 'social-links', [], '<ul class="wp-block-social-links">' . $links . '</ul>' );
+            $inner .= $this->build_social_links_block( $socials );
         }
 
         $html = '<div class="wp-block-group d2g-team-member">' . "\n" . $inner . "\n" . '</div>';
@@ -1119,25 +1115,47 @@ class D2G_Converter {
     // =========================================================================
 
     private function convert_social_follow( array $node ): string {
-        $inner = '';
+        $links = [];
         foreach ( $node['children'] as $child ) {
             if ( $child['tag'] === 'et_pb_social_media_follow_network' ) {
-                $inner .= $this->convert_social_network( $child );
+                $network = $child['attrs']['social_network'] ?? '';
+                $url     = $child['attrs']['url'] ?? '#';
+                if ( $network ) {
+                    $links[ $network ] = $url;
+                }
             }
         }
 
-        $html = '<ul class="wp-block-social-links is-style-default">' . $inner . '</ul>';
-        return $this->gutenberg_block( 'social-links', [], $html );
+        return $this->build_social_links_block( $links );
     }
 
     private function convert_social_network( array $node ): string {
         $attrs   = $node['attrs'];
         $network = $attrs['social_network'] ?? '';
         $url     = $attrs['url'] ?? '#';
-        $content = $this->get_inner_content( $node );
-        $label   = trim( $content ) ?: ucfirst( $network );
 
-        return '<li class="wp-social-link wp-social-link-' . esc_attr( $network ) . '"><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></li>';
+        if ( ! $network ) {
+            return '';
+        }
+
+        return $this->gutenberg_block( 'social-link', [ 'url' => $url, 'service' => $network ] );
+    }
+
+    /**
+     * Build a wp:social-links block with wp:social-link inner blocks.
+     */
+    private function build_social_links_block( array $links ): string {
+        if ( empty( $links ) ) {
+            return '';
+        }
+
+        $inner = '';
+        foreach ( $links as $network => $url ) {
+            $inner .= $this->gutenberg_block( 'social-link', [ 'url' => $url, 'service' => $network ] );
+        }
+
+        $html = '<ul class="wp-block-social-links is-style-default">' . "\n" . $inner . '</ul>';
+        return $this->gutenberg_block( 'social-links', [], $html, true );
     }
 
     // =========================================================================
@@ -1196,37 +1214,85 @@ class D2G_Converter {
     // =========================================================================
 
     private function convert_contact_form( array $node ): string {
-        $attrs = $node['attrs'];
-        $title = $attrs['title'] ?? 'Contact Us';
+        $attrs      = $node['attrs'];
+        $title      = $attrs['title'] ?? '';
+        $email      = $attrs['email'] ?? '';
+        $submit_text = $attrs['submit_button_text'] ?? 'Send';
 
         $inner = '';
         if ( $title ) {
             $inner .= $this->gutenberg_block( 'heading', [ 'level' => 3 ], '<h3>' . esc_html( $title ) . '</h3>' );
         }
-        $inner .= $this->gutenberg_block( 'paragraph', [], '<p><em>[Contact form — please install a forms plugin such as WPForms or Contact Form 7 to recreate this form.]</em></p>' );
 
-        // List the fields for reference.
-        $fields = [];
+        // Map Divi field_type to HTML input type.
+        $type_map = [
+            'input'    => 'text',
+            'email'    => 'email',
+            'text'     => 'textarea',
+            'select'   => 'text',
+            'radio'    => 'text',
+            'checkbox' => 'text',
+        ];
+
+        // Build wp:form-input inner blocks for each contact field.
+        $fields_markup = '';
         foreach ( $node['children'] as $child ) {
-            if ( $child['tag'] === 'et_pb_contact_field' ) {
-                $f_id = $child['attrs']['field_id'] ?? '';
-                $f_title = $child['attrs']['field_title'] ?? $f_id;
-                $f_type = $child['attrs']['field_type'] ?? 'input';
-                $required = ( $child['attrs']['required_mark'] ?? 'on' ) === 'on' ? ' *' : '';
-                $fields[] = esc_html( $f_title ) . ' (' . esc_html( $f_type ) . ')' . $required;
+            if ( $child['tag'] !== 'et_pb_contact_field' ) {
+                continue;
             }
-        }
-        if ( $fields ) {
-            $list_html = '<ul>';
-            foreach ( $fields as $f ) {
-                $list_html .= '<li>' . $f . '</li>';
+            $f_attrs  = $child['attrs'];
+            $f_title  = $f_attrs['field_title'] ?? ( $f_attrs['field_id'] ?? 'Field' );
+            $f_id     = $f_attrs['field_id'] ?? sanitize_title( $f_title );
+            $f_type   = $f_attrs['field_type'] ?? 'input';
+            $required = ( $f_attrs['required_mark'] ?? 'on' ) === 'on';
+
+            $input_type = $type_map[ $f_type ] ?? 'text';
+            $is_textarea = ( $input_type === 'textarea' );
+
+            $field_block_attrs = [
+                'label'    => $f_title,
+                'required' => $required,
+            ];
+            if ( ! $is_textarea ) {
+                $field_block_attrs['type'] = $input_type;
             }
-            $list_html .= '</ul>';
-            $inner .= $this->gutenberg_block( 'list', [], $list_html );
+
+            $req_attr = $required ? ' required' : '';
+            $name_attr = esc_attr( strtolower( $f_id ) );
+
+            if ( $is_textarea ) {
+                $input_html = '<textarea name="' . $name_attr . '" class="wp-block-form-input__input"' . $req_attr . '></textarea>';
+                $field_block_attrs['type'] = 'textarea';
+            } else {
+                $input_html = '<input type="' . esc_attr( $input_type ) . '" name="' . $name_attr . '" class="wp-block-form-input__input"' . $req_attr . '/>';
+            }
+
+            $label_html = '<label class="wp-block-form-input__label">'
+                . '<span class="wp-block-form-input__label-content">' . esc_html( $f_title ) . '</span>'
+                . $input_html
+                . '</label>';
+
+            $fields_markup .= $this->gutenberg_block( 'form-input', $field_block_attrs, $label_html );
         }
 
-        $html = '<div class="wp-block-group d2g-contact-form">' . "\n" . $inner . "\n" . '</div>';
-        return $this->gutenberg_block( 'group', [ 'className' => 'd2g-contact-form' ], $html, true );
+        // Submit button.
+        $submit_markup = $this->gutenberg_block(
+            'form-submit-button',
+            [],
+            '<div class="wp-block-form-submit-button"><button type="submit" class="wp-block-button__link wp-element-button">' . esc_html( $submit_text ) . '</button></div>'
+        );
+
+        // Wrap in wp:form.
+        $form_attrs = [];
+        if ( $email ) {
+            $form_attrs['submissionMethod'] = 'email';
+            $form_attrs['email'] = $email;
+        }
+
+        $form_html = '<form class="wp-block-form" method="post">' . "\n" . $fields_markup . $submit_markup . '</form>';
+        $inner .= $this->gutenberg_block( 'form', $form_attrs, $form_html, true );
+
+        return $inner;
     }
 
     // =========================================================================
@@ -1373,15 +1439,41 @@ class D2G_Converter {
     // =========================================================================
 
     private function convert_portfolio( array $node ): string {
-        $attrs     = $node['attrs'];
-        $posts_num = $attrs['posts_number'] ?? '4';
+        $attrs      = $node['attrs'];
+        $posts_num  = (int) ( $attrs['posts_number'] ?? 4 );
+        $categories = $attrs['include_categories'] ?? '';
+        $fullwidth  = ( $attrs['fullwidth'] ?? '' ) === 'on';
 
-        $block_attrs = [
-            'postsToShow' => (int) $posts_num,
-            'displayPostContent' => true,
+        // Determine the portfolio post type (Divi uses 'project' by default).
+        $post_type = 'project';
+
+        $query = [
+            'postType' => $post_type,
+            'perPage'  => $posts_num,
+            'order'    => 'desc',
+            'orderBy'  => 'date',
         ];
-        $json = wp_json_encode( $block_attrs );
-        return "<!-- wp:latest-posts $json /-->\n\n";
+
+        if ( $categories ) {
+            $cat_ids = array_map( 'intval', explode( ',', $categories ) );
+            $query['taxQuery'] = [
+                'project_category' => $cat_ids,
+            ];
+        }
+
+        $query_attrs = [ 'query' => $query ];
+
+        // Build wp:post-template inner blocks.
+        $template_inner = '';
+        $template_inner .= "<!-- wp:post-featured-image /-->\n\n";
+        $template_inner .= "<!-- wp:post-title /-->\n\n";
+        if ( ! $fullwidth ) {
+            $template_inner .= "<!-- wp:post-excerpt /-->\n\n";
+        }
+
+        $post_template = "<!-- wp:post-template -->\n" . $template_inner . "<!-- /wp:post-template -->\n\n";
+        $html = '<div class="wp-block-query">' . "\n" . $post_template . '</div>';
+        return $this->gutenberg_block( 'query', $query_attrs, $html, true );
     }
 
     // =========================================================================
@@ -1450,34 +1542,44 @@ class D2G_Converter {
 
         // Some blocks use short names.
         $name_map = [
-            'core/paragraph'     => 'paragraph',
-            'core/heading'       => 'heading',
-            'core/image'         => 'image',
-            'core/list'          => 'list',
-            'core/quote'         => 'quote',
-            'core/button'        => 'button',
-            'core/buttons'       => 'buttons',
-            'core/columns'       => 'columns',
-            'core/column'        => 'column',
-            'core/group'         => 'group',
-            'core/cover'         => 'cover',
-            'core/separator'     => 'separator',
-            'core/html'          => 'html',
-            'core/embed'         => 'embed',
-            'core/video'         => 'video',
-            'core/audio'         => 'audio',
-            'core/gallery'       => 'gallery',
-            'core/table'         => 'table',
-            'core/preformatted'  => 'preformatted',
-            'core/details'       => 'details',
-            'core/social-links'  => 'social-links',
+            'core/paragraph'           => 'paragraph',
+            'core/heading'             => 'heading',
+            'core/image'               => 'image',
+            'core/list'                => 'list',
+            'core/quote'               => 'quote',
+            'core/button'              => 'button',
+            'core/buttons'             => 'buttons',
+            'core/columns'             => 'columns',
+            'core/column'              => 'column',
+            'core/group'               => 'group',
+            'core/cover'               => 'cover',
+            'core/separator'           => 'separator',
+            'core/html'                => 'html',
+            'core/embed'               => 'embed',
+            'core/video'               => 'video',
+            'core/audio'               => 'audio',
+            'core/gallery'             => 'gallery',
+            'core/table'               => 'table',
+            'core/preformatted'        => 'preformatted',
+            'core/details'             => 'details',
+            'core/social-links'        => 'social-links',
+            'core/social-link'         => 'social-link',
+            'core/form'                => 'form',
+            'core/form-input'          => 'form-input',
+            'core/form-submit-button'  => 'form-submit-button',
+            'core/query'               => 'query',
+            'core/post-template'       => 'post-template',
+            'core/post-title'          => 'post-title',
+            'core/post-featured-image' => 'post-featured-image',
+            'core/post-excerpt'        => 'post-excerpt',
         ];
 
         $block_name = $name_map[ $full_name ] ?? $name;
 
         $attrs_json = '';
         if ( ! empty( $attrs ) ) {
-            $attrs_json = ' ' . wp_json_encode( $attrs, JSON_UNESCAPED_SLASHES );
+            $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+            $attrs_json = ' ' . $encode( $attrs, JSON_UNESCAPED_SLASHES );
         }
 
         if ( $has_inner ) {
