@@ -54,6 +54,13 @@ class D2G_Admin {
                 <tbody></tbody>
             </table>
 
+            <div id="d2g-pagination" class="tablenav" style="display:none;">
+                <div class="tablenav-pages">
+                    <span class="displaying-num" id="d2g-displaying-num"></span>
+                    <span class="pagination-links" id="d2g-pagination-links"></span>
+                </div>
+            </div>
+
             <div id="d2g-batch-bar" class="d2g-batch-bar" style="display:none;">
                 <button type="button" id="d2g-convert-selected" class="button button-primary">
                     <?php esc_html_e( 'Convert Selected', 'divi2gutenberg' ); ?>

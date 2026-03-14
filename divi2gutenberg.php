@@ -89,13 +89,34 @@ final class Divi2Gutenberg {
         }
 
         global $wpdb;
-        $results = $wpdb->get_results(
-            "SELECT ID, post_title, post_type, post_status
-             FROM {$wpdb->posts}
-             WHERE post_content LIKE '%[et_pb_%'
+
+        $per_page = absint( get_user_option( 'edit_per_page' ) );
+        if ( ! $per_page ) {
+            $per_page = 20;
+        }
+        $paged  = isset( $_POST['paged'] ) ? max( 1, absint( $_POST['paged'] ) ) : 1;
+        $offset = ( $paged - 1 ) * $per_page;
+
+        $where = "WHERE post_content LIKE '%[et_pb_%'
                AND post_status IN ('publish','draft','private','pending')
-               AND post_type IN ('page','post')
-             ORDER BY post_type, post_title"
+               AND post_type IN ('page','post')";
+
+        $total_items = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts} {$where}"
+        );
+
+        $total_pages = (int) ceil( $total_items / $per_page );
+
+        $results = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT ID, post_title, post_type, post_status
+                 FROM {$wpdb->posts}
+                 {$where}
+                 ORDER BY post_type, post_title
+                 LIMIT %d OFFSET %d",
+                $per_page,
+                $offset
+            )
         );
 
         $pages = [];
@@ -109,7 +130,13 @@ final class Divi2Gutenberg {
             ];
         }
 
-        wp_send_json_success( $pages );
+        wp_send_json_success( [
+            'pages'       => $pages,
+            'total_items' => $total_items,
+            'total_pages' => $total_pages,
+            'current_page' => $paged,
+            'per_page'    => $per_page,
+        ] );
     }
 
     /**
