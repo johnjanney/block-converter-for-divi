@@ -164,6 +164,38 @@
     word-wrap: break-word;
 }
 
+/* Pagination */
+#d2g-pagination {
+    margin-top: 12px;
+}
+
+#d2g-pagination .tablenav-pages {
+    float: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#d2g-pagination .displaying-num {
+    margin-right: 8px;
+}
+
+#d2g-pagination .pagination-links .button {
+    min-width: 30px;
+    text-align: center;
+    padding: 0 4px;
+}
+
+#d2g-pagination .pagination-links .button.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+#d2g-pagination .paging-input {
+    font-size: 13px;
+    margin: 0 4px;
+}
+
 /* Spinner */
 .d2g-spinner {
     display: inline-block;

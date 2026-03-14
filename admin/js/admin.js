@@ -10,6 +10,11 @@
     var $batchProgress = $('#d2g-batch-progress');
     var $selectAll    = $('#d2g-select-all');
     var $modal        = $('#d2g-preview-modal');
+    var $pagination   = $('#d2g-pagination');
+    var $pagLinks     = $('#d2g-pagination-links');
+    var $displayNum   = $('#d2g-displaying-num');
+
+    var currentPage = 1;
 
     function showStatus(msg, type) {
         $status.removeClass('d2g-error d2g-success')
@@ -22,33 +27,59 @@
         $status.hide();
     }
 
-    // Scan for Divi pages.
-    $scanBtn.on('click', function () {
-        var $btn = $(this);
-        $btn.prop('disabled', true).text('Scanning…');
+    function renderPagination(data) {
+        var totalItems = data.total_items;
+        var totalPages = data.total_pages;
+        var page       = data.current_page;
+
+        if (totalPages <= 1) {
+            $pagination.hide();
+            return;
+        }
+
+        $displayNum.text(totalItems + ' item(s)');
+
+        var html = '';
+        html += '<a class="first-page button' + (page <= 1 ? ' disabled' : '') + '" data-page="1" title="First page">&laquo;</a> ';
+        html += '<a class="prev-page button' + (page <= 1 ? ' disabled' : '') + '" data-page="' + (page - 1) + '" title="Previous page">&lsaquo;</a> ';
+        html += '<span class="paging-input">' + page + ' of <span class="total-pages">' + totalPages + '</span></span> ';
+        html += '<a class="next-page button' + (page >= totalPages ? ' disabled' : '') + '" data-page="' + (page + 1) + '" title="Next page">&rsaquo;</a> ';
+        html += '<a class="last-page button' + (page >= totalPages ? ' disabled' : '') + '" data-page="' + totalPages + '" title="Last page">&raquo;</a>';
+
+        $pagLinks.html(html);
+        $pagination.show();
+    }
+
+    function loadPage(page) {
+        currentPage = page;
+        $scanBtn.prop('disabled', true).text('Scanning…');
         hideStatus();
         $tbody.empty();
         $table.hide();
         $batchBar.hide();
+        $pagination.hide();
 
         $.post(d2g.ajax_url, {
             action: 'd2g_scan_pages',
-            nonce: d2g.nonce
+            nonce: d2g.nonce,
+            paged: page
         }, function (res) {
-            $btn.prop('disabled', false).text('Scan for Divi Pages');
+            $scanBtn.prop('disabled', false).text('Scan for Divi Pages');
 
             if (!res.success) {
                 showStatus(res.data || 'Scan failed.', 'error');
                 return;
             }
 
-            var pages = res.data;
-            if (!pages.length) {
+            var data  = res.data;
+            var pages = data.pages;
+
+            if (!data.total_items) {
                 showStatus('No Divi pages found.', 'success');
                 return;
             }
 
-            showStatus(pages.length + ' Divi page(s) found.', 'success');
+            showStatus(data.total_items + ' Divi page(s) found.', 'success');
 
             $.each(pages, function (i, page) {
                 var row = '<tr data-id="' + page.id + '">' +
@@ -64,12 +95,28 @@
                 $tbody.append(row);
             });
 
+            $selectAll.prop('checked', false);
             $table.show();
             $batchBar.show();
+            renderPagination(data);
         }).fail(function () {
-            $btn.prop('disabled', false).text('Scan for Divi Pages');
+            $scanBtn.prop('disabled', false).text('Scan for Divi Pages');
             showStatus('Network error during scan.', 'error');
         });
+    }
+
+    // Scan for Divi pages.
+    $scanBtn.on('click', function () {
+        loadPage(1);
+    });
+
+    // Pagination clicks.
+    $pagination.on('click', 'a:not(.disabled)', function (e) {
+        e.preventDefault();
+        var page = $(this).data('page');
+        if (page) {
+            loadPage(page);
+        }
     });
 
     // Select all checkbox.
