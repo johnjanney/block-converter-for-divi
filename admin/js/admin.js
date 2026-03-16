@@ -8,28 +8,13 @@
     var $batchBar      = $('#d2g-batch-bar');
     var $convertBtn    = $('#d2g-convert-selected');
     var $batchProgress = $('#d2g-batch-progress');
-    var $selectAll     = $('#d2g-select-all');
-    var $modal         = $('#d2g-preview-modal');
-    var $filters       = $('#d2g-filters');
-    var $pagination    = $('#d2g-pagination');
+    var $selectAll    = $('#d2g-select-all');
+    var $modal        = $('#d2g-preview-modal');
+    var $pagination   = $('#d2g-pagination');
+    var $pagLinks     = $('#d2g-pagination-links');
+    var $displayNum   = $('#d2g-displaying-num');
 
-    // State.
-    var allPages     = [];   // Full dataset from server.
-    var filtered     = [];   // After filter + sort.
-    var currentPage  = 1;
-
-    function getPerPage() {
-        var val = $('#d2g-per-page').val();
-        return val === 'all' ? Infinity : parseInt(val, 10);
-    }
-
-    function getTotalPages() {
-        var perPage = getPerPage();
-        if (perPage === Infinity || !filtered.length) return 1;
-        return Math.ceil(filtered.length / perPage);
-    }
-
-    // ---------- Status helpers ----------
+    var currentPage = 1;
 
     function showStatus(msg, type) {
         $status.removeClass('d2g-error d2g-success')
@@ -42,75 +27,68 @@
         $status.hide();
     }
 
-    // ---------- Filter & Sort ----------
+    function renderPagination(data) {
+        var totalItems = data.total_items;
+        var totalPages = data.total_pages;
+        var page       = data.current_page;
 
-    function applyFilterAndSort() {
-        var typeFilter = $('#d2g-filter-type').val();
-        var sortVal    = $('#d2g-sort-by').val();
+        if (totalPages <= 1) {
+            $pagination.hide();
+            return;
+        }
 
-        // Filter.
-        filtered = allPages.filter(function (p) {
-            return typeFilter === 'all' || p.type === typeFilter;
-        });
+        $displayNum.text(totalItems + ' item(s)');
 
-        // Sort.
-        var parts = sortVal.split('-');
-        var field = parts[0];
-        var dir   = parts[1] === 'desc' ? -1 : 1;
+        var html = '';
+        html += '<a class="first-page button' + (page <= 1 ? ' disabled' : '') + '" data-page="1" title="First page">&laquo;</a> ';
+        html += '<a class="prev-page button' + (page <= 1 ? ' disabled' : '') + '" data-page="' + (page - 1) + '" title="Previous page">&lsaquo;</a> ';
+        html += '<span class="paging-input">' + page + ' of <span class="total-pages">' + totalPages + '</span></span> ';
+        html += '<a class="next-page button' + (page >= totalPages ? ' disabled' : '') + '" data-page="' + (page + 1) + '" title="Next page">&rsaquo;</a> ';
+        html += '<a class="last-page button' + (page >= totalPages ? ' disabled' : '') + '" data-page="' + totalPages + '" title="Last page">&raquo;</a>';
 
-        filtered.sort(function (a, b) {
-            var aVal, bVal;
-            if (field === 'date') {
-                aVal = a.date || '';
-                bVal = b.date || '';
-            } else if (field === 'title') {
-                aVal = (a.title || '').toLowerCase();
-                bVal = (b.title || '').toLowerCase();
-            } else if (field === 'type') {
-                aVal = a.type;
-                bVal = b.type;
-            } else if (field === 'status') {
-                aVal = a.status;
-                bVal = b.status;
-            } else {
-                aVal = '';
-                bVal = '';
-            }
-            if (aVal < bVal) return -1 * dir;
-            if (aVal > bVal) return 1 * dir;
-            return 0;
-        });
-
-        // Reset to page 1 and render.
-        currentPage = 1;
-        renderTable();
+        $pagLinks.html(html);
+        $pagination.show();
     }
 
-    // ---------- Render ----------
-
-    function renderTable() {
+    function loadPage(page) {
+        currentPage = page;
+        $scanBtn.prop('disabled', true).text('Scanning…');
+        hideStatus();
+        allPages = [];
+        filtered = [];
         $tbody.empty();
-        $selectAll.prop('checked', false);
+        $table.hide();
+        $batchBar.hide();
+        $pagination.hide();
 
-        var totalPages = getTotalPages();
-        if (currentPage > totalPages) currentPage = totalPages;
-        if (currentPage < 1) currentPage = 1;
+        $.post(d2g.ajax_url, {
+            action: 'd2g_scan_pages',
+            nonce: d2g.nonce,
+            paged: page
+        }, function (res) {
+            $scanBtn.prop('disabled', false).text('Scan for Divi Pages');
 
-        var perPage = getPerPage();
-        var start   = (currentPage - 1) * perPage;
-        var pageItems = perPage === Infinity ? filtered : filtered.slice(start, start + perPage);
+            if (!res.success) {
+                showStatus(res.data || 'Scan failed.', 'error');
+                return;
+            }
 
-        if (!pageItems.length) {
-            $tbody.append('<tr><td colspan="6" style="text-align:center;">No results.</td></tr>');
-        } else {
-            $.each(pageItems, function (i, page) {
-                var dateStr = page.date ? page.date.substring(0, 10) : '';
+            var data  = res.data;
+            var pages = data.pages;
+
+            if (!data.total_items) {
+                showStatus('No Divi pages found.', 'success');
+                return;
+            }
+
+            showStatus(data.total_items + ' Divi page(s) found.', 'success');
+
+            $.each(pages, function (i, page) {
                 var row = '<tr data-id="' + page.id + '">' +
                     '<td class="check-column"><input type="checkbox" class="d2g-select" value="' + page.id + '" /></td>' +
                     '<td><a href="' + escHtml(page.edit) + '" target="_blank">' + escHtml(page.title || '(no title)') + '</a></td>' +
                     '<td>' + escHtml(page.type) + '</td>' +
                     '<td>' + escHtml(page.status) + '</td>' +
-                    '<td>' + escHtml(dateStr) + '</td>' +
                     '<td class="d2g-actions">' +
                         '<button type="button" class="button d2g-preview-btn" data-id="' + page.id + '">Preview</button> ' +
                         '<button type="button" class="button button-primary d2g-convert-btn" data-id="' + page.id + '">Convert</button>' +
@@ -118,100 +96,29 @@
                     '</tr>';
                 $tbody.append(row);
             });
-        }
 
-        renderPagination();
-    }
-
-    function renderPagination() {
-        var totalPages = getTotalPages();
-        var total      = filtered.length;
-        var perPage    = getPerPage();
-        var start, end;
-
-        if (perPage === Infinity) {
-            start = 1;
-            end   = total;
-        } else {
-            start = total ? (currentPage - 1) * perPage + 1 : 0;
-            end   = Math.min(currentPage * perPage, total);
-        }
-
-        $('#d2g-page-info').text(total ? start + '–' + end + ' of ' + total + ' items' : '0 items');
-        $('#d2g-total-pages').text(totalPages);
-        $('#d2g-page-input').val(currentPage).attr('max', totalPages);
-
-        $('#d2g-page-first, #d2g-page-prev').prop('disabled', currentPage <= 1);
-        $('#d2g-page-next, #d2g-page-last').prop('disabled', currentPage >= totalPages);
-
-        $pagination.toggle(totalPages > 1 || total > 0);
-    }
-
-    // ---------- Pagination events ----------
-
-    $('#d2g-page-first').on('click', function () { currentPage = 1; renderTable(); });
-    $('#d2g-page-prev').on('click', function () { currentPage--; renderTable(); });
-    $('#d2g-page-next').on('click', function () { currentPage++; renderTable(); });
-    $('#d2g-page-last').on('click', function () { currentPage = getTotalPages(); renderTable(); });
-
-    $('#d2g-page-input').on('change', function () {
-        var val = parseInt($(this).val(), 10);
-        if (val >= 1 && val <= getTotalPages()) {
-            currentPage = val;
-            renderTable();
-        } else {
-            $(this).val(currentPage);
-        }
-    });
-
-    // Filter / sort / per-page changes.
-    $('#d2g-filter-type, #d2g-sort-by').on('change', applyFilterAndSort);
-    $('#d2g-per-page').on('change', function () {
-        currentPage = 1;
-        renderTable();
-    });
-
-    // ---------- Scan ----------
-
-    $scanBtn.on('click', function () {
-        var $btn = $(this);
-        $btn.prop('disabled', true).text('Scanning…');
-        hideStatus();
-        allPages = [];
-        filtered = [];
-        $tbody.empty();
-        $table.hide();
-        $batchBar.hide();
-        $filters.hide();
-        $pagination.hide();
-
-        $.post(d2g.ajax_url, {
-            action: 'd2g_scan_pages',
-            nonce: d2g.nonce
-        }, function (res) {
-            $btn.prop('disabled', false).text('Scan for Divi Pages');
-
-            if (!res.success) {
-                showStatus(res.data || 'Scan failed.', 'error');
-                return;
-            }
-
-            allPages = res.data;
-            if (!allPages.length) {
-                showStatus('No Divi pages found.', 'success');
-                return;
-            }
-
-            showStatus(allPages.length + ' Divi page(s) found.', 'success');
-            $filters.show();
+            $selectAll.prop('checked', false);
             $table.show();
             $batchBar.show();
-
-            applyFilterAndSort();
+            renderPagination(data);
         }).fail(function () {
-            $btn.prop('disabled', false).text('Scan for Divi Pages');
+            $scanBtn.prop('disabled', false).text('Scan for Divi Pages');
             showStatus('Network error during scan.', 'error');
         });
+    }
+
+    // Scan for Divi pages.
+    $scanBtn.on('click', function () {
+        loadPage(1);
+    });
+
+    // Pagination clicks.
+    $pagination.on('click', 'a:not(.disabled)', function (e) {
+        e.preventDefault();
+        var page = $(this).data('page');
+        if (page) {
+            loadPage(page);
+        }
     });
 
     // ---------- Select all ----------

@@ -265,7 +265,10 @@ class D2G_Converter {
 
         $inner = $this->render_nodes( $node['children'] );
 
-        if ( $col_count >= 2 ) {
+        // A core/column block must be nested inside core/columns.
+        // Divi rows commonly have a single column (type 4_4), so we still
+        // need a columns wrapper to avoid Gutenberg block validation errors.
+        if ( $col_count >= 1 ) {
             $columns_html = '<div class="wp-block-columns">' . "\n" . $inner . "\n" . '</div>';
             return $this->gutenberg_block( 'columns', [], $columns_html, true );
         }
@@ -527,12 +530,18 @@ class D2G_Converter {
         $block_attrs = [
             'sizeSlug'        => 'large',
             'linkDestination' => $url ? 'custom' : 'none',
+            'url'             => $src,
+            'alt'             => $alt,
         ];
 
         // Try to resolve WordPress attachment ID.
         $attach_id = $this->url_to_attachment_id( $src );
         if ( $attach_id ) {
             $block_attrs['id'] = $attach_id;
+        }
+
+        if ( $url ) {
+            $block_attrs['href'] = $url;
         }
 
         if ( $align ) {
@@ -846,6 +855,11 @@ class D2G_Converter {
         $columns   = (int) ( $attrs['gallery_columns'] ?? $attrs['columns_number'] ?? 3 );
         $show_cap  = ( $attrs['show_title_and_caption'] ?? '' ) !== 'off';
 
+        // Divi gallery modules can render as either a grid or a slider/carousel.
+        // Preserve that intent by carrying the format through to the converted block.
+        $layout_hint  = strtolower( (string) ( $attrs['gallery_layout'] ?? $attrs['layout'] ?? $attrs['type'] ?? '' ) );
+        $is_carousel  = ( $attrs['fullwidth'] ?? '' ) === 'on' || in_array( $layout_hint, [ 'slider', 'carousel' ], true );
+
         if ( '' === $ids_str ) {
             return $this->gutenberg_block( 'paragraph', [], '<p>[Gallery — no images specified]</p>' );
         }
@@ -860,13 +874,19 @@ class D2G_Converter {
         $divi_link   = $attrs['gallery_link'] ?? 'lightbox';
         $link_to     = $link_map[ $divi_link ] ?? 'none';
 
-        $ids = array_map( 'intval', explode( ',', $ids_str ) );
+        $ids = array_values( array_filter( array_map( 'intval', explode( ',', $ids_str ) ) ) );
         $columns = max( 1, min( $columns, 8 ) );
 
         $gallery_attrs = [
-            'columns' => $columns,
-            'linkTo'  => $link_to,
+            'columns'   => $columns,
+            'linkTo'    => $link_to,
+            'imageCrop' => true,
         ];
+
+        if ( $is_carousel ) {
+            // Core/gallery doesn't support a native carousel block attribute.
+            $gallery_attrs['className'] = 'd2g-gallery-slider';
+        }
 
         // Build individual wp:image inner blocks for each gallery image.
         $images_markup = '';
@@ -879,6 +899,8 @@ class D2G_Converter {
                 'id'              => $id,
                 'sizeSlug'        => 'large',
                 'linkDestination' => $link_to,
+                'url'             => $url,
+                'alt'             => $alt,
             ];
 
             if ( $url ) {
@@ -898,7 +920,11 @@ class D2G_Converter {
             $images_markup .= $this->gutenberg_block( 'image', $img_attrs, $fig_html );
         }
 
-        $gallery_html = '<figure class="wp-block-gallery has-nested-images columns-' . $columns . ' is-cropped">' . "\n" . $images_markup . '</figure>';
+        $gallery_classes = 'wp-block-gallery has-nested-images columns-' . $columns . ' is-cropped';
+        if ( $is_carousel ) {
+            $gallery_classes .= ' d2g-gallery-slider';
+        }
+        $gallery_html    = '<figure class="' . esc_attr( $gallery_classes ) . '">' . "\n" . $images_markup . '</figure>';
         return $this->gutenberg_block( 'gallery', $gallery_attrs, $gallery_html, true );
     }
 

@@ -86,19 +86,10 @@ class D2G_Admin {
                 <tbody></tbody>
             </table>
 
-            <div id="d2g-pagination" class="d2g-pagination" style="display:none;">
-                <span id="d2g-page-info" class="d2g-page-info"></span>
-                <div class="d2g-page-buttons">
-                    <button type="button" id="d2g-page-first" class="button" title="<?php esc_attr_e( 'First page', 'divi2gutenberg' ); ?>">&laquo;</button>
-                    <button type="button" id="d2g-page-prev" class="button" title="<?php esc_attr_e( 'Previous page', 'divi2gutenberg' ); ?>">&lsaquo;</button>
-                    <span class="d2g-page-current">
-                        <?php esc_html_e( 'Page', 'divi2gutenberg' ); ?>
-                        <input type="number" id="d2g-page-input" min="1" value="1" class="small-text" />
-                        <?php esc_html_e( 'of', 'divi2gutenberg' ); ?>
-                        <span id="d2g-total-pages">1</span>
-                    </span>
-                    <button type="button" id="d2g-page-next" class="button" title="<?php esc_attr_e( 'Next page', 'divi2gutenberg' ); ?>">&rsaquo;</button>
-                    <button type="button" id="d2g-page-last" class="button" title="<?php esc_attr_e( 'Last page', 'divi2gutenberg' ); ?>">&raquo;</button>
+            <div id="d2g-pagination" class="tablenav" style="display:none;">
+                <div class="tablenav-pages">
+                    <span class="displaying-num" id="d2g-displaying-num"></span>
+                    <span class="pagination-links" id="d2g-pagination-links"></span>
                 </div>
             </div>
 
