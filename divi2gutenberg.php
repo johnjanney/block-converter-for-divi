@@ -90,7 +90,7 @@ final class Divi2Gutenberg {
 
         global $wpdb;
         $results = $wpdb->get_results(
-            "SELECT ID, post_title, post_type, post_status
+            "SELECT ID, post_title, post_type, post_status, post_date
              FROM {$wpdb->posts}
              WHERE post_content LIKE '%[et_pb_%'
                AND post_status IN ('publish','draft','private','pending')
@@ -105,6 +105,7 @@ final class Divi2Gutenberg {
                 'title'  => $row->post_title,
                 'type'   => $row->post_type,
                 'status' => $row->post_status,
+                'date'   => $row->post_date,
                 'edit'   => get_edit_post_link( $row->ID, 'raw' ),
             ];
         }
