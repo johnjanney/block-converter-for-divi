@@ -109,7 +109,7 @@ final class Divi2Gutenberg {
 
         $results = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT ID, post_title, post_type, post_status
+                "SELECT ID, post_title, post_type, post_status, post_date
                  FROM {$wpdb->posts}
                  {$where}
                  ORDER BY post_type, post_title

@@ -54,8 +54,6 @@
         currentPage = page;
         $scanBtn.prop('disabled', true).text('Scanning…');
         hideStatus();
-        allPages = [];
-        filtered = [];
         $tbody.empty();
         $table.hide();
         $batchBar.hide();
@@ -89,6 +87,7 @@
                     '<td><a href="' + escHtml(page.edit) + '" target="_blank">' + escHtml(page.title || '(no title)') + '</a></td>' +
                     '<td>' + escHtml(page.type) + '</td>' +
                     '<td>' + escHtml(page.status) + '</td>' +
+                    '<td>' + escHtml(page.date) + '</td>' +
                     '<td class="d2g-actions">' +
                         '<button type="button" class="button d2g-preview-btn" data-id="' + page.id + '">Preview</button> ' +
                         '<button type="button" class="button button-primary d2g-convert-btn" data-id="' + page.id + '">Convert</button>' +
