@@ -90,33 +90,18 @@ final class Divi2Gutenberg {
 
         global $wpdb;
 
-        $per_page = absint( get_user_option( 'edit_per_page' ) );
-        if ( ! $per_page ) {
-            $per_page = 20;
-        }
-        $paged  = isset( $_POST['paged'] ) ? max( 1, absint( $_POST['paged'] ) ) : 1;
-        $offset = ( $paged - 1 ) * $per_page;
-
-        $where = "WHERE post_content LIKE '%[et_pb_%'
-               AND post_status IN ('publish','draft','private','pending')
-               AND post_type IN ('page','post')";
-
-        $total_items = (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM {$wpdb->posts} {$where}"
-        );
-
-        $total_pages = (int) ceil( $total_items / $per_page );
-
+        // Detect Divi pages by content pattern OR by the Divi builder meta flag.
+        // Fetches all results at once; pagination is handled client-side.
         $results = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT ID, post_title, post_type, post_status
-                 FROM {$wpdb->posts}
-                 {$where}
-                 ORDER BY post_type, post_title
-                 LIMIT %d OFFSET %d",
-                $per_page,
-                $offset
-            )
+            "SELECT DISTINCT p.ID, p.post_title, p.post_type, p.post_status, p.post_date
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm
+               ON p.ID = pm.post_id AND pm.meta_key = '_et_pb_use_builder'
+             WHERE ( p.post_content LIKE '%[et\_pb\_%'
+                  OR pm.meta_value = 'on' )
+               AND p.post_status IN ('publish','draft','private','pending')
+               AND p.post_type IN ('page','post')
+             ORDER BY p.post_type, p.post_title"
         );
 
         $pages = [];
@@ -131,13 +116,7 @@ final class Divi2Gutenberg {
             ];
         }
 
-        wp_send_json_success( [
-            'pages'       => $pages,
-            'total_items' => $total_items,
-            'total_pages' => $total_pages,
-            'current_page' => $paged,
-            'per_page'    => $per_page,
-        ] );
+        wp_send_json_success( $pages );
     }
 
     /**

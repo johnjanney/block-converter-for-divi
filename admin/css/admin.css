@@ -97,39 +97,6 @@
     background: #fcf0f1;
 }
 
-/* Pagination */
-.d2g-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 12px;
-    padding: 8px 0;
-}
-
-.d2g-page-info {
-    font-size: 13px;
-    color: #555;
-}
-
-.d2g-page-buttons {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.d2g-page-current {
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin: 0 4px;
-}
-
-#d2g-page-input {
-    width: 50px;
-    text-align: center;
-}
-
 /* Batch bar */
 .d2g-batch-bar {
     margin-top: 16px;
