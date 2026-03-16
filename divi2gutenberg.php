@@ -126,6 +126,7 @@ final class Divi2Gutenberg {
                 'title'  => $row->post_title,
                 'type'   => $row->post_type,
                 'status' => $row->post_status,
+                'date'   => $row->post_date,
                 'edit'   => get_edit_post_link( $row->ID, 'raw' ),
             ];
         }

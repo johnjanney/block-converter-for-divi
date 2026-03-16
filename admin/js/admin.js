@@ -1,12 +1,12 @@
 (function ($) {
     'use strict';
 
-    var $scanBtn      = $('#d2g-scan');
-    var $status       = $('#d2g-status');
-    var $table        = $('#d2g-results');
-    var $tbody        = $table.find('tbody');
-    var $batchBar     = $('#d2g-batch-bar');
-    var $convertBtn   = $('#d2g-convert-selected');
+    var $scanBtn       = $('#d2g-scan');
+    var $status        = $('#d2g-status');
+    var $table         = $('#d2g-results');
+    var $tbody         = $table.find('tbody');
+    var $batchBar      = $('#d2g-batch-bar');
+    var $convertBtn    = $('#d2g-convert-selected');
     var $batchProgress = $('#d2g-batch-progress');
     var $selectAll    = $('#d2g-select-all');
     var $modal        = $('#d2g-preview-modal');
@@ -54,6 +54,8 @@
         currentPage = page;
         $scanBtn.prop('disabled', true).text('Scanning…');
         hideStatus();
+        allPages = [];
+        filtered = [];
         $tbody.empty();
         $table.hide();
         $batchBar.hide();
@@ -119,12 +121,14 @@
         }
     });
 
-    // Select all checkbox.
+    // ---------- Select all ----------
+
     $selectAll.on('change', function () {
         $tbody.find('.d2g-select').prop('checked', this.checked);
     });
 
-    // Preview a single page.
+    // ---------- Preview ----------
+
     $tbody.on('click', '.d2g-preview-btn', function () {
         var $btn = $(this);
         var postId = $btn.data('id');
@@ -151,7 +155,8 @@
         });
     });
 
-    // Close modal.
+    // ---------- Modal ----------
+
     $modal.on('click', '.d2g-modal-close', function () {
         $modal.hide();
     });
@@ -161,7 +166,8 @@
         }
     });
 
-    // Convert a single page.
+    // ---------- Convert single ----------
+
     $tbody.on('click', '.d2g-convert-btn', function () {
         var $btn = $(this);
         var postId = $btn.data('id');
@@ -208,7 +214,8 @@
         });
     }
 
-    // Batch convert selected pages.
+    // ---------- Batch convert ----------
+
     $convertBtn.on('click', function () {
         var ids = [];
         $tbody.find('.d2g-select:checked').each(function () {
@@ -246,6 +253,8 @@
 
         next();
     });
+
+    // ---------- Utility ----------
 
     function escHtml(str) {
         if (!str) return '';

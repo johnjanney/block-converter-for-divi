@@ -41,13 +41,45 @@ class D2G_Admin {
 
             <div id="d2g-status" class="d2g-status" style="display:none;"></div>
 
+            <div id="d2g-filters" class="d2g-filters" style="display:none;">
+                <div class="d2g-filter-group">
+                    <label for="d2g-filter-type"><?php esc_html_e( 'Show:', 'divi2gutenberg' ); ?></label>
+                    <select id="d2g-filter-type">
+                        <option value="all"><?php esc_html_e( 'All', 'divi2gutenberg' ); ?></option>
+                        <option value="page"><?php esc_html_e( 'Pages', 'divi2gutenberg' ); ?></option>
+                        <option value="post"><?php esc_html_e( 'Posts', 'divi2gutenberg' ); ?></option>
+                    </select>
+                </div>
+                <div class="d2g-filter-group">
+                    <label for="d2g-sort-by"><?php esc_html_e( 'Sort by:', 'divi2gutenberg' ); ?></label>
+                    <select id="d2g-sort-by">
+                        <option value="title-asc"><?php esc_html_e( 'Title (A–Z)', 'divi2gutenberg' ); ?></option>
+                        <option value="title-desc"><?php esc_html_e( 'Title (Z–A)', 'divi2gutenberg' ); ?></option>
+                        <option value="date-desc"><?php esc_html_e( 'Date (Newest)', 'divi2gutenberg' ); ?></option>
+                        <option value="date-asc"><?php esc_html_e( 'Date (Oldest)', 'divi2gutenberg' ); ?></option>
+                        <option value="type-asc"><?php esc_html_e( 'Type (A–Z)', 'divi2gutenberg' ); ?></option>
+                        <option value="status-asc"><?php esc_html_e( 'Status (A–Z)', 'divi2gutenberg' ); ?></option>
+                    </select>
+                </div>
+                <div class="d2g-filter-group">
+                    <label for="d2g-per-page"><?php esc_html_e( 'Per page:', 'divi2gutenberg' ); ?></label>
+                    <select id="d2g-per-page">
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="all"><?php esc_html_e( 'All', 'divi2gutenberg' ); ?></option>
+                    </select>
+                </div>
+            </div>
+
             <table id="d2g-results" class="widefat d2g-table" style="display:none;">
                 <thead>
                     <tr>
                         <th class="check-column"><input type="checkbox" id="d2g-select-all" /></th>
-                        <th><?php esc_html_e( 'Title', 'divi2gutenberg' ); ?></th>
-                        <th><?php esc_html_e( 'Type', 'divi2gutenberg' ); ?></th>
-                        <th><?php esc_html_e( 'Status', 'divi2gutenberg' ); ?></th>
+                        <th class="d2g-sortable" data-sort="title"><?php esc_html_e( 'Title', 'divi2gutenberg' ); ?></th>
+                        <th class="d2g-sortable" data-sort="type"><?php esc_html_e( 'Type', 'divi2gutenberg' ); ?></th>
+                        <th class="d2g-sortable" data-sort="status"><?php esc_html_e( 'Status', 'divi2gutenberg' ); ?></th>
+                        <th><?php esc_html_e( 'Date', 'divi2gutenberg' ); ?></th>
                         <th><?php esc_html_e( 'Actions', 'divi2gutenberg' ); ?></th>
                     </tr>
                 </thead>
