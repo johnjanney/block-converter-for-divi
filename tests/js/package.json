@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Runs converted markup through the real WordPress block parser and validator.",
+  "engines": {
+    "node": ">=22.22.2"
+  },
   "dependencies": {
     "@wordpress/block-library": "^10.3.0",
     "@wordpress/blocks": "^15.25.0",

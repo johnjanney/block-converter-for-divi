@@ -231,7 +231,9 @@ were invalid block markup, which is the one thing the project exists to avoid.
   fail against 2.1.0 before the fix landed.
 - A GitHub Actions workflow: the full suite including block validation, a PHP
   matrix over 7.4 through 8.4, a guard that golden snapshots are committed and
-  current, and lint and syntax checks. The suite was additionally run locally
+  current, and lint and syntax checks. The validator needs Node 22 (jsdom's
+  floor); `tests/js/.npmrc` sets `engine-strict` so an older Node fails the
+  install rather than failing mysteriously at runtime. The suite was additionally run locally
   under Docker on PHP 7.4, 8.1, 8.2, 8.3, 8.4 and 8.5 — identical results and
   byte-identical snapshots on all six.
 

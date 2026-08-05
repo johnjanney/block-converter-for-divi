@@ -1,9 +1,14 @@
 # The converter test suite
 
 ```bash
-php tests/run.php                 # everything
 npm --prefix tests/js ci          # once, to enable real block validation
+php tests/run.php                 # everything
 ```
+
+Requires **Node 22 or newer** — jsdom's floor. `npm ci` refuses to install on
+anything older rather than installing and letting a transitive dependency throw
+later, which is how a Node 20 CI runner got as far as a green install and a
+mystifying validator crash.
 
 The suite exists to answer two questions the project could not answer before:
 
