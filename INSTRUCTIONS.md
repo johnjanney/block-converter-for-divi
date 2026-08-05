@@ -277,9 +277,25 @@ Deactivate and delete under **Plugins**. Converted pages are unaffected —
 Gutenberg block markup is native WordPress content and does not depend on this
 plugin.
 
-The plugin has no uninstall routine, so any `_d2g_divi_backup` and
-`_d2g_backup_date` post meta remains in the database. That is intentional for
-safety. To clear it once you are confident in the migration:
+### What happens to your backups
+
+**By default, deleting the plugin keeps every backup.** They are the only way to
+restore a converted page, so removing the plugin does not throw away your
+ability to roll back. The meta stays in the database and the Restore capability
+returns if you reinstall.
+
+Once your migration is finished and you are certain you will not need to roll
+anything back, tick **Delete all Divi backups when this plugin is deleted** in
+the *Data retention* box on the tools screen. With that on, deleting the plugin
+removes all `_d2g_divi_backup` and `_d2g_backup_date` meta across the site — on
+multisite, across every site in the network.
+
+The setting only takes effect when the plugin is **deleted**, not deactivated,
+and it cannot be undone afterwards. Turning it on asks for confirmation.
+
+### Clearing backups by hand
+
+To remove a single page's backup without touching the setting:
 
 ```bash
 wp post meta delete <POST_ID> _d2g_divi_backup

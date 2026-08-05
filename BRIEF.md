@@ -60,7 +60,10 @@ without requiring Divi to remain installed afterward.
 ## 4. Architecture
 
 ```
-divi2gutenberg.php            Bootstrap, constants, admin menu, 3 AJAX endpoints
+divi2gutenberg.php            Bootstrap, constants, admin menu, 5 AJAX endpoints
+uninstall.php                 Delete-time cleanup; opt-in backup removal
+LICENSE                       GPL-2.0
+bin/build-zip.sh              Versioned release packaging
 ├── includes/
 │   ├── class-d2g-parser.php        Divi shortcode → node tree
 │   ├── class-d2g-converter.php     Node tree → Gutenberg block markup (~1800 LOC)
@@ -98,6 +101,7 @@ Gutenberg block comment markup → `wp_update_post()`.
 | `d2g_preview_conversion` | Convert in memory, return original + converted |
 | `d2g_convert_page` | Backup (optional), convert, save, detach builder meta |
 | `d2g_restore_page` | Restore `post_content` from `_d2g_divi_backup`, re-enable the Divi Builder |
+| `d2g_save_settings` | Persist the opt-in "delete backups on uninstall" preference |
 
 The scan deliberately matches on *"contains `[et_pb_` **or** has a backup"*. A
 converted page no longer contains Divi markup, so a content-only match would
@@ -193,11 +197,13 @@ emits nothing.
 
 ## 8. Roadmap
 
-**Phase 1 — Release hygiene (next)**
-- Adopt semantic versioning; bump `D2G_VERSION` + plugin header together
-- Build and retain versioned ZIPs (`divi2gutenberg-X.Y.Z.zip`), tag each release
-- Add `readme.txt`, `uninstall.php`, `LICENSE`
-- Populate `CHANGELOG.md` going forward
+**Phase 1 — Release hygiene** *(largely delivered)*
+- ~~Adopt semantic versioning; bump `D2G_VERSION` + plugin header together~~ — done
+- ~~Build and retain versioned ZIPs, tag each release~~ — done; `bin/build-zip.sh`
+  reads the version from the plugin header and refuses to overwrite an archive
+- ~~Add `uninstall.php` and `LICENSE`~~ — done
+- ~~Populate `CHANGELOG.md`~~ — done
+- `readme.txt` in WordPress.org format — only needed if we distribute there (Q8)
 
 **Phase 2 — Safety** *(partly delivered in 1.1.0)*
 - ~~Restore-from-backup UI and endpoint~~ — done in 1.1.0

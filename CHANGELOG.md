@@ -40,8 +40,9 @@ Every release **must**:
 
 ### What goes in the ZIP
 
-Ships to users: the plugin code, `README.md`, `INSTRUCTIONS.md`, and
-`CHANGELOG.md`.
+Ships to users: the plugin code, `LICENSE`, `README.md`, `INSTRUCTIONS.md`, and
+`CHANGELOG.md`. `LICENSE` is not optional — the GPL requires the licence text to
+accompany the distributed work.
 
 Excluded as internal: `BRIEF.md`, `OPENQUESTIONS.md`, `.git/`, `dist/`, and
 `build/`.
@@ -85,7 +86,20 @@ gh release create "v${VERSION}" "dist/divi2gutenberg-${VERSION}.zip" \
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- `LICENSE` — the full GPL-2.0 text, matching the licence declared in the plugin
+  header.
+- `uninstall.php` — cleanup handler that runs when the plugin is **deleted**
+  (not on deactivation). Multisite-aware: it walks every site, since post meta
+  and options are per-site and `uninstall.php` executes only once.
+- **"Delete all Divi backups when this plugin is deleted"** setting on the tools
+  screen, off by default, with a confirmation prompt when switching it on.
+
+### Changed
+- Deleting the plugin no longer leaves its preference row behind. **Backups are
+  still kept unless the new setting is switched on** — they are the only way to
+  restore a converted page, so removing the plugin must not silently destroy the
+  ability to undo its own work.
 
 ---
 

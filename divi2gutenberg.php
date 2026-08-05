@@ -45,6 +45,7 @@ final class Divi2Gutenberg {
         add_action( 'wp_ajax_d2g_scan_pages', [ $this, 'ajax_scan_pages' ] );
         add_action( 'wp_ajax_d2g_preview_conversion', [ $this, 'ajax_preview_conversion' ] );
         add_action( 'wp_ajax_d2g_restore_page', [ $this, 'ajax_restore_page' ] );
+        add_action( 'wp_ajax_d2g_save_settings', [ $this, 'ajax_save_settings' ] );
     }
 
     public function register_admin_menu() {
@@ -301,6 +302,30 @@ final class Divi2Gutenberg {
             'message'     => sprintf( 'Page "%s" converted successfully.', $post->post_title ),
             'has_backup'  => (bool) $backup,
             'backup_date' => $backup ? get_post_meta( $post_id, '_d2g_backup_date', true ) : '',
+        ] );
+    }
+
+    /**
+     * AJAX: Save the tools-screen settings.
+     *
+     * Only one setting so far: whether deleting the plugin should also delete
+     * the Divi backups. Defaults to off — see uninstall.php.
+     */
+    public function ajax_save_settings() {
+        check_ajax_referer( 'd2g_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Permission denied.' );
+        }
+
+        $delete_data = isset( $_POST['delete_data'] ) && 'yes' === $_POST['delete_data'];
+
+        update_option( 'd2g_delete_data_on_uninstall', $delete_data ? 1 : 0 );
+
+        wp_send_json_success( [
+            'delete_data' => $delete_data,
+            'message'     => $delete_data
+                ? 'Backups will be deleted when the plugin is deleted.'
+                : 'Backups will be kept when the plugin is deleted.',
         ] );
     }
 

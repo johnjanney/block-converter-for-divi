@@ -397,6 +397,42 @@
         });
     });
 
+    // ---------- Settings ----------
+
+    $('#d2g-delete-data').on('change', function () {
+        var $box      = $(this);
+        var $feedback = $('#d2g-settings-feedback');
+        var enabled   = $box.is(':checked');
+
+        if (enabled && !confirm('Delete every Divi backup when this plugin is deleted?\n\nBackups are the only way to restore a converted page. Once the plugin is removed with this on, they cannot be recovered.')) {
+            $box.prop('checked', false);
+            return;
+        }
+
+        $box.prop('disabled', true);
+        $feedback.removeClass('d2g-error').text('Saving…');
+
+        $.post(d2g.ajax_url, {
+            action: 'd2g_save_settings',
+            nonce: d2g.nonce,
+            delete_data: enabled ? 'yes' : 'no'
+        }, function (res) {
+            $box.prop('disabled', false);
+
+            if (!res.success) {
+                // Put the control back to what the server still holds.
+                $box.prop('checked', !enabled);
+                $feedback.addClass('d2g-error').text(res.data || 'Could not save setting.');
+                return;
+            }
+
+            $feedback.text(res.data.message || 'Saved.');
+        }).fail(function () {
+            $box.prop('disabled', false).prop('checked', !enabled);
+            $feedback.addClass('d2g-error').text('Network error — setting not saved.');
+        });
+    });
+
     // ---------- Batch convert ----------
 
     $convertBtn.on('click', function () {

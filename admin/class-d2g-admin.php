@@ -103,6 +103,19 @@ class D2G_Admin {
                 <span id="d2g-batch-progress"></span>
             </div>
 
+            <div class="d2g-settings">
+                <h2 class="d2g-settings-heading"><?php esc_html_e( 'Data retention', 'divi2gutenberg' ); ?></h2>
+                <label class="d2g-setting-label">
+                    <input type="checkbox" id="d2g-delete-data"
+                        <?php checked( (bool) get_option( 'd2g_delete_data_on_uninstall', false ) ); ?> />
+                    <?php esc_html_e( 'Delete all Divi backups when this plugin is deleted', 'divi2gutenberg' ); ?>
+                </label>
+                <p class="d2g-setting-help">
+                    <?php esc_html_e( 'Off by default. Backups are the only way to restore a converted page, so they are kept even after the plugin is removed. Turn this on once your migration is finished and you no longer need to roll anything back.', 'divi2gutenberg' ); ?>
+                </p>
+                <span id="d2g-settings-feedback" class="d2g-setting-feedback"></span>
+            </div>
+
             <div id="d2g-preview-modal" class="d2g-modal" style="display:none;">
                 <div class="d2g-modal-content">
                     <div class="d2g-modal-header">
