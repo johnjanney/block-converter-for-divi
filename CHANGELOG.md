@@ -24,9 +24,11 @@ The changelog format follows
 
 Every release **must**:
 
-1. **Bump the version in both places** — the `Version:` header in
-   `block-converter-for-divi.php` and the `D2G_VERSION` constant. They must always match;
-   `D2G_VERSION` is used for asset cache-busting.
+1. **Bump the version in all three places** — the `Version:` header in
+   `block-converter-for-divi.php`, the `D2G_VERSION` constant, and `Stable tag:`
+   in `readme.txt`. They must always match: `D2G_VERSION` drives asset
+   cache-busting, and WordPress.org serves whatever `Stable tag` names.
+   `bin/build-zip.sh` refuses to build if they disagree.
 2. **Have a dated section in this file** listing every user-visible change.
 3. **Be tagged in git** as `vX.Y.Z` on the release commit.
 4. **Produce a distributable plugin ZIP named with its version number** —
@@ -58,11 +60,16 @@ built locally:
 
 ```
 dist/
-  block-converter-for-divi-1.0.0.zip
-  block-converter-for-divi-1.0.1.zip
-  block-converter-for-divi-1.1.0.zip
+  divi2gutenberg-1.0.0.zip          <- pre-rename releases keep their old name
+  divi2gutenberg-1.1.0.zip
+  divi2gutenberg-1.2.0.zip
+  block-converter-for-divi-2.0.0.zip
   ...
 ```
+
+Archives built before the 2.0.0 rename keep the `divi2gutenberg-` prefix. They
+are not renamed retroactively — the filename records what was actually
+published under that version.
 
 ### Building a release ZIP
 
@@ -86,6 +93,19 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 ---
 
 ## [Unreleased]
+
+_Nothing yet._
+
+---
+
+## [2.0.0] — 2026-08-04
+
+**The plugin has been renamed. Upgrading from 1.x is not automatic — see below.**
+
+Major only because the distribution identity breaks: the plugin directory name
+changed, so WordPress treats this as a different plugin and there is no upgrade
+path from 1.2.0. Nothing about conversion behaviour changed, and existing
+backups keep working.
 
 ### Changed
 - **Renamed the plugin to "Block Converter for Divi" (slug
@@ -238,7 +258,8 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/johnjanney/block-converter-for-divi/releases/tag/v1.0.0

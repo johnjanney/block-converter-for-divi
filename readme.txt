@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -133,6 +133,17 @@ the most useful thing to hear about.
 
 == Changelog ==
 
+= 2.0.0 =
+* Renamed the plugin to "Block Converter for Divi". It was previously "Divi to
+  Gutenberg Converter".
+* The admin screen moved to **Tools → Block Converter for Divi**. Old bookmarks
+  to the previous screen will not resolve.
+* Upgrading from 1.x is not automatic: the plugin folder name changed, so
+  WordPress treats this as a separate plugin. Deactivate and delete the old one,
+  then install this. Your backups are stored against your posts, not in the
+  plugin, so they survive and remain restorable.
+* No change to how pages are converted.
+
 = 1.2.0 =
 * Added the GPL-2.0 licence text.
 * Added an uninstall handler that runs when the plugin is deleted. It is
@@ -162,6 +173,11 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.0.0 =
+The plugin has been renamed. Upgrading is not automatic — deactivate and delete
+"Divi to Gutenberg Converter", then install this. Your backups survive and stay
+restorable. Conversion behaviour is unchanged.
 
 = 1.2.0 =
 Adds a licence file and an uninstall handler. Deleting the plugin still keeps

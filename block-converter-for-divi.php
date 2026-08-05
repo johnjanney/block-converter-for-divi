@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     1.2.0
+ * Version:     2.0.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * page. Renaming the keys would orphan every one of them, so they stay as they
  * are and existing backups keep working after the upgrade.
  */
-define( 'D2G_VERSION', '1.2.0' );
+define( 'D2G_VERSION', '2.0.0' );
 define( 'D2G_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'D2G_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 

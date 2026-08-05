@@ -1,6 +1,6 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** Released at `1.2.0` (tagged, packaged, published)
+**Status:** Released at `2.0.0` (tagged, packaged, published)
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
