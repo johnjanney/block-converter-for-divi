@@ -48,8 +48,8 @@ requires the licence text to accompany the distributed work. `readme.txt` must
 sit at the plugin root and its `Stable tag:` must match the version being
 released, or WordPress.org will serve the wrong version.
 
-Excluded as internal: `BRIEF.md`, `OPENQUESTIONS.md`, `.git/`, `dist/`, and
-`build/`.
+Excluded as internal: `BRIEF.md`, `OPENQUESTIONS.md`, `CODEX-REVIEW.md`,
+`CODEX-REVIEW-RESPONSE.md`, `tests/`, `.git/`, `dist/`, and `build/`.
 
 ### Where ZIPs live
 
@@ -95,6 +95,119 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 ## [Unreleased]
 
 _Nothing yet._
+
+---
+
+## [2.1.0] — 2026-08-05
+
+Correctness and data-safety release, following an external review of 2.0.0
+(`CODEX-REVIEW.md`, answered in `CODEX-REVIEW-RESPONSE.md`).
+
+**Do not publish this version until `Tested up to:` reflects a real test run**
+against a live WordPress install — see `OPENQUESTIONS.md` Q18 and Q23.
+
+### Fixed — data safety
+
+- **Backslashes were stripped from content on backup, conversion, and restore.**
+  `wp_update_post()` and `update_post_meta()` both unslash what they are given,
+  so passing unslashed content removed one level of escaping from every code
+  sample, regular expression, JSON string, and escaped quote on the page — and
+  the backup was damaged before conversion even started. All three paths now
+  pass through `wp_slash()`.
+- **A repeated conversion could destroy a page's backup.** The second request
+  read the already-converted Gutenberg content and wrote it over
+  `_d2g_divi_backup`, leaving no way back to Divi. The browser disabled the
+  button after a conversion, but a replayed request, a queued batch, or a second
+  tab does not go through the browser. The original snapshot is now written once
+  and never replaced, the server refuses to convert a post that holds no Divi
+  content, and a per-post lock stops two writes overlapping.
+- **The backup covered `post_content` only.** Conversion deletes
+  `_et_pb_use_builder` and `_et_pb_old_content`; restore re-added the first and
+  could not recover the second. Both are now snapshotted into
+  `_d2g_builder_meta` and restored as found.
+- **Post actions checked only `manage_options`.** Preview, convert, and restore
+  now also require `edit_post` on the specific post, and refuse revisions,
+  autosaves, and post types or statuses the scan does not list.
+- Conversion can be rejected when the post changed after it was previewed.
+
+### Fixed — conversion output
+
+- **Text modules produced invalid blocks.** A module's whole body was packed
+  into one paragraph block after stripping one outer `<p>` pair, so
+  `<p>One</p><p>Two</p>` became a single paragraph block containing two
+  paragraphs. Every top-level element now becomes its own block, with runs of
+  inline content gathered into paragraphs.
+- **Alignment classes had no matching block attribute.** A heading or paragraph
+  carrying `has-text-align-center` without `textAlign` / `align` fails
+  WordPress's validation, which regenerates markup from attributes and compares.
+  Affected text modules, pricing tables, and counters.
+- **An open toggle wrote `open` without `showContent`** — the same class of
+  mismatch on `core/details`.
+- Lists now use `core/list-item` inner blocks, quotes hold inner blocks, and
+  tables get the `<tbody>` that `core/table` sources its rows from. A table
+  carrying attributes core cannot store is preserved verbatim instead.
+- **Pricing table features were left on the page as raw
+  `[et_pb_pricing_item]` shortcode text.** They are now list items.
+- **Unrecognised Divi modules were left on the page as raw shortcode text.** The
+  tokenizer now recognises any `et_pb_*` tag, not only the ones with renderers.
+
+### Changed
+
+- **Contact forms no longer convert to `core/form`.** Those blocks are
+  experimental — they ship with the Gutenberg plugin and are not registered by
+  WordPress core, so on a normal install the converted page showed "block not
+  supported" placeholders. The mapping also flattened dropdowns, radios, and
+  checkboxes to text inputs and produced nothing that could send mail. The
+  fields, their types, and the recipient are now written out as ordinary blocks
+  to rebuild with a form plugin, and the module is reported as needing work.
+- **Menu modules no longer emit a `menuId` attribute.** `core/navigation` has no
+  such attribute — it references a `wp_navigation` post through `ref`, and
+  Divi's `menu_id` is a classic menu term ID. The result was a block that parsed
+  and resolved to nothing. A bare Navigation block is emitted and the classic
+  menu is named in a warning.
+- Portfolio conversion reports its dependency on Divi's `project` post type, and
+  the post type and taxonomy are filterable (`d2g_portfolio_post_type`,
+  `d2g_portfolio_taxonomy`).
+- **Minimum WordPress raised to 6.0**, derived from the blocks actually emitted.
+  `core/details` (6.3) is feature-detected and degrades to a heading plus text.
+- Batch conversion reports successes and failures separately, with a per-page
+  error list. It previously counted a failed page as converted.
+- The "All" per-page option is capped at 500 rows (`d2g_scan_hard_cap`) and says
+  so when it truncates.
+- Uninstall walks multisite in batches of 100 rather than loading every site ID.
+
+### Added
+
+- **Conversion warnings.** Every lossy or unmapped module is collected and shown
+  in the preview, and returned with the conversion response.
+- **A fixture test suite** — `php tests/run.php`. Runs on plain PHP with no
+  WordPress install, and gates `bin/build-zip.sh`.
+- Filters: `d2g_scan_hard_cap`, `d2g_supported_post_types`,
+  `d2g_supported_post_statuses`, `d2g_contact_form_markup`,
+  `d2g_portfolio_post_type`, `d2g_portfolio_taxonomy`.
+
+### Removed
+
+- The `mbstring` dependency and the PHP 8.2 `HTML-ENTITIES` deprecation. The DOM
+  loader now uses an XML encoding prologue, which also stops multibyte
+  characters being rewritten as numeric entities.
+- Dead code: an unused regex in the parser, an unused variable and a no-op block
+  name map in the converter, and a duplicated pagination section plus selectors
+  for controls that do not exist in the stylesheet.
+
+### Security
+
+- Admin status messages are inserted with `.text()` rather than `.html()`. They
+  carry post titles and server error strings, neither of which is HTML.
+
+### Accessibility and localization
+
+- The preview is a real dialog: `role="dialog"`, an accessible name, Escape to
+  close, a focus trap, and focus returned to the trigger.
+- Sortable column headers and pagination controls are real buttons with
+  `aria-sort` and labels, reachable from the keyboard.
+- The status region announces itself with `aria-live`.
+- Every interface string, including AJAX responses, is translatable.
 
 ---
 

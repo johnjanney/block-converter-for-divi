@@ -48,6 +48,28 @@ fi
 VERSION="$HEADER_VERSION"
 ARCHIVE="dist/${SLUG}-${VERSION}.zip"
 
+# ---- Conversion fixtures must pass before anything is packaged -------------
+#
+# The converter's output is a large hand-built markup string, and its whole
+# history is bug fixes to that string. The fixture suite is what stops a fixed
+# defect coming back, so it gates the build rather than being run on trust.
+
+if [[ -f tests/run.php ]]; then
+    if ! command -v php >/dev/null 2>&1; then
+        echo "error: php is required to run the fixture suite before building." >&2
+        exit 1
+    fi
+    echo "Running conversion fixtures..."
+    if ! php tests/run.php >/tmp/d2g-tests.$$ 2>&1; then
+        cat /tmp/d2g-tests.$$ >&2
+        rm -f /tmp/d2g-tests.$$
+        echo "error: fixtures failed; refusing to build." >&2
+        exit 1
+    fi
+    tail -1 /tmp/d2g-tests.$$
+    rm -f /tmp/d2g-tests.$$
+fi
+
 # ---- Never clobber a previously built archive ------------------------------
 
 if [[ -e "$ARCHIVE" ]]; then
@@ -70,6 +92,9 @@ rsync -a \
     --exclude 'bin' \
     --exclude 'BRIEF.md' \
     --exclude 'OPENQUESTIONS.md' \
+    --exclude 'CODEX-REVIEW.md' \
+    --exclude 'CODEX-REVIEW-RESPONSE.md' \
+    --exclude 'tests' \
     ./ "build/${SLUG}/"
 
 # A single top-level directory, so the WordPress plugin uploader installs it

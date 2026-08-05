@@ -76,6 +76,15 @@ class D2G_Parser {
     ];
 
     /**
+     * How deep the shortcode tree may nest before parsing stops.
+     *
+     * Each level keeps its own copy of its inner span, so a runaway nesting
+     * depth in malformed source costs both time and memory quadratically. Real
+     * Divi layouts nest about six deep (section › row › column › module).
+     */
+    const MAX_DEPTH = 32;
+
+    /**
      * Parse a Divi content string into a tree of nodes.
      *
      * Each node is: [
@@ -106,12 +115,24 @@ class D2G_Parser {
     /**
      * Recursively parse shortcode nodes from a content string.
      */
-    private function parse_nodes( string $content ): array {
+    private function parse_nodes( string $content, int $depth = 0 ): array {
         $nodes = [];
-        $tag_pattern = implode( '|', array_map( 'preg_quote', self::$tags ) );
 
-        // Match opening shortcodes: [tag attr="val"] or [tag attr="val" /]
-        $regex = '#\[(' . $tag_pattern . ')(\s[^\]]*?)?\](.*?)\[/\1\]|\[(' . $tag_pattern . ')(\s[^\]]*?)?\s*/?\]#s';
+        // Past the depth limit the remaining span is kept as text rather than
+        // parsed further. Its shortcode syntax is stripped on the way, because
+        // leaving raw [et_pb_*] markup in a converted post is the one thing
+        // conversion exists to prevent — the words survive, the tags do not.
+        if ( $depth > self::MAX_DEPTH ) {
+            $remaining = trim( self::strip_divi_tags( $content ) );
+            return '' === $remaining ? [] : [
+                [
+                    'tag'      => '__text__',
+                    'attrs'    => [],
+                    'content'  => $remaining,
+                    'children' => [],
+                ],
+            ];
+        }
 
         $offset = 0;
         $length = strlen( $content );
@@ -168,13 +189,13 @@ class D2G_Parser {
                         'tag'      => $tag,
                         'attrs'    => $attrs,
                         'content'  => $inner,
-                        'children' => $this->parse_nodes( $inner ),
+                        'children' => $this->parse_nodes( $inner, $depth + 1 ),
                     ];
                     break;
                 }
 
                 $inner = substr( $content, $next['content_start'], $close['content_end'] - $next['content_start'] );
-                $children = $this->parse_nodes( $inner );
+                $children = $this->parse_nodes( $inner, $depth + 1 );
 
                 // Always preserve the raw inner content so that modules
                 // like et_pb_text can access HTML (iframes, embeds, images)
@@ -194,12 +215,38 @@ class D2G_Parser {
     }
 
     /**
+     * Pattern matching any syntactically complete Divi shortcode tag name.
+     *
+     * Deliberately broader than self::$tags. The tokenizer used to recognise
+     * only the tags it had a renderer for, which meant a module outside that
+     * list — a newer Divi release, a third-party module, an Extra or Theme
+     * Builder tag — was never tokenized at all. It fell through as plain text
+     * and was written into the converted post verbatim, so the page ended up
+     * displaying "[et_pb_whatever]" once Divi was gone.
+     *
+     * Recognising the shape and letting convert_unknown() handle the ones with
+     * no mapping means their content survives and the user gets told, instead.
+     */
+    const TAG_NAME_PATTERN = 'et_pb_[a-z0-9_]+';
+
+    /**
      * Find the next Divi shortcode tag at or after $offset.
      */
     private function find_next_shortcode( string $content, int $offset ) {
-        $tag_pattern = implode( '|', array_map( 'preg_quote', self::$tags ) );
         // Match [tag ...] or [tag ... /]
-        $pattern = '#\[(' . $tag_pattern . ')((?:\s+[^\]]*)?)(\s*/)?]#';
+        //
+        // The attribute group is lazy. Greedy, it swallowed the closing slash
+        // of every self-closing tag that had attributes — so
+        // `[et_pb_image src="…" /]` was read as an *opening* tag, no
+        // `[/et_pb_image]` was ever found, and the "unmatched tag" branch
+        // absorbed the entire rest of the post as that image's content. Every
+        // module after a self-closing one silently disappeared.
+        //
+        // `[^\]]` cannot cross a `]`, so the match always ends at the first
+        // one; laziness only decides whether a trailing `/` lands in the
+        // attribute group or in the self-closing group, which is the question
+        // that matters.
+        $pattern = '#\[(' . self::TAG_NAME_PATTERN . ')((?:\s+[^\]]*?)?)\s*(/)?]#';
 
         if ( ! preg_match( $pattern, $content, $m, PREG_OFFSET_CAPTURE, $offset ) ) {
             return false;
@@ -226,7 +273,9 @@ class D2G_Parser {
      * Find the matching closing tag [/tag], respecting nesting.
      */
     private function find_closing_tag( string $content, string $tag, int $offset ) {
-        $open_pattern  = '#\[' . preg_quote( $tag, '#' ) . '(?:\s[^\]]*)?]#';
+        // A self-closing occurrence of the same tag must not raise the depth,
+        // or the closer that follows would be matched to it instead.
+        $open_pattern  = '#\[' . preg_quote( $tag, '#' ) . '(?:\s[^\]]*?)?(?<!/)]#';
         $close_pattern = '#\[/' . preg_quote( $tag, '#' ) . ']#';
 
         $depth = 1;
@@ -288,9 +337,53 @@ class D2G_Parser {
     }
 
     /**
-     * Check whether content contains any Divi shortcodes.
+     * Check whether content contains a Divi shortcode this parser knows.
+     *
+     * This is the gate the convert endpoint uses before it overwrites a post,
+     * so a loose match is not harmless. Testing for the bare `[et_pb_` prefix
+     * matched documentation, a code sample, or a support answer that merely
+     * mentions a Divi tag, and pulled that post into a destructive flow. The
+     * match now requires a complete, known tag followed by a real terminator —
+     * whitespace, `]`, or `/]` — so `[et_pb_` on its own no longer qualifies.
      */
     public static function has_divi_content( string $content ): bool {
-        return (bool) preg_match( '#\[et_pb_#', $content );
+        if ( false === strpos( $content, '[et_pb_' ) ) {
+            return false; // Cheap rejection before running the pattern.
+        }
+
+        return (bool) preg_match( '#\[' . self::TAG_NAME_PATTERN . '(?:\s[^\]]*)?\s*/?\]#', $content );
+    }
+
+    /**
+     * List the distinct Divi tags a string contains.
+     *
+     * @return string[]
+     */
+    public static function found_tags( string $content ): array {
+        if ( ! preg_match_all( '#\[(' . self::TAG_NAME_PATTERN . ')(?:\s[^\]]*)?\s*/?\]#', $content, $m ) ) {
+            return [];
+        }
+        return array_values( array_unique( $m[1] ) );
+    }
+
+    /**
+     * Whether this parser has a renderer registered for a tag.
+     */
+    public static function is_known_tag( string $tag ): bool {
+        return in_array( $tag, self::$tags, true );
+    }
+
+    /**
+     * Remove Divi shortcode syntax from a string, keeping the text inside it.
+     *
+     * Only used where parsing has given up — past the nesting limit — so that
+     * content is still preserved without leaving shortcode text on the page.
+     */
+    public static function strip_divi_tags( string $content ): string {
+        return (string) preg_replace(
+            '#\[/?' . self::TAG_NAME_PATTERN . '(?:\s[^\]]*)?\s*/?\]#',
+            '',
+            $content
+        );
     }
 }

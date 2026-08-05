@@ -26,6 +26,8 @@
     border-left: 4px solid #2271b1;
     background: #f0f6fc;
     font-size: 13px;
+    /* A batch failure list is one message with a line per failed page. */
+    white-space: pre-line;
 }
 
 .d2g-status.d2g-error {
@@ -95,8 +97,26 @@
     user-select: none;
 }
 
-.d2g-table th.d2g-sortable:hover span {
+.d2g-table th.d2g-sortable .d2g-sort-btn {
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+
+.d2g-table th.d2g-sortable .d2g-sort-btn:hover span,
+.d2g-table th.d2g-sortable .d2g-sort-btn:focus span {
     color: #2271b1;
+}
+
+.d2g-table th.d2g-sortable .d2g-sort-btn:focus-visible {
+    outline: 2px solid #2271b1;
+    outline-offset: 2px;
 }
 
 .d2g-table th.d2g-sortable span::after {
@@ -108,7 +128,7 @@
     opacity: 0;
 }
 
-.d2g-table th.d2g-sortable:hover span::after {
+.d2g-table th.d2g-sortable .d2g-sort-btn:hover span::after {
     opacity: 0.35;
     border-bottom-color: #50575e;
     margin-bottom: 4px;
@@ -157,39 +177,6 @@
 /* Already converted before this session — dim, but still restorable. */
 .d2g-row-done td:not(.d2g-actions) {
     color: #787c82;
-}
-
-/* Pagination */
-.d2g-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 12px;
-    padding: 8px 0;
-}
-
-.d2g-page-info {
-    font-size: 13px;
-    color: #555;
-}
-
-.d2g-page-buttons {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.d2g-page-current {
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin: 0 4px;
-}
-
-#d2g-page-input {
-    width: 50px;
-    text-align: center;
 }
 
 /* Batch bar */
@@ -362,19 +349,26 @@
     margin: 0 4px;
 }
 
-/* Spinner */
-.d2g-spinner {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid #ccc;
-    border-top-color: #2271b1;
-    border-radius: 50%;
-    animation: d2g-spin 0.6s linear infinite;
-    vertical-align: middle;
-    margin-right: 6px;
+/* Conversion warnings in the preview modal */
+.d2g-preview-warnings {
+    border-left: 4px solid #dba617;
+    background: #fcf9e8;
+    padding: 8px 12px;
+    margin-bottom: 16px;
 }
 
-@keyframes d2g-spin {
-    to { transform: rotate(360deg); }
+.d2g-preview-warnings h3 {
+    margin: 0 0 6px;
+    font-size: 13px;
+}
+
+.d2g-preview-warnings ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    list-style: disc;
+}
+
+.d2g-preview-warnings code {
+    background: rgba(0, 0, 0, 0.06);
 }

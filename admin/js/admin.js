@@ -21,6 +21,24 @@
     var currentPage = 1;
     var hasScanned  = false;
 
+    // Every user-facing string comes from PHP so it can be translated.
+    var i18n = (window.d2g && d2g.i18n) || {};
+
+    function t(key) {
+        return i18n[key] !== undefined ? i18n[key] : key;
+    }
+
+    // Minimal sprintf for the %s / %1$s placeholders WordPress uses. Argument
+    // order matters in translation, so positional placeholders have to work.
+    function fmt(template) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        var next = 0;
+        return String(template).replace(/%(\d+\$)?s/g, function (match, position) {
+            var index = position ? parseInt(position, 10) - 1 : next++;
+            return args[index] !== undefined ? args[index] : '';
+        });
+    }
+
     // Current query state. Kept in sync with the filter controls in both
     // directions: changing a control updates this, and clicking a sortable
     // column header updates both this and the sort dropdown.
@@ -31,15 +49,46 @@
         per_page: '20'
     };
 
+    // Post IDs with a request in flight. A row's actions all stay disabled
+    // while any of them is running: two overlapping requests for one post is
+    // how a conversion could once overwrite its own backup.
+    var busy = {};
+
+    function setRowBusy(postId, isBusy) {
+        if (isBusy) {
+            busy[postId] = true;
+        } else {
+            delete busy[postId];
+        }
+        rowFor(postId).find('button, input[type="checkbox"]').each(function () {
+            var $el = $(this);
+            if (isBusy) {
+                // Remember what was already disabled so re-enabling does not
+                // wake up a control that should have stayed off.
+                $el.data('d2gWasDisabled', $el.prop('disabled'));
+                $el.prop('disabled', true);
+            } else if (!$el.data('d2gWasDisabled')) {
+                $el.prop('disabled', false);
+            }
+        });
+    }
+
+    function rowFor(postId) {
+        return $tbody.find('tr[data-id="' + postId + '"]');
+    }
+
+    // Status text is always inserted as text. It can carry a post title or a
+    // server error message, and neither is HTML — putting them through .html()
+    // made this an injection sink for anything that reached a title.
     function showStatus(msg, type) {
         $status.removeClass('d2g-error d2g-success')
             .addClass(type ? 'd2g-' + type : '')
-            .html(msg)
+            .text(msg)
             .show();
     }
 
     function hideStatus() {
-        $status.hide();
+        $status.hide().text('');
     }
 
     // ---------- Filter / sort state ----------
@@ -65,32 +114,55 @@
 
         $table.find('.d2g-sortable')
             .removeClass('d2g-sorted d2g-asc d2g-desc')
+            .attr('aria-sort', 'none')
             .filter('[data-sort="' + query.orderby + '"]')
-            .addClass('d2g-sorted d2g-' + query.order);
+            .addClass('d2g-sorted d2g-' + query.order)
+            .attr('aria-sort', query.order === 'asc' ? 'ascending' : 'descending');
     }
 
     // ---------- Pagination ----------
+
+    function pageButton(cls, page, label, title, disabled) {
+        var $btn = $('<button/>', {
+            type: 'button',
+            'class': cls + ' button',
+            title: title,
+            'aria-label': title,
+            text: label
+        }).data('page', page);
+
+        if (disabled) {
+            $btn.prop('disabled', true).addClass('disabled');
+        }
+        return $btn;
+    }
 
     function renderPagination(data) {
         var totalItems = data.total_items;
         var totalPages = data.total_pages;
         var page       = data.current_page;
 
-        $displayNum.text(totalItems + ' item(s)');
+        $displayNum.text(fmt(t('items'), totalItems));
 
         if (totalPages <= 1) {
             $pagination.hide();
             return;
         }
 
-        var html = '';
-        html += '<a class="first-page button' + (page <= 1 ? ' disabled' : '') + '" data-page="1" title="First page">&laquo;</a> ';
-        html += '<a class="prev-page button' + (page <= 1 ? ' disabled' : '') + '" data-page="' + (page - 1) + '" title="Previous page">&lsaquo;</a> ';
-        html += '<span class="paging-input">' + page + ' of <span class="total-pages">' + totalPages + '</span></span> ';
-        html += '<a class="next-page button' + (page >= totalPages ? ' disabled' : '') + '" data-page="' + (page + 1) + '" title="Next page">&rsaquo;</a> ';
-        html += '<a class="last-page button' + (page >= totalPages ? ' disabled' : '') + '" data-page="' + totalPages + '" title="Last page">&raquo;</a>';
+        // Built as real elements rather than a concatenated string: these are
+        // buttons, not links to nowhere, so they are reachable from the
+        // keyboard and announced as controls.
+        $pagLinks.empty()
+            .append(pageButton('first-page', 1, '«', t('firstPage'), page <= 1))
+            .append(document.createTextNode(' '))
+            .append(pageButton('prev-page', page - 1, '‹', t('prevPage'), page <= 1))
+            .append(document.createTextNode(' '))
+            .append($('<span/>', { 'class': 'paging-input', text: fmt(t('pageOf'), page, totalPages) }))
+            .append(document.createTextNode(' '))
+            .append(pageButton('next-page', page + 1, '›', t('nextPage'), page >= totalPages))
+            .append(document.createTextNode(' '))
+            .append(pageButton('last-page', totalPages, '»', t('lastPage'), page >= totalPages));
 
-        $pagLinks.html(html);
         $pagination.show();
     }
 
@@ -100,46 +172,91 @@
         var convertible = page.has_divi;
         var restorable  = page.has_backup;
 
-        var backupCell = restorable
-            ? '<span class="d2g-backup-yes" title="' + escAttr(page.backup_date) + '">' +
-                  escHtml(page.backup_date ? page.backup_date.split(' ')[0] : 'Yes') +
-              '</span>'
-            : '<span class="d2g-backup-no">&mdash;</span>';
-
-        var actions = '<button type="button" class="button d2g-preview-btn" data-id="' + page.id + '"' +
-                          (convertible ? '' : ' disabled') + '>Preview</button> ' +
-                      '<button type="button" class="button button-primary d2g-convert-btn" data-id="' + page.id + '"' +
-                          (convertible ? '' : ' disabled') + '>' +
-                          (convertible ? 'Convert' : 'Converted') +
-                      '</button>';
-
-        if (restorable) {
-            actions += ' <button type="button" class="button d2g-restore-btn" data-id="' + page.id + '">Restore</button>';
+        var $row = $('<tr/>', { 'data-id': page.id });
+        if (!convertible) {
+            $row.addClass('d2g-row-done');
         }
 
-        return '<tr data-id="' + page.id + '"' + (convertible ? '' : ' class="d2g-row-done"') + '>' +
-            '<td class="check-column">' +
-                '<input type="checkbox" class="d2g-select" value="' + page.id + '"' + (convertible ? '' : ' disabled') + ' />' +
-            '</td>' +
-            '<td><a href="' + escAttr(page.edit) + '" target="_blank">' + escHtml(page.title || '(no title)') + '</a></td>' +
-            '<td>' + escHtml(page.type) + '</td>' +
-            '<td>' + escHtml(page.status) + '</td>' +
-            '<td>' + escHtml(page.date) + '</td>' +
-            '<td>' + backupCell + '</td>' +
-            '<td class="d2g-actions">' + actions + '</td>' +
-            '</tr>';
+        $('<td/>', { 'class': 'check-column' })
+            .append($('<input/>', {
+                type: 'checkbox',
+                'class': 'd2g-select',
+                value: page.id,
+                disabled: !convertible,
+                'aria-label': page.title || t('noTitle')
+            }))
+            .appendTo($row);
+
+        $('<td/>')
+            .append($('<a/>', {
+                href: page.edit || '#',
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                text: page.title || t('noTitle')
+            }))
+            .appendTo($row);
+
+        $('<td/>', { text: page.type }).appendTo($row);
+        $('<td/>', { text: page.status }).appendTo($row);
+        $('<td/>', { text: page.date }).appendTo($row);
+        $('<td/>').append(backupCell(page.has_backup, page.backup_date)).appendTo($row);
+
+        var $actions = $('<td/>', { 'class': 'd2g-actions' });
+        $actions.append($('<button/>', {
+            type: 'button',
+            'class': 'button d2g-preview-btn',
+            'data-id': page.id,
+            disabled: !convertible,
+            text: t('preview')
+        }));
+        $actions.append(document.createTextNode(' '));
+        $actions.append($('<button/>', {
+            type: 'button',
+            'class': 'button button-primary d2g-convert-btn',
+            'data-id': page.id,
+            disabled: !convertible,
+            text: convertible ? t('convert') : t('converted')
+        }));
+        if (restorable) {
+            $actions.append(document.createTextNode(' '));
+            $actions.append(restoreButton(page.id));
+        }
+        $actions.appendTo($row);
+
+        return $row;
+    }
+
+    function restoreButton(postId) {
+        return $('<button/>', {
+            type: 'button',
+            'class': 'button d2g-restore-btn',
+            'data-id': postId,
+            text: t('restore')
+        });
+    }
+
+    function backupCell(hasBackup, backupDate) {
+        if (!hasBackup) {
+            return $('<span/>', { 'class': 'd2g-backup-no', text: '—' });
+        }
+        return $('<span/>', {
+            'class': 'd2g-backup-yes',
+            title: backupDate || '',
+            text: backupDate ? backupDate.split(' ')[0] : t('yes')
+        });
     }
 
     // ---------- Scan ----------
 
     function loadPage(page) {
         currentPage = page;
-        $scanBtn.prop('disabled', true).text('Scanning…');
+        $scanBtn.prop('disabled', true).text(t('scanning'));
         hideStatus();
         $tbody.empty();
         $table.hide();
         $batchBar.hide();
         $pagination.hide();
+        busy = {};
 
         $.post(d2g.ajax_url, {
             action: 'd2g_scan_pages',
@@ -150,10 +267,10 @@
             order: query.order,
             per_page: query.per_page
         }, function (res) {
-            $scanBtn.prop('disabled', false).text('Scan for Divi Pages');
+            $scanBtn.prop('disabled', false).text(t('scan'));
 
             if (!res.success) {
-                showStatus(res.data || 'Scan failed.', 'error');
+                showStatus(res.data || t('scanFailed'), 'error');
                 return;
             }
 
@@ -175,11 +292,16 @@
             syncControls();
 
             if (!data.total_items) {
-                showStatus('No Divi pages found for the current filter.', 'success');
+                showStatus(t('noResults'), 'success');
                 return;
             }
 
-            showStatus(data.total_items + ' page(s) found.', 'success');
+            if (data.truncated) {
+                showStatus(fmt(t('found'), data.total_items) + ' ' +
+                    fmt(t('items'), data.shown) + ' — ' + t('truncated'), 'error');
+            } else {
+                showStatus(fmt(t('found'), data.total_items), 'success');
+            }
 
             $.each(data.pages, function (i, page) {
                 $tbody.append(renderRow(page));
@@ -190,8 +312,8 @@
             $batchBar.show();
             renderPagination(data);
         }).fail(function () {
-            $scanBtn.prop('disabled', false).text('Scan for Divi Pages');
-            showStatus('Network error during scan.', 'error');
+            $scanBtn.prop('disabled', false).text(t('scan'));
+            showStatus(t('scanNetworkError'), 'error');
         });
     }
 
@@ -201,8 +323,7 @@
     });
 
     // Pagination clicks.
-    $pagination.on('click', 'a:not(.disabled)', function (e) {
-        e.preventDefault();
+    $pagination.on('click', 'button:not(:disabled)', function () {
         var page = $(this).data('page');
         if (page) {
             loadPage(page);
@@ -222,12 +343,12 @@
 
     // Clicking a sortable column header sorts by it, toggling direction if it
     // is already the active column.
-    $table.on('click', '.d2g-sortable', function () {
+    $table.on('click', '.d2g-sort-btn', function () {
         if (!hasScanned) {
             return;
         }
 
-        var col = $(this).data('sort');
+        var col = $(this).closest('.d2g-sortable').data('sort');
         if (!col) {
             return;
         }
@@ -251,107 +372,196 @@
 
     // ---------- Preview ----------
 
+    var lastPreviewHash = {};
+
     $tbody.on('click', '.d2g-preview-btn', function () {
         var $btn = $(this);
         var postId = $btn.data('id');
-        $btn.prop('disabled', true).text('Loading…');
+
+        if (busy[postId]) {
+            return;
+        }
+
+        setRowBusy(postId, true);
+        $btn.text(t('loading'));
 
         $.post(d2g.ajax_url, {
             action: 'd2g_preview_conversion',
             nonce: d2g.nonce,
             post_id: postId
         }, function (res) {
-            $btn.prop('disabled', false).text('Preview');
+            setRowBusy(postId, false);
+            $btn.text(t('preview'));
 
             if (!res.success) {
-                showStatus(res.data || 'Preview failed.', 'error');
+                showStatus(res.data || t('previewFailed'), 'error');
                 return;
             }
 
+            lastPreviewHash[postId] = res.data.source_hash || '';
+
             $('#d2g-preview-original').text(res.data.original);
             $('#d2g-preview-converted').text(res.data.converted);
-            $modal.show();
+            renderWarnings(res.data.warnings);
+            openModal();
         }).fail(function () {
-            $btn.prop('disabled', false).text('Preview');
-            showStatus('Network error during preview.', 'error');
+            setRowBusy(postId, false);
+            $btn.text(t('preview'));
+            showStatus(t('previewNetworkError'), 'error');
         });
     });
 
+    function renderWarnings(warnings) {
+        var $box = $('#d2g-preview-warnings');
+        $box.empty();
+
+        if (!warnings || !warnings.length) {
+            $box.hide();
+            return;
+        }
+
+        $box.append($('<h3/>', { text: fmt(t('warningsCount'), warnings.length) }));
+        var $list = $('<ul/>');
+        $.each(warnings, function (i, warning) {
+            $list.append($('<li/>').append(
+                $('<code/>', { text: warning.module })
+            ).append(document.createTextNode(' ' + warning.message)));
+        });
+        $box.append($list).show();
+    }
+
     // ---------- Modal ----------
 
-    $modal.on('click', '.d2g-modal-close', function () {
+    var $lastFocus = null;
+
+    function openModal() {
+        $lastFocus = $(document.activeElement);
+        $modal.show();
+        $modal.find('.d2g-modal-close').trigger('focus');
+        $(document).on('keydown.d2gModal', function (e) {
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                closeModal();
+                return;
+            }
+            if (e.key === 'Tab' || e.keyCode === 9) {
+                trapFocus(e);
+            }
+        });
+    }
+
+    function closeModal() {
         $modal.hide();
-    });
+        $(document).off('keydown.d2gModal');
+        if ($lastFocus && $lastFocus.length) {
+            $lastFocus.trigger('focus');
+        }
+    }
+
+    // Keep Tab inside the dialog while it is open, so a keyboard user cannot
+    // wander into the page behind it and lose track of where they are.
+    function trapFocus(e) {
+        var $focusable = $modal.find('a[href], button:not(:disabled), textarea, input, select, [tabindex]:not([tabindex="-1"])').filter(':visible');
+        if (!$focusable.length) {
+            return;
+        }
+
+        var first = $focusable.first()[0];
+        var last  = $focusable.last()[0];
+
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
+
+    $modal.on('click', '.d2g-modal-close', closeModal);
     $modal.on('click', function (e) {
         if (e.target === this) {
-            $modal.hide();
+            closeModal();
         }
     });
 
     // ---------- Convert single ----------
 
     $tbody.on('click', '.d2g-convert-btn', function () {
-        var $btn = $(this);
-        var postId = $btn.data('id');
+        var postId = $(this).data('id');
 
-        if (!confirm('Convert this page to Gutenberg blocks? This will modify the page content.')) {
+        if (busy[postId]) {
             return;
         }
 
-        convertPage(postId, $btn);
+        if (!window.confirm(t('confirmConvert'))) {
+            return;
+        }
+
+        convertPage(postId, $(this));
     });
 
     function convertPage(postId, $btn) {
         var backup = $('#d2g-backup').is(':checked') ? 'yes' : 'no';
-        var $row = $tbody.find('tr[data-id="' + postId + '"]');
+        var $row = rowFor(postId);
 
+        setRowBusy(postId, true);
         if ($btn) {
-            $btn.prop('disabled', true).text('Converting…');
+            $btn.text(t('converting'));
         }
 
         return $.post(d2g.ajax_url, {
             action: 'd2g_convert_page',
             nonce: d2g.nonce,
             post_id: postId,
-            backup: backup
+            backup: backup,
+            source_hash: lastPreviewHash[postId] || ''
         }).then(function (res) {
+            setRowBusy(postId, false);
+
             if (!res.success) {
                 if ($btn) {
-                    $btn.prop('disabled', false).text('Convert');
+                    $btn.text(t('convert'));
                 }
                 $row.addClass('d2g-row-error');
-                showStatus('Error converting page ' + postId + ': ' + (res.data || 'Unknown error'), 'error');
-                return $.Deferred().reject();
+                var message = fmt(t('convertError'), postId, res.data || t('unknownError'));
+                showStatus(message, 'error');
+                // Rejecting with the message lets the batch runner record which
+                // page failed and why, instead of counting it as a success.
+                return $.Deferred().reject(message).promise();
             }
 
             markConverted($row, res.data);
             return res;
-        }).fail(function () {
+        }, function () {
+            // Transport-level failure: jQuery's own rejection path.
+            setRowBusy(postId, false);
             if ($btn) {
-                $btn.prop('disabled', false).text('Convert');
+                $btn.text(t('convert'));
             }
             $row.addClass('d2g-row-error');
+            var message = fmt(t('convertNetworkError'), postId);
+            showStatus(message, 'error');
+            return $.Deferred().reject(message).promise();
         });
     }
 
     // Update a row in place after a successful conversion: it no longer holds
     // Divi content, and it may now have a backup to restore from.
     function markConverted($row, data) {
+        var postId = $row.data('id');
+
         $row.removeClass('d2g-row-error').addClass('d2g-row-converted d2g-row-done');
         $row.find('.d2g-select').prop('checked', false).prop('disabled', true);
         $row.find('.d2g-preview-btn').prop('disabled', true);
-        $row.find('.d2g-convert-btn').text('Converted').prop('disabled', true);
+        $row.find('.d2g-convert-btn').text(t('converted')).prop('disabled', true);
 
         if (data && data.has_backup) {
             if (!$row.find('.d2g-restore-btn').length) {
-                $row.find('.d2g-actions').append(
-                    ' <button type="button" class="button d2g-restore-btn" data-id="' + $row.data('id') + '">Restore</button>'
-                );
+                $row.find('.d2g-actions')
+                    .append(document.createTextNode(' '))
+                    .append(restoreButton(postId));
             }
-            var label = data.backup_date ? data.backup_date.split(' ')[0] : 'Yes';
-            $row.find('td').eq(5).html(
-                '<span class="d2g-backup-yes" title="' + escAttr(data.backup_date || '') + '">' + escHtml(label) + '</span>'
-            );
+            $row.find('td').eq(5).empty().append(backupCell(true, data.backup_date));
         }
     }
 
@@ -360,40 +570,48 @@
     $tbody.on('click', '.d2g-restore-btn', function () {
         var $btn   = $(this);
         var postId = $btn.data('id');
-        var $row   = $tbody.find('tr[data-id="' + postId + '"]');
-        var title  = $row.find('td').eq(1).text() || 'this page';
+        var $row   = rowFor(postId);
+        var title  = $row.find('td').eq(1).text() || t('thisPage');
 
-        if (!confirm('Restore "' + title + '" to its original Divi content?\n\nThis replaces the current Gutenberg content and hands the page back to the Divi Builder.')) {
+        if (busy[postId]) {
             return;
         }
 
-        $btn.prop('disabled', true).text('Restoring…');
+        if (!window.confirm(fmt(t('confirmRestore'), title))) {
+            return;
+        }
+
+        setRowBusy(postId, true);
+        $btn.text(t('restoring'));
 
         $.post(d2g.ajax_url, {
             action: 'd2g_restore_page',
             nonce: d2g.nonce,
             post_id: postId
         }, function (res) {
-            $btn.prop('disabled', false).text('Restore');
+            setRowBusy(postId, false);
+            $btn.text(t('restore'));
 
             if (!res.success) {
                 $row.addClass('d2g-row-error');
-                showStatus('Error restoring page ' + postId + ': ' + (res.data || 'Unknown error'), 'error');
+                showStatus(fmt(t('restoreError'), postId, res.data || t('unknownError')), 'error');
                 return;
             }
 
             // The page holds Divi content again, so it is convertible again.
             $row.removeClass('d2g-row-converted d2g-row-error d2g-row-done')
                 .addClass('d2g-row-restored');
-            $row.find('.d2g-select').prop('disabled', false);
-            $row.find('.d2g-preview-btn').prop('disabled', false);
-            $row.find('.d2g-convert-btn').text('Convert').prop('disabled', false);
+            $row.find('.d2g-select').prop('disabled', false).data('d2gWasDisabled', false);
+            $row.find('.d2g-preview-btn').prop('disabled', false).data('d2gWasDisabled', false);
+            $row.find('.d2g-convert-btn').text(t('convert')).prop('disabled', false).data('d2gWasDisabled', false);
+            delete lastPreviewHash[postId];
 
-            showStatus(res.data.message || 'Page restored.', 'success');
+            showStatus(res.data.message || t('restored'), 'success');
         }).fail(function () {
-            $btn.prop('disabled', false).text('Restore');
+            setRowBusy(postId, false);
+            $btn.text(t('restore'));
             $row.addClass('d2g-row-error');
-            showStatus('Network error during restore.', 'error');
+            showStatus(t('restoreNetworkError'), 'error');
         });
     });
 
@@ -404,13 +622,13 @@
         var $feedback = $('#d2g-settings-feedback');
         var enabled   = $box.is(':checked');
 
-        if (enabled && !confirm('Delete every Divi backup when this plugin is deleted?\n\nBackups are the only way to restore a converted page. Once the plugin is removed with this on, they cannot be recovered.')) {
+        if (enabled && !window.confirm(t('confirmDeleteData'))) {
             $box.prop('checked', false);
             return;
         }
 
         $box.prop('disabled', true);
-        $feedback.removeClass('d2g-error').text('Saving…');
+        $feedback.removeClass('d2g-error').text(t('saving'));
 
         $.post(d2g.ajax_url, {
             action: 'd2g_save_settings',
@@ -422,14 +640,14 @@
             if (!res.success) {
                 // Put the control back to what the server still holds.
                 $box.prop('checked', !enabled);
-                $feedback.addClass('d2g-error').text(res.data || 'Could not save setting.');
+                $feedback.addClass('d2g-error').text(res.data || t('saveFailed'));
                 return;
             }
 
-            $feedback.text(res.data.message || 'Saved.');
+            $feedback.text(res.data.message || t('saved'));
         }).fail(function () {
             $box.prop('disabled', false).prop('checked', !enabled);
-            $feedback.addClass('d2g-error').text('Network error — setting not saved.');
+            $feedback.addClass('d2g-error').text(t('saveNetworkError'));
         });
     });
 
@@ -442,48 +660,52 @@
         });
 
         if (!ids.length) {
-            showStatus('No pages selected.', 'error');
+            showStatus(t('noSelection'), 'error');
             return;
         }
 
-        if (!confirm('Convert ' + ids.length + ' page(s) to Gutenberg blocks?')) {
+        if (!window.confirm(fmt(t('confirmBatch'), ids.length))) {
             return;
         }
 
         $convertBtn.prop('disabled', true);
-        var done = 0;
-        var total = ids.length;
+
+        // Successes and failures are counted separately. They used to share one
+        // counter incremented from .always(), so a batch where every page
+        // failed still finished by reporting them all as converted — which in a
+        // migration is how someone removes Divi too early.
+        var total     = ids.length;
+        var succeeded = 0;
+        var failures  = [];
+
         $batchProgress.text('0 / ' + total);
 
-        function next() {
+        function step() {
             if (!ids.length) {
                 $convertBtn.prop('disabled', false);
-                showStatus('Batch conversion complete. ' + done + ' / ' + total + ' pages converted.', 'success');
+                if (failures.length) {
+                    showStatus(
+                        fmt(t('batchDoneErrors'), succeeded, total, failures.length) + '\n' + failures.join('\n'),
+                        'error'
+                    );
+                } else {
+                    showStatus(fmt(t('batchDone'), succeeded, total), 'success');
+                }
                 return;
             }
 
             var id = ids.shift();
-            convertPage(id, null).always(function () {
-                done++;
-                $batchProgress.text(done + ' / ' + total);
-                next();
+            convertPage(id, null).then(function () {
+                succeeded++;
+            }, function (message) {
+                failures.push(message || fmt(t('convertError'), id, t('unknownError')));
+            }).always(function () {
+                $batchProgress.text((succeeded + failures.length) + ' / ' + total);
+                step();
             });
         }
 
-        next();
+        step();
     });
-
-    // ---------- Utility ----------
-
-    function escHtml(str) {
-        if (!str) return '';
-        var div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
-    }
-
-    function escAttr(str) {
-        return escHtml(str).replace(/"/g, '&quot;');
-    }
 
 })(jQuery);

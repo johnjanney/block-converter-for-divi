@@ -3,11 +3,11 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.0.0
+ * Version:     2.1.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
- * Requires at least: 5.0
+ * Requires at least: 6.0
  * Requires PHP: 7.4
  */
 
@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * page. Renaming the keys would orphan every one of them, so they stay as they
  * are and existing backups keep working after the upgrade.
  */
-define( 'D2G_VERSION', '2.0.0' );
+define( 'D2G_VERSION', '2.1.0' );
 define( 'D2G_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'D2G_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -88,9 +88,72 @@ final class Block_Converter_For_Divi {
             D2G_VERSION,
             true
         );
+        // Every user-visible string the script can produce is passed in from
+        // PHP so it goes through the normal translation pipeline — the script
+        // itself contains no English.
         wp_localize_script( 'd2g-admin', 'd2g', [
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( 'd2g_nonce' ),
+            'i18n'     => [
+                'scan'              => __( 'Scan for Divi Pages', 'block-converter-for-divi' ),
+                'scanning'          => __( 'Scanning…', 'block-converter-for-divi' ),
+                'scanFailed'        => __( 'Scan failed.', 'block-converter-for-divi' ),
+                'scanNetworkError'  => __( 'Network error during scan.', 'block-converter-for-divi' ),
+                'noResults'         => __( 'No Divi pages found for the current filter.', 'block-converter-for-divi' ),
+                'truncated'         => __( 'showing the first batch only. Use a smaller per-page setting and work through the pages.', 'block-converter-for-divi' ),
+                /* translators: %s: number of pages found. */
+                'found'             => __( '%s page(s) found.', 'block-converter-for-divi' ),
+                /* translators: %s: number of items in the result set. */
+                'items'             => __( '%s item(s)', 'block-converter-for-divi' ),
+                'noTitle'           => __( '(no title)', 'block-converter-for-divi' ),
+                'preview'           => __( 'Preview', 'block-converter-for-divi' ),
+                'loading'           => __( 'Loading…', 'block-converter-for-divi' ),
+                'previewFailed'     => __( 'Preview failed.', 'block-converter-for-divi' ),
+                'previewNetworkError' => __( 'Network error during preview.', 'block-converter-for-divi' ),
+                'convert'           => __( 'Convert', 'block-converter-for-divi' ),
+                'converting'        => __( 'Converting…', 'block-converter-for-divi' ),
+                'converted'         => __( 'Converted', 'block-converter-for-divi' ),
+                'confirmConvert'    => __( 'Convert this page to Gutenberg blocks? This will modify the page content.', 'block-converter-for-divi' ),
+                /* translators: %s: number of selected pages. */
+                'confirmBatch'      => __( 'Convert %s page(s) to Gutenberg blocks?', 'block-converter-for-divi' ),
+                'noSelection'       => __( 'No pages selected.', 'block-converter-for-divi' ),
+                /* translators: 1: post ID, 2: error message. */
+                'convertError'      => __( 'Error converting page %1$s: %2$s', 'block-converter-for-divi' ),
+                /* translators: %s: post ID. */
+                'convertNetworkError' => __( 'Network error converting page %s.', 'block-converter-for-divi' ),
+                'unknownError'      => __( 'Unknown error', 'block-converter-for-divi' ),
+                /* translators: 1: converted count, 2: total count. */
+                'batchDone'         => __( 'Batch conversion complete. %1$s of %2$s converted.', 'block-converter-for-divi' ),
+                /* translators: 1: converted count, 2: total count, 3: failed count. */
+                'batchDoneErrors'   => __( 'Batch conversion finished with errors. %1$s of %2$s converted, %3$s failed.', 'block-converter-for-divi' ),
+                'restore'           => __( 'Restore', 'block-converter-for-divi' ),
+                'restoring'         => __( 'Restoring…', 'block-converter-for-divi' ),
+                'restored'          => __( 'Page restored.', 'block-converter-for-divi' ),
+                'thisPage'          => __( 'this page', 'block-converter-for-divi' ),
+                /* translators: %s: page title. */
+                'confirmRestore'    => __( 'Restore "%s" to its original Divi content?
+
+This replaces the current Gutenberg content and hands the page back to the Divi Builder.', 'block-converter-for-divi' ),
+                /* translators: 1: post ID, 2: error message. */
+                'restoreError'      => __( 'Error restoring page %1$s: %2$s', 'block-converter-for-divi' ),
+                'restoreNetworkError' => __( 'Network error during restore.', 'block-converter-for-divi' ),
+                'confirmDeleteData' => __( 'Delete every Divi backup when this plugin is deleted?
+
+Backups are the only way to restore a converted page. Once the plugin is removed with this on, they cannot be recovered.', 'block-converter-for-divi' ),
+                'saving'            => __( 'Saving…', 'block-converter-for-divi' ),
+                'saved'             => __( 'Saved.', 'block-converter-for-divi' ),
+                'saveFailed'        => __( 'Could not save setting.', 'block-converter-for-divi' ),
+                'saveNetworkError'  => __( 'Network error — setting not saved.', 'block-converter-for-divi' ),
+                'yes'               => __( 'Yes', 'block-converter-for-divi' ),
+                'firstPage'         => __( 'First page', 'block-converter-for-divi' ),
+                'prevPage'          => __( 'Previous page', 'block-converter-for-divi' ),
+                'nextPage'          => __( 'Next page', 'block-converter-for-divi' ),
+                'lastPage'          => __( 'Last page', 'block-converter-for-divi' ),
+                /* translators: 1: current page number, 2: total page count. */
+                'pageOf'            => __( '%1$s of %2$s', 'block-converter-for-divi' ),
+                /* translators: %s: number of modules needing manual work. */
+                'warningsCount'     => __( '%s module(s) need manual attention — see the preview.', 'block-converter-for-divi' ),
+            ],
         ] );
     }
 
@@ -120,7 +183,7 @@ final class Block_Converter_For_Divi {
     public function ajax_scan_pages() {
         check_ajax_referer( 'd2g_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( 'Permission denied.' );
+            wp_send_json_error( __( 'Permission denied.', 'block-converter-for-divi' ) );
         }
 
         global $wpdb;
@@ -129,7 +192,12 @@ final class Block_Converter_For_Divi {
         $per_page_raw = isset( $_POST['per_page'] ) ? sanitize_text_field( wp_unslash( $_POST['per_page'] ) ) : '';
 
         if ( 'all' === $per_page_raw ) {
-            $per_page = 0; // 0 means "no limit".
+            // "All" is still bounded. An unbounded result set has to be built
+            // in PHP, JSON-encoded, and turned into DOM rows one at a time, so
+            // a site with thousands of Divi pages would exhaust memory on the
+            // server, the browser, or both. The cap is filterable for anyone
+            // who knows their site is small enough.
+            $per_page = 0; // 0 means "up to the hard cap".
         } else {
             $per_page = absint( $per_page_raw );
             if ( ! in_array( $per_page, [ 20, 50, 100 ], true ) ) {
@@ -212,13 +280,15 @@ final class Block_Converter_For_Divi {
 
         $args = array_merge( [ $like ], $where_args );
 
-        if ( $per_page ) {
-            $sql   .= ' LIMIT %d OFFSET %d';
-            $args[] = $per_page;
-            $args[] = $offset;
-        }
+        $sql   .= ' LIMIT %d OFFSET %d';
+        $args[] = $per_page ? $per_page : self::scan_hard_cap();
+        $args[] = $offset;
 
         $results = $wpdb->get_results( $wpdb->prepare( $sql, $args ) );
+
+        // Tell the browser when "All" was truncated, so the count in the status
+        // line is not read as "this is everything".
+        $truncated = ! $per_page && $total_items > self::scan_hard_cap();
 
         $pages = [];
         foreach ( $results as $row ) {
@@ -244,7 +314,113 @@ final class Block_Converter_For_Divi {
             'post_type'    => $post_type,
             'orderby'      => $orderby,
             'order'        => strtolower( $order ),
+            'truncated'    => $truncated,
+            'shown'        => count( $pages ),
         ] );
+    }
+
+    /**
+     * Upper bound on how many rows a single scan may return.
+     *
+     * Applies to the "All" per-page option. 20/50/100 are unaffected.
+     */
+    private static function scan_hard_cap() {
+        return (int) apply_filters( 'd2g_scan_hard_cap', 500 );
+    }
+
+    /**
+     * Post types this plugin is allowed to touch.
+     */
+    private static function supported_post_types() {
+        return (array) apply_filters( 'd2g_supported_post_types', [ 'page', 'post' ] );
+    }
+
+    /**
+     * Post statuses this plugin is allowed to touch.
+     *
+     * Mirrors the scan query, so the UI can never list something an action
+     * would then refuse.
+     */
+    private static function supported_post_statuses() {
+        return (array) apply_filters( 'd2g_supported_post_statuses', [ 'publish', 'draft', 'private', 'pending' ] );
+    }
+
+    /**
+     * Load a post and confirm the current user may act on it.
+     *
+     * `manage_options` is a site-wide gate, not an object one: a custom role can
+     * hold it and still have no business editing a given post. It also says
+     * nothing about *what* the ID points at, so a hand-made request could
+     * otherwise aim convert or restore at a revision, an autosave, an
+     * attachment, or a post type the scan never lists.
+     *
+     * @return WP_Post|WP_Error
+     */
+    private static function get_actionable_post( $post_id ) {
+        $post_id = absint( $post_id );
+
+        if ( ! $post_id ) {
+            return new WP_Error( 'd2g_no_post', __( 'Post not found.', 'block-converter-for-divi' ) );
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post ) {
+            return new WP_Error( 'd2g_no_post', __( 'Post not found.', 'block-converter-for-divi' ) );
+        }
+
+        if ( wp_is_post_revision( $post ) || wp_is_post_autosave( $post ) ) {
+            return new WP_Error( 'd2g_bad_type', __( 'Revisions and autosaves cannot be converted.', 'block-converter-for-divi' ) );
+        }
+
+        if ( ! in_array( $post->post_type, self::supported_post_types(), true ) ) {
+            return new WP_Error(
+                'd2g_bad_type',
+                sprintf(
+                    /* translators: %s: post type slug. */
+                    __( 'The post type "%s" is not supported by this plugin.', 'block-converter-for-divi' ),
+                    $post->post_type
+                )
+            );
+        }
+
+        if ( ! in_array( $post->post_status, self::supported_post_statuses(), true ) ) {
+            return new WP_Error(
+                'd2g_bad_status',
+                sprintf(
+                    /* translators: %s: post status slug. */
+                    __( 'Posts with status "%s" are not supported by this plugin.', 'block-converter-for-divi' ),
+                    $post->post_status
+                )
+            );
+        }
+
+        if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+            return new WP_Error( 'd2g_forbidden', __( 'You are not allowed to edit this post.', 'block-converter-for-divi' ) );
+        }
+
+        return $post;
+    }
+
+    /**
+     * Take a per-post lock for the duration of a write.
+     *
+     * Nonces do not stop a replay inside their validity window, and a batch run
+     * can queue the same post twice, so the write path needs its own guard
+     * against two conversions of one post overlapping.
+     *
+     * @return bool True when the lock was acquired.
+     */
+    private static function acquire_lock( $post_id ) {
+        $key = 'd2g_lock_' . (int) $post_id;
+        if ( get_transient( $key ) ) {
+            return false;
+        }
+        set_transient( $key, time(), 2 * MINUTE_IN_SECONDS );
+        return true;
+    }
+
+    private static function release_lock( $post_id ) {
+        delete_transient( 'd2g_lock_' . (int) $post_id );
     }
 
     /**
@@ -253,21 +429,23 @@ final class Block_Converter_For_Divi {
     public function ajax_preview_conversion() {
         check_ajax_referer( 'd2g_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( 'Permission denied.' );
+            wp_send_json_error( __( 'Permission denied.', 'block-converter-for-divi' ) );
         }
 
-        $post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
-        $post    = get_post( $post_id );
-        if ( ! $post ) {
-            wp_send_json_error( 'Post not found.' );
+        $post = self::get_actionable_post( isset( $_POST['post_id'] ) ? $_POST['post_id'] : 0 );
+        if ( is_wp_error( $post ) ) {
+            wp_send_json_error( $post->get_error_message() );
         }
 
         $converter = new D2G_Converter();
         $result    = $converter->convert( $post->post_content );
 
         wp_send_json_success( [
-            'original'  => $post->post_content,
-            'converted' => $result,
+            'original'    => $post->post_content,
+            'converted'   => $result,
+            'warnings'    => $converter->get_warnings(),
+            // Lets convert reject a save when the page changed after preview.
+            'source_hash' => md5( $post->post_content ),
         ] );
     }
 
@@ -277,45 +455,122 @@ final class Block_Converter_For_Divi {
     public function ajax_convert_page() {
         check_ajax_referer( 'd2g_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( 'Permission denied.' );
+            wp_send_json_error( __( 'Permission denied.', 'block-converter-for-divi' ) );
         }
 
-        $post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
-        $backup  = isset( $_POST['backup'] ) && $_POST['backup'] === 'yes';
-        $post    = get_post( $post_id );
-
-        if ( ! $post ) {
-            wp_send_json_error( 'Post not found.' );
+        $post = self::get_actionable_post( isset( $_POST['post_id'] ) ? $_POST['post_id'] : 0 );
+        if ( is_wp_error( $post ) ) {
+            wp_send_json_error( $post->get_error_message() );
         }
 
-        // Save backup as post meta before converting.
+        $post_id = $post->ID;
+        $backup  = isset( $_POST['backup'] ) && 'yes' === $_POST['backup'];
+
+        // The single most destructive thing this plugin can do is overwrite a
+        // good backup with content it has already converted. That happens when
+        // a post is converted twice: the second pass reads Gutenberg markup,
+        // writes it over _d2g_divi_backup, and the only Divi copy is gone. The
+        // browser disables the button after a conversion, but a replayed
+        // request, a queued batch, or a second tab does not go through the
+        // browser. So the server refuses outright.
+        if ( ! D2G_Parser::has_divi_content( $post->post_content ) ) {
+            wp_send_json_error( __( 'This post does not contain Divi content. It may already have been converted.', 'block-converter-for-divi' ) );
+        }
+
+        // Refuse to save against a stale preview.
+        $expected_hash = isset( $_POST['source_hash'] ) ? sanitize_key( wp_unslash( $_POST['source_hash'] ) ) : '';
+        if ( $expected_hash && ! hash_equals( md5( $post->post_content ), $expected_hash ) ) {
+            wp_send_json_error( __( 'This post changed since it was previewed. Scan again and re-check the preview before converting.', 'block-converter-for-divi' ) );
+        }
+
+        if ( ! self::acquire_lock( $post_id ) ) {
+            wp_send_json_error( __( 'A conversion of this post is already running.', 'block-converter-for-divi' ) );
+        }
+
+        // wp_send_json_*() ends the request, so the lock has to be dropped
+        // before each one rather than in a finally block — otherwise a failed
+        // conversion would keep the post locked until the transient expired.
         if ( $backup ) {
-            update_post_meta( $post_id, '_d2g_divi_backup', $post->post_content );
-            update_post_meta( $post_id, '_d2g_backup_date', current_time( 'mysql' ) );
+            self::write_backup( $post );
         }
 
         $converter = new D2G_Converter();
         $converted = $converter->convert( $post->post_content );
 
-        $update = wp_update_post( [
+        if ( '' === trim( $converted ) ) {
+            self::release_lock( $post_id );
+            wp_send_json_error( __( 'Conversion produced no content. Nothing was saved.', 'block-converter-for-divi' ) );
+        }
+
+        // wp_update_post() unslashes what it is given, so content that is not
+        // slashed on the way in loses a level of backslashes — every "\n" in a
+        // code sample, every escape in a regex or JSON string.
+        $update = wp_update_post( wp_slash( [
             'ID'           => $post_id,
             'post_content' => $converted,
-        ], true );
+        ] ), true );
 
         if ( is_wp_error( $update ) ) {
+            self::release_lock( $post_id );
             wp_send_json_error( $update->get_error_message() );
         }
 
-        // Remove Divi page-builder meta so WP opens the block editor.
+        // Remove Divi page-builder meta so WP opens the block editor. The
+        // values were captured by write_backup() above, so restore can put them
+        // back.
         delete_post_meta( $post_id, '_et_pb_use_builder' );
         delete_post_meta( $post_id, '_et_pb_old_content' );
 
+        self::release_lock( $post_id );
+
         wp_send_json_success( [
             'post_id'     => $post_id,
-            'message'     => sprintf( 'Page "%s" converted successfully.', $post->post_title ),
+            'message'     => sprintf(
+                /* translators: %s: page title. */
+                __( 'Page "%s" converted successfully.', 'block-converter-for-divi' ),
+                $post->post_title
+            ),
             'has_backup'  => (bool) $backup,
             'backup_date' => $backup ? get_post_meta( $post_id, '_d2g_backup_date', true ) : '',
+            'warnings'    => $converter->get_warnings(),
         ] );
+    }
+
+    /**
+     * Snapshot a post's Divi state before conversion overwrites it.
+     *
+     * Two rules matter here:
+     *
+     * 1. The first snapshot wins. Once _d2g_divi_backup holds the original Divi
+     *    content it is never rewritten, so no later request can replace it.
+     * 2. post_content alone is not the whole state. Conversion also deletes
+     *    _et_pb_use_builder and _et_pb_old_content; without capturing those a
+     *    "restore" hands back the text but not the builder state.
+     *
+     * Meta values are slashed on the way in because update_post_meta() unslashes
+     * before it stores.
+     */
+    private static function write_backup( WP_Post $post ) {
+        $existing = get_post_meta( $post->ID, '_d2g_divi_backup', true );
+
+        if ( '' === $existing || null === $existing || false === $existing ) {
+            update_post_meta( $post->ID, '_d2g_divi_backup', wp_slash( $post->post_content ) );
+            update_post_meta( $post->ID, '_d2g_backup_date', current_time( 'mysql' ) );
+        }
+
+        // The builder meta is re-captured each time, because it is deleted on
+        // every conversion and re-added on every restore.
+        $builder_meta = [];
+        foreach ( [ '_et_pb_use_builder', '_et_pb_old_content' ] as $key ) {
+            $value = get_post_meta( $post->ID, $key, true );
+            if ( '' !== $value && null !== $value && false !== $value ) {
+                $builder_meta[ $key ] = $value;
+            }
+        }
+
+        if ( $builder_meta ) {
+            update_post_meta( $post->ID, '_d2g_builder_meta', wp_slash( $builder_meta ) );
+        }
     }
 
     /**
@@ -327,7 +582,7 @@ final class Block_Converter_For_Divi {
     public function ajax_save_settings() {
         check_ajax_referer( 'd2g_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( 'Permission denied.' );
+            wp_send_json_error( __( 'Permission denied.', 'block-converter-for-divi' ) );
         }
 
         $delete_data = isset( $_POST['delete_data'] ) && 'yes' === $_POST['delete_data'];
@@ -337,8 +592,8 @@ final class Block_Converter_For_Divi {
         wp_send_json_success( [
             'delete_data' => $delete_data,
             'message'     => $delete_data
-                ? 'Backups will be deleted when the plugin is deleted.'
-                : 'Backups will be kept when the plugin is deleted.',
+                ? __( 'Backups will be deleted when the plugin is deleted.', 'block-converter-for-divi' )
+                : __( 'Backups will be kept when the plugin is deleted.', 'block-converter-for-divi' ),
         ] );
     }
 
@@ -351,37 +606,60 @@ final class Block_Converter_For_Divi {
     public function ajax_restore_page() {
         check_ajax_referer( 'd2g_nonce', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_send_json_error( 'Permission denied.' );
+            wp_send_json_error( __( 'Permission denied.', 'block-converter-for-divi' ) );
         }
 
-        $post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
-        $post    = get_post( $post_id );
-
-        if ( ! $post ) {
-            wp_send_json_error( 'Post not found.' );
+        $post = self::get_actionable_post( isset( $_POST['post_id'] ) ? $_POST['post_id'] : 0 );
+        if ( is_wp_error( $post ) ) {
+            wp_send_json_error( $post->get_error_message() );
         }
 
-        $backup = get_post_meta( $post_id, '_d2g_divi_backup', true );
+        $post_id = $post->ID;
+        $backup  = get_post_meta( $post_id, '_d2g_divi_backup', true );
 
-        if ( '' === $backup || null === $backup ) {
-            wp_send_json_error( 'No backup found for this page.' );
+        if ( '' === $backup || null === $backup || false === $backup ) {
+            wp_send_json_error( __( 'No backup found for this page.', 'block-converter-for-divi' ) );
         }
 
-        $update = wp_update_post( [
+        if ( ! self::acquire_lock( $post_id ) ) {
+            wp_send_json_error( __( 'Another operation on this post is already running.', 'block-converter-for-divi' ) );
+        }
+
+        // Slashed for the same reason as the conversion write: wp_update_post()
+        // unslashes, so an unslashed restore would hand back content that is
+        // not byte-identical to the backup.
+        $update = wp_update_post( wp_slash( [
             'ID'           => $post_id,
             'post_content' => $backup,
-        ], true );
+        ] ), true );
 
         if ( is_wp_error( $update ) ) {
+            self::release_lock( $post_id );
             wp_send_json_error( $update->get_error_message() );
         }
 
-        // Hand the page back to the Divi Builder.
-        update_post_meta( $post_id, '_et_pb_use_builder', 'on' );
+        // Put back the builder meta exactly as it was found, falling back to
+        // just switching the builder on when the post predates the snapshot.
+        $builder_meta = get_post_meta( $post_id, '_d2g_builder_meta', true );
+        if ( is_array( $builder_meta ) && $builder_meta ) {
+            foreach ( $builder_meta as $key => $value ) {
+                if ( in_array( $key, [ '_et_pb_use_builder', '_et_pb_old_content' ], true ) ) {
+                    update_post_meta( $post_id, $key, wp_slash( $value ) );
+                }
+            }
+        } else {
+            update_post_meta( $post_id, '_et_pb_use_builder', 'on' );
+        }
+
+        self::release_lock( $post_id );
 
         wp_send_json_success( [
             'post_id' => $post_id,
-            'message' => sprintf( 'Page "%s" restored to its original Divi content.', $post->post_title ),
+            'message' => sprintf(
+                /* translators: %s: page title. */
+                __( 'Page "%s" restored to its original Divi content.', 'block-converter-for-divi' ),
+                $post->post_title
+            ),
         ] );
     }
 }

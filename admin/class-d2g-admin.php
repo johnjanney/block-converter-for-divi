@@ -39,7 +39,8 @@ class D2G_Admin {
                 </label>
             </div>
 
-            <div id="d2g-status" class="d2g-status" style="display:none;"></div>
+            <?php // aria-live so a screen reader hears scan and conversion results, which are otherwise silent. ?>
+            <div id="d2g-status" class="d2g-status" role="status" aria-live="polite" aria-atomic="true" style="display:none;"></div>
 
             <div id="d2g-filters" class="d2g-filters" style="display:none;">
                 <div class="d2g-filter-group">
@@ -77,13 +78,31 @@ class D2G_Admin {
             <table id="d2g-results" class="widefat d2g-table" style="display:none;">
                 <thead>
                     <tr>
-                        <th class="check-column"><input type="checkbox" id="d2g-select-all" /></th>
-                        <th class="d2g-sortable" data-sort="title"><span><?php esc_html_e( 'Title', 'block-converter-for-divi' ); ?></span></th>
-                        <th class="d2g-sortable" data-sort="type"><span><?php esc_html_e( 'Type', 'block-converter-for-divi' ); ?></span></th>
-                        <th class="d2g-sortable" data-sort="status"><span><?php esc_html_e( 'Status', 'block-converter-for-divi' ); ?></span></th>
-                        <th class="d2g-sortable" data-sort="date"><span><?php esc_html_e( 'Date', 'block-converter-for-divi' ); ?></span></th>
-                        <th><?php esc_html_e( 'Backup', 'block-converter-for-divi' ); ?></th>
-                        <th><?php esc_html_e( 'Actions', 'block-converter-for-divi' ); ?></th>
+                        <th scope="col" class="check-column">
+                            <input type="checkbox" id="d2g-select-all" aria-label="<?php esc_attr_e( 'Select all convertible pages', 'block-converter-for-divi' ); ?>" />
+                        </th>
+                        <?php
+                        // Sorting is a real button inside the header cell, not a
+                        // click handler on the cell itself: that makes it
+                        // reachable by keyboard, and aria-sort tells assistive
+                        // technology which column is active and in which
+                        // direction.
+                        $d2g_columns = [
+                            'title'  => __( 'Title', 'block-converter-for-divi' ),
+                            'type'   => __( 'Type', 'block-converter-for-divi' ),
+                            'status' => __( 'Status', 'block-converter-for-divi' ),
+                            'date'   => __( 'Date', 'block-converter-for-divi' ),
+                        ];
+                        foreach ( $d2g_columns as $d2g_key => $d2g_label ) :
+                            ?>
+                            <th scope="col" class="d2g-sortable" data-sort="<?php echo esc_attr( $d2g_key ); ?>" aria-sort="none">
+                                <button type="button" class="d2g-sort-btn">
+                                    <span><?php echo esc_html( $d2g_label ); ?></span>
+                                </button>
+                            </th>
+                        <?php endforeach; ?>
+                        <th scope="col"><?php esc_html_e( 'Backup', 'block-converter-for-divi' ); ?></th>
+                        <th scope="col"><?php esc_html_e( 'Actions', 'block-converter-for-divi' ); ?></th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -116,13 +135,21 @@ class D2G_Admin {
                 <span id="d2g-settings-feedback" class="d2g-setting-feedback"></span>
             </div>
 
-            <div id="d2g-preview-modal" class="d2g-modal" style="display:none;">
+            <?php
+            // role="dialog" plus aria-modal and aria-labelledby give the preview
+            // an accessible name and identity; the Escape key, the focus trap,
+            // and returning focus on close are handled in admin.js.
+            ?>
+            <div id="d2g-preview-modal" class="d2g-modal" role="dialog" aria-modal="true"
+                aria-labelledby="d2g-preview-title" style="display:none;">
                 <div class="d2g-modal-content">
                     <div class="d2g-modal-header">
-                        <h2><?php esc_html_e( 'Conversion Preview', 'block-converter-for-divi' ); ?></h2>
-                        <button type="button" class="d2g-modal-close">&times;</button>
+                        <h2 id="d2g-preview-title"><?php esc_html_e( 'Conversion Preview', 'block-converter-for-divi' ); ?></h2>
+                        <button type="button" class="d2g-modal-close"
+                            aria-label="<?php esc_attr_e( 'Close preview', 'block-converter-for-divi' ); ?>">&times;</button>
                     </div>
                     <div class="d2g-modal-body">
+                        <div id="d2g-preview-warnings" class="d2g-preview-warnings" style="display:none;"></div>
                         <div class="d2g-preview-panes">
                             <div class="d2g-pane">
                                 <h3><?php esc_html_e( 'Original (Divi)', 'block-converter-for-divi' ); ?></h3>

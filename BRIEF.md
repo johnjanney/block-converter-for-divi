@@ -1,10 +1,12 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** Released at `2.0.0` (tagged, packaged, published)
-**Repository:** https://github.com/johnjanney/block-converter-for-divi
+**Status:** `2.1.0` built and tagged locally. **Not published** — the
+repository and release URLs below 404 (see `OPENQUESTIONS.md` Q21), and
+`Tested up to` is still a placeholder rather than a test result (Q18).
+**Repository (intended):** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
-**Last brief update:** 2026-08-04
+**Last brief update:** 2026-08-05
 
 ---
 
@@ -38,7 +40,7 @@ without requiring Divi to remain installed afterward.
 | Detection | Scan `page` and `post` types with status `publish`, `draft`, `private`, `pending` for `[et_pb_` content |
 | Parsing | Full recursive shortcode parser producing an attribute + child tree |
 | Conversion | Map Divi modules to core Gutenberg blocks (see §5) |
-| Style mapping | Translate common Divi design attributes to inline CSS / block attributes |
+| Style mapping | Translate the Divi design attributes listed in §5.1 to block attributes. Everything else is reported as lost, not silently dropped |
 | Preview | Side-by-side original vs. converted diff before committing |
 | Single + batch conversion | Convert one page, or a multi-select batch, via AJAX |
 | Backup | Snapshot original Divi content into post meta before overwriting |
@@ -90,11 +92,9 @@ Gutenberg block comment markup → `wp_update_post()`.
   `et_pb_*` tags. Handles nesting via depth counting, self-closing tags,
   unmatched closers, smart-quote entity normalization, and wraps loose text in
   synthetic `__text__` nodes. Static helper `has_divi_content()`.
-- **`D2G_Style_Mapper`** — static translation of `background_color`,
-  `background_image`, text colors, `text_orientation`, `custom_padding` /
-  `custom_margin`, `max_width`, `border_radii`, borders, box shadows, font
-  sizes, line heights, `custom_css_main_element`, and Divi font strings into an
-  inline style string, a `has-text-align-*` class, or block colour attributes.
+- **`D2G_Style_Mapper`** — translation of Divi style attributes. Only
+  `text_align_class()` is wired into conversion today; see §5.1 for what that
+  means in practice and why the rest is not connected.
 - **`D2G_Converter`** — one renderer method per module, recursive, with a
   fallback that renders children or wraps raw content in `core/html`.
 
@@ -142,7 +142,7 @@ server-side; the `ORDER BY` clause is assembled only from a fixed column map.
 | `et_pb_number_counter`, `et_pb_circle_counter` | `core/group` (heading + paragraph) |
 | `et_pb_social_media_follow` (+ `_network`) | `core/social-links` › `core/social-link` |
 | `et_pb_code`, `et_pb_fullwidth_code` | `core/html` |
-| `et_pb_contact_form` (+ `et_pb_contact_field`) | `core/form` › `core/form-input` + `core/form-submit-button` |
+| `et_pb_contact_form` (+ `et_pb_contact_field`) | `core/group` (heading + field description list). **Not** `core/form` — that block is experimental and unregistered in WordPress core |
 | `et_pb_audio` | `core/audio`, wrapped in `core/group` when titled |
 | `et_pb_blog` | `core/latest-posts` |
 | `et_pb_login` | `core/loginout` |
@@ -162,43 +162,99 @@ server-side; the `ORDER BY` clause is assembled only from a fixed column map.
 | `et_pb_signup` | `core/group` with placeholder paragraph |
 | `et_pb_shop` | `core/paragraph` placeholder — replace with WooCommerce blocks |
 
-**Fallback** — any unrecognised tag renders its children recursively; if it has
-content but no children, the raw content is wrapped in `core/html`; otherwise it
-emits nothing.
+**Fallback** — the tokenizer recognises the *shape* `et_pb_[a-z0-9_]+`, not just
+the tags with renderers, so a module from a newer Divi release or a third party
+is still tokenized rather than left on the page as shortcode text. An
+unrecognised tag renders its children recursively, wraps content-without-children
+in `core/html`, and records a conversion warning naming the tag.
+
+### 5.1 Style coverage
+
+The style mapper is only partly wired into conversion. What conversion actually
+preserves:
+
+| Divi attribute | Where it lands |
+| --- | --- |
+| `text_orientation` | `has-text-align-*` class **and** the matching `textAlign` / `align` block attribute on headings and paragraphs |
+| `background_color` (section, CTA) | `core/group` `style.color.background` + `has-background` |
+| `button_bg_color`, `button_text_color` | `core/button` `style.color.*` |
+| `type` (column) | `core/column` `width` |
+| `color` (divider) | `core/separator` `style.color.background` |
+| `background_image` (header, slide) | `core/cover` `url` |
+| `header_level` (blurb) | heading `level` |
+
+What is **not** carried over, and is reported rather than silently dropped:
+padding, margin, `max_width`, borders, `border_radii`, box shadows, fonts, font
+sizes, line heights, `custom_css_main_element`, hover states, animations, and
+per-breakpoint responsive spacing.
+
+`D2G_Style_Mapper::build_inline_style()`, `wrapper_style()`, `get_color_attrs()`,
+and `parse_font()` are retained but **not called by the converter**. Wiring them
+in naively is what would break block validation: WordPress regenerates a static
+block's markup from its attributes and compares it byte for byte, and an inline
+`style` attribute the block's own save function would not have produced is
+exactly the mismatch that shows "unexpected or invalid content". Connecting them
+properly means emitting block-supported `style` attributes and reproducing the
+style engine's own serialization — a real piece of work, tracked as Q22, not a
+one-line change.
 
 ## 6. Requirements
 
 | | |
 | --- | --- |
-| WordPress | 5.0+ (block editor); `core/details`, `core/form` blocks need 6.3+ / 6.5+ for full fidelity |
+| WordPress | 6.0+. Derived from the blocks emitted: `core/comments` needs 6.0, `core/navigation` 5.9, `core/query` / `core/post-template` / `core/loginout` 5.8. `core/details` (6.3) is feature-detected and degrades to a heading + text below that |
 | PHP | 7.4+ |
-| Capability | `manage_options` |
-| Dependencies | jQuery (bundled with WP), `DOMDocument` (`ext-dom`) |
+| Capability | `manage_options`, plus `edit_post` on each target post |
+| Dependencies | jQuery (bundled with WP). `DOMDocument` (`ext-dom`) recommended — without it rich text falls back to `core/html`. No `mbstring` requirement |
 | Divi | Not required at conversion time — the parser reads raw shortcodes |
 
 ## 7. Known gaps / risk register
 
-1. **Restore depends on the backup being taken.** Conversion still overwrites
+1. **No live block-editor validation has been run.** The fixture suite checks
+   that a block's saved markup agrees with its own attributes, which is what
+   caught every serialization defect fixed in 2.1.0 — but it cannot execute
+   core's JavaScript `save()` functions. Whether a converted page opens clean in
+   a real editor on a given WordPress version is still unmeasured. This is the
+   single largest remaining risk and it gates publication. See `OPENQUESTIONS.md`
+   Q18 and Q23.
+2. **Restore depends on the backup being taken.** Conversion still overwrites
    `post_content` outright. If the backup checkbox was unticked there is no
    `_d2g_divi_backup`, no Restore button, and recovery falls back to WordPress
    revisions or a database backup.
-2. **Backup covers content only.** Conversion deletes `_et_pb_use_builder` and
-   `_et_pb_old_content`; restore re-adds the former but cannot recover the
-   latter, because only `post_content` is snapshotted. See `OPENQUESTIONS.md` Q16.
 3. **kses filtering on multisite.** `wp_update_post()` strips markup for users
    without `unfiltered_html`, which on multisite means every non-super-admin.
    Affects both convert and restore. See `OPENQUESTIONS.md` Q15.
-4. **Heuristic HTML classification.** `et_pb_text` routing between paragraph /
-   HTML / embed relies on regex sniffing; `DOMDocument` parsing of malformed
-   Divi HTML is error-suppressed and can degrade.
-5. **Style fidelity is partial.** Hover states, animations, responsive
-   breakpoints, and Divi's per-device spacing are not mapped.
+4. **Style fidelity is partial** and mostly unmapped — see §5.1 for the exact
+   matrix. Spacing, borders, shadows, fonts, and module custom CSS are lost.
+   Losses are now reported in the preview rather than being silent.
+5. **Attribute values containing `]` can truncate a tag.** The tokenizer stops an
+   opening tag at the first unescaped `]`, even inside a quoted value. Divi does
+   not normally produce such values, but a hand-edited layout could.
 6. **Gallery carousels** emit a `d2g-gallery-slider` class with no shipped CSS or
    JS to make it behave as a carousel.
-7. **No release engineering.** No tags, no built ZIPs, no `readme.txt`, no
-   `uninstall.php`, and the version constant has never been bumped despite ~20
-   commits of post-1.0.0 fixes.
-8. **No automated tests.** All ~3,200 lines are verified manually.
+7. **The scan does not scale.** It uses a leading-wildcard `LIKE` over
+   `post_content`, which cannot use an index. "All" is capped at 500 rows
+   (`d2g_scan_hard_cap`) so it cannot exhaust memory, but a large site still
+   costs a full table scan per query. See `OPENQUESTIONS.md` Q11.
+8. **Portfolio conversion depends on Divi's `project` post type**, which stops
+   existing when Divi is removed. The converted Query Loop is warned about but
+   still points at it.
+
+### Closed in 2.1.0
+
+- Backslash stripping on backup, convert, and restore (`wp_slash`).
+- A repeat conversion overwriting the original backup.
+- Backup covering `post_content` only — Divi builder meta is now snapshotted and
+  restored.
+- Missing object-level capability and post type/status checks.
+- Text modules producing one paragraph block containing many paragraphs.
+- Alignment, toggle, list, quote, and table markup disagreeing with block
+  attributes.
+- `[et_pb_pricing_item]` and unrecognised modules left as raw shortcode text.
+- Experimental `core/form*` output and the invented `core/navigation` `menuId`.
+- `mbstring` dependency and the PHP 8.2 `HTML-ENTITIES` deprecation.
+- Batch conversion reporting failures as successes.
+- No automated tests — `tests/run.php` now gates `bin/build-zip.sh`.
 
 ## 8. Roadmap
 
@@ -212,25 +268,35 @@ emits nothing.
   name/slug trademark question (Q17), a real `Tested up to` value (Q18), and
   screenshots plus a WP.org username (Q19)
 
-**Phase 2 — Safety** *(partly delivered in 1.1.0)*
+**Phase 2 — Safety** *(delivered in 1.1.0 and 2.1.0)*
 - ~~Restore-from-backup UI and endpoint~~ — done in 1.1.0
-- ~~Guard against double-converting a page~~ — done in 1.1.0 via `has_divi`
-- Extend the backup to cover `_et_pb_*` meta, not just `post_content` (Q16)
+- ~~Guard against double-converting a page~~ — 1.1.0 in the UI, 2.1.0 on the
+  server, which is where it had to be
+- ~~Extend the backup to cover `_et_pb_*` meta, not just `post_content`~~ — done
+  in 2.1.0 (Q16 resolved)
+- ~~Conversion report of lossy modules per page~~ — done in 2.1.0; shown in the
+  preview
 - Resolve kses stripping for non-`unfiltered_html` users (Q15)
-- Dry-run / preview-all mode; conversion report of lossy modules per page
+- Dry-run / preview-all mode across a whole batch
 
-**Phase 3 — UI completion** *(partly delivered in 1.1.0)*
+**Phase 3 — UI completion** *(delivered in 1.1.0 and 2.1.0)*
 - ~~Wire up the filter, sort, and per-page controls~~ — done in 1.1.0
-- Per-row conversion warnings for placeholder modules
+- ~~Conversion warnings for placeholder modules~~ — done in 2.1.0 in the preview
+- Surface those warnings per row in the results table too
 
 **Phase 4 — Coverage**
 - Divi Library / global module resolution
 - Real map, signup, and shop block targets
 - Optional companion stylesheet for carousel and layout classes
 
-**Phase 5 — Quality**
-- Fixture-based unit tests: known Divi input → expected block markup
-- Block-validity assertion so converted output never trips "invalid content"
+**Phase 5 — Quality** *(partly delivered in 2.1.0)*
+- ~~Fixture-based unit tests: known Divi input → expected block markup~~ — done
+  in 2.1.0; `tests/run.php`, gating the build script
+- ~~Static block-consistency assertions (markup vs. attributes)~~ — done in 2.1.0
+- Run the canonical WordPress **JavaScript** block parser and validator against
+  every fixture, on each supported WordPress version — the remaining half of the
+  validity gate, and what `Tested up to` is blocked on (Q23)
+- CI matrix over supported WordPress and PHP versions
 - WP-CLI command for large-site batch migration
 
 ## 9. Success criteria

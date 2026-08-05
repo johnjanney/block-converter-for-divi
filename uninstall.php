@@ -39,26 +39,44 @@ function d2g_uninstall_current_site() {
         return;
     }
 
-    foreach ( [ '_d2g_divi_backup', '_d2g_backup_date' ] as $meta_key ) {
+    foreach ( [ '_d2g_divi_backup', '_d2g_backup_date', '_d2g_builder_meta' ] as $meta_key ) {
         $wpdb->delete( $wpdb->postmeta, [ 'meta_key' => $meta_key ], [ '%s' ] );
     }
 }
 
-// uninstall.php is executed once, not once per site, so multisite has to be
-// walked explicitly. Options and post meta are both per-site.
+/*
+ * uninstall.php is executed once, not once per site, so multisite has to be
+ * walked explicitly. Options and post meta are both per-site, and so is the
+ * "delete backups" preference: this deliberately does NOT purge a network from
+ * one switch. Each site's administrator opted in for their own site, or did
+ * not, and a network-wide purge triggered from another site's setting would
+ * destroy backups nobody there agreed to lose. INSTRUCTIONS.md documents the
+ * per-site model to match.
+ *
+ * Sites are walked in batches rather than loaded all at once, so a large
+ * network does not build one array of every site ID before it starts.
+ */
 if ( is_multisite() ) {
-    $d2g_site_ids = get_sites( [
-        'fields' => 'ids',
-        'number' => 0,
-    ] );
+    $d2g_batch_size = 100;
+    $d2g_offset     = 0;
 
-    foreach ( $d2g_site_ids as $d2g_site_id ) {
-        switch_to_blog( $d2g_site_id );
-        d2g_uninstall_current_site();
-        restore_current_blog();
-    }
+    do {
+        $d2g_site_ids = get_sites( [
+            'fields' => 'ids',
+            'number' => $d2g_batch_size,
+            'offset' => $d2g_offset,
+        ] );
 
-    unset( $d2g_site_ids, $d2g_site_id );
+        foreach ( $d2g_site_ids as $d2g_site_id ) {
+            switch_to_blog( $d2g_site_id );
+            d2g_uninstall_current_site();
+            restore_current_blog();
+        }
+
+        $d2g_offset += $d2g_batch_size;
+    } while ( count( $d2g_site_ids ) === $d2g_batch_size );
+
+    unset( $d2g_batch_size, $d2g_offset, $d2g_site_ids, $d2g_site_id );
 } else {
     d2g_uninstall_current_site();
 }

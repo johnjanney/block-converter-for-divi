@@ -11,6 +11,30 @@ class D2G_Converter {
 
     private $parser;
 
+    /**
+     * Modules that could not be carried over faithfully in the last run.
+     *
+     * Collected rather than silently dropped so the preview can tell the user
+     * what will need rebuilding by hand before they commit to a conversion.
+     *
+     * @var array<int, array{module: string, message: string}>
+     */
+    private $warnings = [];
+
+    /**
+     * HTML elements that belong inside a paragraph rather than beside one.
+     *
+     * Used to decide where one block ends and the next begins: a run of text
+     * and inline elements becomes a single paragraph block, and anything else
+     * becomes a block of its own.
+     */
+    private static $inline_tags = [
+        'a', 'abbr', 'acronym', 'b', 'bdi', 'bdo', 'big', 'br', 'cite', 'code',
+        'data', 'del', 'dfn', 'em', 'i', 'img', 'ins', 'kbd', 'label', 'mark',
+        'q', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'span', 'strong', 'sub',
+        'sup', 'time', 'tt', 'u', 'var', 'wbr',
+    ];
+
     public function __construct() {
         $this->parser = new D2G_Parser();
     }
@@ -19,6 +43,8 @@ class D2G_Converter {
      * Convert Divi shortcode content to Gutenberg block markup.
      */
     public function convert( string $content ): string {
+        $this->warnings = [];
+
         if ( ! D2G_Parser::has_divi_content( $content ) ) {
             return $content;
         }
@@ -29,6 +55,46 @@ class D2G_Converter {
         // Clean up excessive whitespace.
         $output = preg_replace( "/\n{3,}/", "\n\n", $output );
         return trim( $output );
+    }
+
+    /**
+     * Modules from the last convert() call that need manual attention.
+     *
+     * @return array<int, array{module: string, message: string}>
+     */
+    public function get_warnings(): array {
+        return $this->warnings;
+    }
+
+    /**
+     * Record a module that converted lossily or not at all.
+     */
+    private function add_warning( string $module, string $message ) {
+        foreach ( $this->warnings as $existing ) {
+            if ( $existing['module'] === $module && $existing['message'] === $message ) {
+                return; // One entry per distinct problem, not one per instance.
+            }
+        }
+        $this->warnings[] = [
+            'module'  => $module,
+            'message' => $message,
+        ];
+    }
+
+    /**
+     * Whether a core block is actually registered on this WordPress version.
+     *
+     * The converter can emit blocks that only exist on newer WordPress —
+     * core/details arrived in 6.3. Emitting one on an older install leaves the
+     * user with a "block not found" placeholder, so the renderer asks first and
+     * falls back to blocks that have always existed.
+     */
+    private function block_supported( string $block_name ): bool {
+        if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
+            // Outside WordPress (fixture tests): assume a current install.
+            return true;
+        }
+        return WP_Block_Type_Registry::get_instance()->is_registered( $block_name );
     }
 
     /**
@@ -121,6 +187,10 @@ class D2G_Converter {
                 return $this->convert_pricing_tables( $node );
             case 'et_pb_pricing_table':
                 return $this->convert_pricing_table( $node );
+            case 'et_pb_pricing_item':
+                // Normally consumed by convert_pricing_table(); reachable only
+                // when an item appears outside a table.
+                return $this->convert_pricing_items( [ $node ] );
 
             // Counters / Number counter.
             case 'et_pb_counters':
@@ -216,11 +286,7 @@ class D2G_Converter {
         if ( '' === $content ) {
             return '';
         }
-        // If it looks like HTML already, wrap in an HTML block.
-        if ( preg_match( '#<[a-z][\s\S]*>#i', $content ) ) {
-            return $this->gutenberg_block( 'html', [], $content );
-        }
-        return $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
+        return $this->html_to_blocks( $content, [] );
     }
 
     // =========================================================================
@@ -319,44 +385,25 @@ class D2G_Converter {
     private function convert_text( array $node ): string {
         $attrs   = $node['attrs'];
         $content = $this->get_inner_content( $node );
-        $align   = D2G_Style_Mapper::text_align_class( $attrs );
 
-        if ( '' === trim( strip_tags( $content ) ) && '' === trim( $content ) ) {
+        if ( '' === trim( $content ) ) {
             return '';
         }
 
         // If the content contains iframes (YouTube/Vimeo embeds, etc.) or embed/object/video tags,
         // extract them first and convert separately so they aren't lost by DOMDocument.
         if ( preg_match( '#<(?:iframe|embed|object|video)[\s>]#i', $content ) ) {
-            return $this->convert_text_with_embeds( $content, $attrs, $align );
+            return $this->convert_text_with_embeds( $content, $attrs );
         }
 
-        // If the content already contains block-level HTML (h1-h6, ul, ol, table, etc.),
-        // render as an HTML block to preserve formatting.
-        if ( preg_match( '#<(?:h[1-6]|ul|ol|table|blockquote|pre|dl|figure)[>\s]#i', $content ) ) {
-            return $this->convert_rich_html( $content, $attrs );
-        }
-
-        // Simple paragraph content.
-        $classes = $align ? ' class="' . $align . '"' : '';
-
-        // Strip wrapping <p> tags if already present, then re-wrap.
-        $content = preg_replace( '#^<p[^>]*>(.*)</p>$#s', '$1', trim( $content ) );
-        $html    = '<p' . $classes . '>' . $content . '</p>';
-
-        $block_attrs = [];
-        if ( $align ) {
-            $block_attrs['align'] = $attrs['text_orientation'];
-        }
-
-        return $this->gutenberg_block( 'paragraph', $block_attrs, $html );
+        return $this->html_to_blocks( $content, $attrs );
     }
 
     /**
      * Convert text content that contains embedded media (iframes, video, embeds).
      * Splits around embed tags so text becomes paragraphs and embeds become embed/html blocks.
      */
-    private function convert_text_with_embeds( string $content, array $attrs, string $align = '' ): string {
+    private function convert_text_with_embeds( string $content, array $attrs ): string {
         $output = '';
 
         // Split content around iframe/embed/object/video tags, keeping the tags.
@@ -374,22 +421,10 @@ class D2G_Converter {
             }
 
             // Check if this part is an embed tag.
-            if ( preg_match( '#^<(iframe|embed|object|video)\b#i', $part, $m ) ) {
+            if ( preg_match( '#^<(iframe|embed|object|video)\b#i', $part ) ) {
                 $output .= $this->convert_embed_tag( $part );
             } else {
-                // Regular HTML/text — use the normal text conversion path.
-                $stripped = trim( strip_tags( $part ) );
-                if ( '' === $stripped && '' === trim( $part ) ) {
-                    continue;
-                }
-
-                if ( preg_match( '#<(?:h[1-6]|ul|ol|table|blockquote|pre|dl|figure)[>\s]#i', $part ) ) {
-                    $output .= $this->convert_rich_html( $part, $attrs );
-                } else {
-                    $part = preg_replace( '#^<p[^>]*>(.*)</p>$#s', '$1', $part );
-                    $cls = $align ? ' class="' . $align . '"' : '';
-                    $output .= $this->gutenberg_block( 'paragraph', [], '<p' . $cls . '>' . $part . '</p>' );
-                }
+                $output .= $this->html_to_blocks( $part, $attrs );
             }
         }
 
@@ -434,74 +469,344 @@ class D2G_Converter {
     }
 
     /**
-     * Convert rich HTML content (headings, lists, etc.) into appropriate Gutenberg blocks.
+     * Convert a fragment of HTML into one Gutenberg block per top-level element.
+     *
+     * This is the single entry point for every piece of free-form HTML the
+     * converter meets — Divi text modules, blurb and slide bodies, toggle
+     * contents, and so on.
+     *
+     * Earlier versions wrapped a whole fragment in a single paragraph block
+     * after stripping one outer <p> pair, so `<p>One</p><p>Two</p>` became one
+     * paragraph block containing two paragraph elements. WordPress validates a
+     * static block by re-running its save function over the parsed attributes
+     * and comparing the result with the stored markup, and a paragraph block
+     * whose body is not exactly one <p> fails that comparison — which is what
+     * produced "this block contains unexpected or invalid content".
+     *
+     * So: block-level elements each become their own block, and runs of text
+     * and inline elements between them are gathered into a paragraph.
      */
-    private function convert_rich_html( string $html, array $attrs ): string {
-        $output = '';
+    private function html_to_blocks( string $html, array $attrs, int $depth = 0 ): string {
+        if ( '' === trim( $html ) ) {
+            return '';
+        }
 
         // If the HTML contains iframes/embeds, extract and convert them first
         // before DOM parsing, which can corrupt iframe tags.
         if ( preg_match( '#<(?:iframe|embed|object)\b#i', $html ) ) {
-            return $this->convert_text_with_embeds( $html, $attrs, D2G_Style_Mapper::text_align_class( $attrs ) );
+            return $this->convert_text_with_embeds( $html, $attrs );
         }
 
-        // Split HTML by block-level elements and convert each.
-        $dom = new DOMDocument();
-        $wrapped = '<div>' . mb_convert_encoding( $html, 'HTML-ENTITIES', 'UTF-8' ) . '</div>';
-        @$dom->loadHTML( '<?xml encoding="UTF-8">' . $wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+        // Nothing that needs structural parsing: one paragraph.
+        if ( ! preg_match( '#<[a-z!/]#i', $html ) ) {
+            return $this->paragraph_block( $html, $attrs );
+        }
 
-        $root = $dom->getElementsByTagName( 'div' )->item( 0 );
-        if ( ! $root ) {
+        // Guard against a pathological nesting depth in malformed source.
+        if ( $depth > 10 ) {
             return $this->gutenberg_block( 'html', [], $html );
         }
 
+        $root = $this->load_html_fragment( $html );
+        if ( null === $root ) {
+            // No DOM extension, or the fragment could not be parsed. Preserving
+            // it verbatim in a core/html block loses editability but never
+            // loses content.
+            return $this->gutenberg_block( 'html', [], $html );
+        }
+
+        $output = '';
+        $buffer = ''; // Accumulated inline content awaiting a paragraph.
+
         foreach ( $root->childNodes as $child ) {
-            if ( $child->nodeType === XML_TEXT_NODE ) {
-                $text = trim( $child->textContent );
-                if ( '' !== $text ) {
-                    $output .= $this->gutenberg_block( 'paragraph', [], '<p>' . esc_html( $text ) . '</p>' );
-                }
+            if ( XML_TEXT_NODE === $child->nodeType ) {
+                $buffer .= $root->ownerDocument->saveHTML( $child );
                 continue;
             }
 
-            if ( $child->nodeType !== XML_ELEMENT_NODE ) {
+            if ( XML_ELEMENT_NODE !== $child->nodeType ) {
                 continue;
             }
 
             $tag_name = strtolower( $child->nodeName );
-            $inner_html = $this->dom_inner_html( $child );
 
-            if ( preg_match( '/^h([1-6])$/', $tag_name, $hm ) ) {
-                $level = (int) $hm[1];
-                $align = D2G_Style_Mapper::text_align_class( $attrs );
-                $cls = $align ? ' class="' . $align . '"' : '';
-                $h_html = '<' . $tag_name . $cls . '>' . $inner_html . '</' . $tag_name . '>';
-                $output .= $this->gutenberg_block( 'heading', [ 'level' => $level ], $h_html );
-            } elseif ( $tag_name === 'ul' ) {
-                $output .= $this->gutenberg_block( 'list', [], '<ul>' . $inner_html . '</ul>' );
-            } elseif ( $tag_name === 'ol' ) {
-                $output .= $this->gutenberg_block( 'list', [ 'ordered' => true ], '<ol>' . $inner_html . '</ol>' );
-            } elseif ( $tag_name === 'blockquote' ) {
-                $output .= $this->gutenberg_block( 'quote', [], '<blockquote class="wp-block-quote">' . $inner_html . '</blockquote>' );
-            } elseif ( $tag_name === 'table' ) {
-                $output .= $this->gutenberg_block( 'table', [], '<figure class="wp-block-table"><table>' . $inner_html . '</table></figure>' );
-            } elseif ( $tag_name === 'pre' ) {
-                $output .= $this->gutenberg_block( 'preformatted', [], '<pre class="wp-block-preformatted">' . $inner_html . '</pre>' );
-            } elseif ( $tag_name === 'p' ) {
-                $align = D2G_Style_Mapper::text_align_class( $attrs );
-                $cls = $align ? ' class="' . $align . '"' : '';
-                $output .= $this->gutenberg_block( 'paragraph', [], '<p' . $cls . '>' . $inner_html . '</p>' );
-            } elseif ( $tag_name === 'figure' || $tag_name === 'img' ) {
-                $output .= $this->gutenberg_block( 'html', [], $dom->saveHTML( $child ) );
-            } elseif ( $tag_name === 'div' ) {
-                // Recurse into divs.
-                $output .= $this->convert_rich_html( $inner_html, $attrs );
-            } else {
-                $output .= $this->gutenberg_block( 'html', [], $dom->saveHTML( $child ) );
+            if ( in_array( $tag_name, self::$inline_tags, true ) ) {
+                $buffer .= $root->ownerDocument->saveHTML( $child );
+                continue;
+            }
+
+            // A block-level element closes whatever paragraph was building up.
+            $output .= $this->paragraph_block( $buffer, $attrs );
+            $buffer  = '';
+            $output .= $this->block_for_element( $child, $attrs, $depth );
+        }
+
+        $output .= $this->paragraph_block( $buffer, $attrs );
+
+        return $output;
+    }
+
+    /**
+     * Turn one block-level DOM element into its matching Gutenberg block.
+     */
+    private function block_for_element( DOMNode $el, array $attrs, int $depth ): string {
+        $tag_name   = strtolower( $el->nodeName );
+        $inner_html = $this->dom_inner_html( $el );
+        $align      = D2G_Style_Mapper::text_align_class( $attrs );
+
+        if ( preg_match( '/^h([1-6])$/', $tag_name, $hm ) ) {
+            $level       = (int) $hm[1];
+            $block_attrs = [ 'level' => $level ];
+            $cls         = '';
+            if ( $align ) {
+                // The class and the block attribute have to agree: core/heading
+                // regenerates the class from textAlign, so emitting one without
+                // the other is exactly the mismatch that invalidates the block.
+                $block_attrs['textAlign'] = $attrs['text_orientation'];
+                $cls                      = ' class="' . $align . '"';
+            }
+            return $this->gutenberg_block(
+                'heading',
+                $block_attrs,
+                '<' . $tag_name . $cls . '>' . $inner_html . '</' . $tag_name . '>'
+            );
+        }
+
+        switch ( $tag_name ) {
+            case 'p':
+                return $this->paragraph_block( $inner_html, $attrs );
+
+            case 'ul':
+            case 'ol':
+                return $this->list_block( $el, $attrs, $depth );
+
+            case 'blockquote':
+                return $this->quote_block( $el, $attrs, $depth );
+
+            case 'table':
+                return $this->table_block( $el );
+
+            case 'pre':
+                return $this->gutenberg_block(
+                    'preformatted',
+                    [],
+                    '<pre class="wp-block-preformatted">' . $inner_html . '</pre>'
+                );
+
+            case 'hr':
+                return $this->gutenberg_block(
+                    'separator',
+                    [],
+                    '<hr class="wp-block-separator has-alpha-channel-opacity"/>'
+                );
+
+            case 'div':
+            case 'section':
+            case 'article':
+                return $this->html_to_blocks( $inner_html, $attrs, $depth + 1 );
+
+            default:
+                return $this->gutenberg_block( 'html', [], $el->ownerDocument->saveHTML( $el ) );
+        }
+    }
+
+    /**
+     * Emit a core/paragraph block, or nothing when there is nothing to say.
+     */
+    private function paragraph_block( string $inner_html, array $attrs ): string {
+        // Whitespace and empty markup are not content. An <img> is, even though
+        // it strips to nothing.
+        if ( '' === trim( strip_tags( $inner_html, '<img><br>' ) ) && ! preg_match( '#<img\b#i', $inner_html ) ) {
+            return '';
+        }
+
+        $align       = D2G_Style_Mapper::text_align_class( $attrs );
+        $block_attrs = [];
+        $cls         = '';
+
+        if ( $align ) {
+            $block_attrs['align'] = $attrs['text_orientation'];
+            $cls                  = ' class="' . $align . '"';
+        }
+
+        return $this->gutenberg_block( 'paragraph', $block_attrs, '<p' . $cls . '>' . trim( $inner_html ) . '</p>' );
+    }
+
+    /**
+     * Emit a core/list block with one core/list-item per <li>.
+     *
+     * core/list has held its items as inner blocks since WordPress 6.0; a bare
+     * <ul><li>…</li></ul> body only survives through a deprecation path.
+     */
+    private function list_block( DOMNode $el, array $attrs, int $depth ): string {
+        $tag_name    = strtolower( $el->nodeName );
+        $ordered     = ( 'ol' === $tag_name );
+        $block_attrs = $ordered ? [ 'ordered' => true ] : [];
+
+        $items = '';
+        foreach ( $el->childNodes as $li ) {
+            if ( XML_ELEMENT_NODE !== $li->nodeType || 'li' !== strtolower( $li->nodeName ) ) {
+                continue;
+            }
+
+            $item_inline = '';
+            $item_nested = '';
+
+            foreach ( $li->childNodes as $part ) {
+                if ( XML_ELEMENT_NODE === $part->nodeType
+                    && in_array( strtolower( $part->nodeName ), [ 'ul', 'ol' ], true )
+                ) {
+                    // A nested list is its own core/list block inside the item.
+                    $item_nested .= $this->list_block( $part, $attrs, $depth + 1 );
+                    continue;
+                }
+                $item_inline .= $el->ownerDocument->saveHTML( $part );
+            }
+
+            $item_html = '<li>' . trim( $item_inline );
+            if ( '' !== $item_nested ) {
+                $item_html .= "\n" . $item_nested;
+            }
+            $item_html .= '</li>';
+
+            $items .= $this->gutenberg_block( 'list-item', [], $item_html );
+        }
+
+        if ( '' === $items ) {
+            return '';
+        }
+
+        $html = '<' . $tag_name . ' class="wp-block-list">' . "\n" . $items . '</' . $tag_name . '>';
+        return $this->gutenberg_block( 'list', $block_attrs, $html, true );
+    }
+
+    /**
+     * Emit a core/quote block with its body as inner blocks.
+     */
+    private function quote_block( DOMNode $el, array $attrs, int $depth ): string {
+        $body = '';
+        $cite = '';
+
+        foreach ( $el->childNodes as $part ) {
+            if ( XML_ELEMENT_NODE === $part->nodeType && 'cite' === strtolower( $part->nodeName ) ) {
+                $cite = $this->dom_inner_html( $part );
+                continue;
+            }
+            $body .= $el->ownerDocument->saveHTML( $part );
+        }
+
+        // core/quote holds its body as inner blocks and its citation as a
+        // sourced <cite>, so the body has to be real blocks, not loose markup.
+        $inner = $this->html_to_blocks( $body, [], $depth + 1 );
+        if ( '' === trim( $inner ) ) {
+            return '';
+        }
+
+        $html = '<blockquote class="wp-block-quote">' . "\n" . $inner;
+        if ( '' !== trim( $cite ) ) {
+            $html .= '<cite>' . trim( $cite ) . '</cite>';
+        }
+        $html .= '</blockquote>';
+
+        return $this->gutenberg_block( 'quote', [], $html, true );
+    }
+
+    /**
+     * Emit a core/table block, or preserve the table verbatim when core/table
+     * would not round-trip it.
+     *
+     * core/table stores its rows as sourced attributes selected with
+     * `tbody tr`, and regenerates plain <td>/<th> cells from them. Rows outside
+     * a <tbody>, or cells carrying attributes core does not model, would be
+     * dropped or rewritten on regeneration — which is a validation failure and,
+     * worse, silent content loss. Those tables stay as core/html.
+     */
+    private function table_block( DOMNode $el ): string {
+        $doc  = $el->ownerDocument;
+        $html = $doc->saveHTML( $el );
+
+        // Any attribute on the table or on a row/cell is a signal that core
+        // would not reproduce this table faithfully.
+        foreach ( $el->getElementsByTagName( '*' ) as $descendant ) {
+            if ( $descendant->hasAttributes() ) {
+                $this->add_warning(
+                    'table',
+                    __( 'A table used HTML attributes that the core Table block does not store. It was preserved as a Custom HTML block instead.', 'block-converter-for-divi' )
+                );
+                return $this->gutenberg_block( 'html', [], $html );
+            }
+        }
+        if ( $el->hasAttributes() ) {
+            return $this->gutenberg_block( 'html', [], $html );
+        }
+
+        $sections = '';
+        $loose    = '';
+        foreach ( $el->childNodes as $child ) {
+            if ( XML_ELEMENT_NODE !== $child->nodeType ) {
+                continue;
+            }
+            $name = strtolower( $child->nodeName );
+            if ( in_array( $name, [ 'thead', 'tbody', 'tfoot' ], true ) ) {
+                $sections .= $doc->saveHTML( $child );
+            } elseif ( 'tr' === $name ) {
+                $loose .= $doc->saveHTML( $child );
             }
         }
 
-        return $output;
+        if ( '' !== $loose ) {
+            // Rows written straight into <table> are invisible to core's
+            // `tbody tr` selector, so give them the tbody they need.
+            $sections .= '<tbody>' . $loose . '</tbody>';
+        }
+
+        if ( '' === $sections ) {
+            return $this->gutenberg_block( 'html', [], $html );
+        }
+
+        // hasFixedLayout is stated rather than left to the block default, which
+        // has changed between WordPress versions and controls a class name.
+        return $this->gutenberg_block(
+            'table',
+            [ 'hasFixedLayout' => false ],
+            '<figure class="wp-block-table"><table>' . $sections . '</table></figure>'
+        );
+    }
+
+    /**
+     * Parse an HTML fragment and return the wrapper element holding its nodes.
+     *
+     * The `<?xml encoding="UTF-8">` prologue is what keeps multibyte content
+     * intact. The previous implementation instead ran the fragment through
+     * mb_convert_encoding( …, 'HTML-ENTITIES', … ), which requires the mbstring
+     * extension that the plugin never declared, and whose 'HTML-ENTITIES'
+     * encoding PHP 8.2 deprecates. The prologue does the same job with no
+     * extension requirement and no deprecation, and leaves characters as
+     * characters rather than numeric entities.
+     *
+     * @return DOMNode|null Null when the fragment cannot be parsed.
+     */
+    private function load_html_fragment( string $html ) {
+        if ( ! class_exists( 'DOMDocument' ) ) {
+            return null;
+        }
+
+        $dom = new DOMDocument();
+
+        $previous = libxml_use_internal_errors( true );
+        $loaded   = $dom->loadHTML(
+            '<?xml encoding="UTF-8"><div>' . $html . '</div>',
+            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors( $previous );
+
+        if ( ! $loaded ) {
+            return null;
+        }
+
+        $root = $dom->getElementsByTagName( 'div' )->item( 0 );
+        return $root ? $root : null;
     }
 
     private function dom_inner_html( DOMNode $node ): string {
@@ -724,9 +1029,7 @@ class D2G_Converter {
         }
 
         // Body text.
-        if ( trim( $content ) ) {
-            $inner .= $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
-        }
+        $inner .= $this->html_to_blocks( $content, $attrs );
 
         $html = $group_open . "\n" . $inner . "\n" . '</div>';
         return $this->gutenberg_block( 'group', [], $html, true );
@@ -747,9 +1050,7 @@ class D2G_Converter {
         if ( $title ) {
             $inner .= $this->gutenberg_block( 'heading', [ 'level' => 2 ], '<h2>' . esc_html( $title ) . '</h2>' );
         }
-        if ( trim( $content ) ) {
-            $inner .= $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
-        }
+        $inner .= $this->html_to_blocks( $content, $attrs );
         if ( $btn_text ) {
             $btn_inner = $this->gutenberg_block( 'button', [], '<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="' . esc_url( $btn_url ) . '">' . esc_html( $btn_text ) . '</a></div>' );
             $inner .= $this->gutenberg_block( 'buttons', [], '<div class="wp-block-buttons">' . "\n" . $btn_inner . "\n" . '</div>', true );
@@ -886,6 +1187,10 @@ class D2G_Converter {
         if ( $is_carousel ) {
             // Core/gallery doesn't support a native carousel block attribute.
             $gallery_attrs['className'] = 'd2g-gallery-slider';
+            $this->add_warning(
+                'et_pb_gallery',
+                __( 'A gallery slider became a static grid gallery tagged with the d2g-gallery-slider class. Core has no carousel gallery; style or script that class in your theme if you need the slider behaviour back.', 'block-converter-for-divi' )
+            );
         }
 
         // Build individual wp:image inner blocks for each gallery image.
@@ -953,17 +1258,37 @@ class D2G_Converter {
 
     private function convert_toggle( array $node ): string {
         $attrs   = $node['attrs'];
-        $title   = $attrs['title'] ?? 'Toggle';
+        $title   = $attrs['title'] ?? __( 'Toggle', 'block-converter-for-divi' );
         $content = $this->get_inner_content( $node );
-        $open    = ( $attrs['open'] ?? '' ) === 'on' ? ' open' : '';
+        $is_open = ( $attrs['open'] ?? '' ) === 'on';
+        $body    = $this->html_to_blocks( $content, $attrs );
 
-        $html = '<details class="wp-block-details"' . $open . '><summary>' . esc_html( $title ) . '</summary>';
-        if ( trim( $content ) ) {
-            $html .= "\n" . $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
+        // core/details arrived in WordPress 6.3. On anything older the block is
+        // unregistered, so the editor would show "your site doesn't include
+        // support for this block" instead of the content.
+        if ( ! $this->block_supported( 'core/details' ) ) {
+            $this->add_warning(
+                'et_pb_toggle',
+                __( 'Toggles and accordions were converted to headings and text because this WordPress version has no Details block (added in 6.3).', 'block-converter-for-divi' )
+            );
+            $inner = $this->gutenberg_block( 'heading', [ 'level' => 3 ], '<h3>' . esc_html( $title ) . '</h3>' ) . $body;
+            return $this->gutenberg_block( 'group', [], '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>', true );
+        }
+
+        // showContent is what core/details reads to decide whether to write the
+        // `open` attribute back out. Emitting `open` without it makes the saved
+        // markup disagree with the regenerated markup, and the block is flagged
+        // as invalid the first time the page is opened in the editor.
+        $block_attrs = $is_open ? [ 'showContent' => true ] : [];
+        $open_attr   = $is_open ? ' open' : '';
+
+        $html = '<details class="wp-block-details"' . $open_attr . '><summary>' . esc_html( $title ) . '</summary>';
+        if ( '' !== trim( $body ) ) {
+            $html .= "\n" . $body;
         }
         $html .= '</details>';
 
-        return $this->gutenberg_block( 'details', [], $html, true );
+        return $this->gutenberg_block( 'details', $block_attrs, $html, true );
     }
 
     // =========================================================================
@@ -991,10 +1316,7 @@ class D2G_Converter {
         $content = $this->get_inner_content( $node );
 
         $heading = $this->gutenberg_block( 'heading', [ 'level' => 3 ], '<h3>' . esc_html( $title ) . '</h3>' );
-        $body = '';
-        if ( trim( $content ) ) {
-            $body = $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
-        }
+        $body    = $this->html_to_blocks( $content, $attrs );
 
         $html = '<div class="wp-block-group">' . "\n" . $heading . $body . "\n" . '</div>';
         return $this->gutenberg_block( 'group', [], $html, true );
@@ -1031,9 +1353,7 @@ class D2G_Converter {
         if ( $heading ) {
             $inner .= $this->gutenberg_block( 'heading', [ 'level' => 2 ], '<h2>' . esc_html( $heading ) . '</h2>' );
         }
-        if ( trim( $content ) ) {
-            $inner .= $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
-        }
+        $inner .= $this->html_to_blocks( $content, $attrs );
         if ( $btn_text ) {
             $btn_inner = $this->gutenberg_block( 'button', [], '<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="' . esc_url( $btn_url ) . '">' . esc_html( $btn_text ) . '</a></div>' );
             $inner .= $this->gutenberg_block( 'buttons', [], '<div class="wp-block-buttons">' . "\n" . $btn_inner . "\n" . '</div>', true );
@@ -1077,15 +1397,22 @@ class D2G_Converter {
             $cite_parts[] = $c;
         }
 
-        $quote_inner = '';
-        if ( trim( $content ) ) {
-            $quote_inner .= '<p>' . $content . '</p>';
-        }
-        if ( $cite_parts ) {
-            $quote_inner .= '<cite>' . implode( ', ', $cite_parts ) . '</cite>';
+        // core/quote keeps its body as inner blocks and its attribution as a
+        // sourced <cite>, so the body is built as real blocks rather than as
+        // loose markup inside the blockquote.
+        $quote_body = $this->html_to_blocks( $content, $attrs );
+        if ( '' === trim( $quote_body ) && $cite_parts ) {
+            $quote_body = $this->gutenberg_block( 'paragraph', [], '<p></p>' );
         }
 
-        $inner .= $this->gutenberg_block( 'quote', [], '<blockquote class="wp-block-quote">' . $quote_inner . '</blockquote>' );
+        if ( '' !== trim( $quote_body ) ) {
+            $quote_html = '<blockquote class="wp-block-quote">' . "\n" . $quote_body;
+            if ( $cite_parts ) {
+                $quote_html .= '<cite>' . implode( ', ', $cite_parts ) . '</cite>';
+            }
+            $quote_html .= '</blockquote>';
+            $inner .= $this->gutenberg_block( 'quote', [], $quote_html, true );
+        }
 
         $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
         return $this->gutenberg_block( 'group', [], $html, true );
@@ -1112,9 +1439,7 @@ class D2G_Converter {
         if ( $position ) {
             $inner .= $this->gutenberg_block( 'paragraph', [ 'fontSize' => 'small' ], '<p class="has-small-font-size"><em>' . esc_html( $position ) . '</em></p>' );
         }
-        if ( trim( $content ) ) {
-            $inner .= $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
-        }
+        $inner .= $this->html_to_blocks( $content, $attrs );
 
         // Social links from attrs.
         $socials = $this->extract_social_links( $attrs );
@@ -1164,12 +1489,17 @@ class D2G_Converter {
         $period  = $attrs['per'] ?? '';
         $btn_text = $attrs['button_text'] ?? '';
         $btn_url  = $attrs['button_url'] ?? '#';
-        $content = $this->get_inner_content( $node );
-        $featured = ( $attrs['featured'] ?? '' ) === 'on';
 
         $inner = '';
         if ( $title ) {
-            $inner .= $this->gutenberg_block( 'heading', [ 'level' => 3 ], '<h3 class="has-text-align-center">' . esc_html( $title ) . '</h3>' );
+            // textAlign has to accompany the has-text-align-center class, or
+            // core/heading regenerates the markup without it and the block is
+            // reported as invalid.
+            $inner .= $this->gutenberg_block(
+                'heading',
+                [ 'textAlign' => 'center', 'level' => 3 ],
+                '<h3 class="has-text-align-center">' . esc_html( $title ) . '</h3>'
+            );
         }
         if ( $subtitle ) {
             $inner .= $this->gutenberg_block( 'paragraph', [ 'align' => 'center' ], '<p class="has-text-align-center">' . esc_html( $subtitle ) . '</p>' );
@@ -1179,13 +1509,29 @@ class D2G_Converter {
             if ( $period ) {
                 $price_text .= '<small>/' . esc_html( $period ) . '</small>';
             }
-            $inner .= $this->gutenberg_block( 'heading', [ 'level' => 2 ], '<h2 class="has-text-align-center">' . $price_text . '</h2>' );
+            $inner .= $this->gutenberg_block(
+                'heading',
+                [ 'textAlign' => 'center', 'level' => 2 ],
+                '<h2 class="has-text-align-center">' . $price_text . '</h2>'
+            );
         }
 
-        // Features list from content.
-        if ( trim( $content ) ) {
-            // Divi pricing table features are typically in the inner content.
-            $inner .= $this->gutenberg_block( 'paragraph', [], '<p>' . $content . '</p>' );
+        // Feature rows. Divi stores each one as its own [et_pb_pricing_item]
+        // shortcode inside the table. There was no renderer for that tag, and
+        // the table fell back to the node's raw inner content, so the shortcodes
+        // themselves were written into a paragraph — leaving literal
+        // "[et_pb_pricing_item]" text on the page once Divi was gone.
+        $items = [];
+        foreach ( $node['children'] as $child ) {
+            if ( 'et_pb_pricing_item' === $child['tag'] ) {
+                $items[] = $child;
+            }
+        }
+
+        if ( $items ) {
+            $inner .= $this->convert_pricing_items( $items );
+        } else {
+            $inner .= $this->html_to_blocks( $this->get_inner_content( $node ), $attrs );
         }
 
         if ( $btn_text ) {
@@ -1195,6 +1541,41 @@ class D2G_Converter {
 
         $html = '<div class="wp-block-column">' . "\n" . $inner . "\n" . '</div>';
         return $this->gutenberg_block( 'column', [], $html, true );
+    }
+
+    /**
+     * Render [et_pb_pricing_item] nodes as a core/list of core/list-item blocks.
+     *
+     * Divi marks a struck-through (unavailable) feature with available="off";
+     * that is carried over as a <s> element so the distinction survives.
+     */
+    private function convert_pricing_items( array $items ): string {
+        $list_items = '';
+
+        foreach ( $items as $item ) {
+            $text = trim( wp_strip_all_tags( $this->get_inner_content( $item ), true ) );
+            if ( '' === $text ) {
+                continue;
+            }
+
+            $label = esc_html( $text );
+            if ( ( $item['attrs']['available'] ?? 'on' ) === 'off' ) {
+                $label = '<s>' . $label . '</s>';
+            }
+
+            $list_items .= $this->gutenberg_block( 'list-item', [], '<li>' . $label . '</li>' );
+        }
+
+        if ( '' === $list_items ) {
+            return '';
+        }
+
+        return $this->gutenberg_block(
+            'list',
+            [],
+            '<ul class="wp-block-list">' . "\n" . $list_items . '</ul>',
+            true
+        );
     }
 
     // =========================================================================
@@ -1233,7 +1614,11 @@ class D2G_Converter {
             $display .= '%';
         }
 
-        $inner = $this->gutenberg_block( 'heading', [ 'level' => 2 ], '<h2 class="has-text-align-center">' . $display . '</h2>' );
+        $inner = $this->gutenberg_block(
+            'heading',
+            [ 'textAlign' => 'center', 'level' => 2 ],
+            '<h2 class="has-text-align-center">' . $display . '</h2>'
+        );
         if ( $title ) {
             $inner .= $this->gutenberg_block( 'paragraph', [ 'align' => 'center' ], '<p class="has-text-align-center">' . esc_html( $title ) . '</p>' );
         }
@@ -1327,6 +1712,10 @@ class D2G_Converter {
         }
 
         if ( $map_content ) {
+            $this->add_warning(
+                'et_pb_map',
+                __( 'A map module became text. Core has no map block — the address and any pin labels were preserved so the map can be rebuilt with a maps plugin or an embed.', 'block-converter-for-divi' )
+            );
             return $this->gutenberg_block( 'group', [], '<div class="wp-block-group">' . "\n" . $this->gutenberg_block( 'html', [], $map_content ) . "\n" . '</div>', true );
         }
 
@@ -1349,86 +1738,116 @@ class D2G_Converter {
     // Contact Form
     // =========================================================================
 
+    /**
+     * Convert a Divi contact form into a description of the form to rebuild.
+     *
+     * Earlier versions emitted core/form, core/form-input and
+     * core/form-submit-button. Those three blocks are experimental: they ship
+     * with the Gutenberg feature plugin and are not registered by WordPress
+     * core, so on a normal install the converted page showed three "block not
+     * supported" placeholders where the form used to be. The mapping also
+     * flattened select, radio and checkbox fields to plain text inputs, and
+     * nothing carried the recipient address into a working mail path, so even
+     * where the blocks did render the form could not be submitted.
+     *
+     * A form is not something to silently half-convert. The fields, their
+     * types, and the recipient are written out as ordinary core blocks — always
+     * valid, always visible — and the module is reported as needing manual
+     * work, so the user rebuilds it with a form plugin of their choosing rather
+     * than discovering later that submissions were being dropped.
+     *
+     * The `d2g_contact_form_markup` filter lets a site swap in blocks for
+     * whichever form plugin it actually uses.
+     */
     private function convert_contact_form( array $node ): string {
-        $attrs      = $node['attrs'];
-        $title      = $attrs['title'] ?? '';
-        $email      = $attrs['email'] ?? '';
-        $submit_text = $attrs['submit_button_text'] ?? 'Send';
+        $attrs       = $node['attrs'];
+        $title       = $attrs['title'] ?? '';
+        $email       = $attrs['email'] ?? '';
+        $submit_text = $attrs['submit_button_text'] ?? __( 'Send', 'block-converter-for-divi' );
+
+        // Human-readable names for what Divi called each field type.
+        $type_labels = [
+            'input'    => __( 'text', 'block-converter-for-divi' ),
+            'email'    => __( 'email', 'block-converter-for-divi' ),
+            'text'     => __( 'multi-line text', 'block-converter-for-divi' ),
+            'select'   => __( 'dropdown', 'block-converter-for-divi' ),
+            'radio'    => __( 'radio buttons', 'block-converter-for-divi' ),
+            'checkbox' => __( 'checkboxes', 'block-converter-for-divi' ),
+        ];
+
+        $fields = '';
+        foreach ( $node['children'] as $child ) {
+            if ( 'et_pb_contact_field' !== $child['tag'] ) {
+                continue;
+            }
+
+            $f_attrs = $child['attrs'];
+            $f_title = $f_attrs['field_title'] ?? ( $f_attrs['field_id'] ?? __( 'Field', 'block-converter-for-divi' ) );
+            $f_type  = $f_attrs['field_type'] ?? 'input';
+            $label   = $type_labels[ $f_type ] ?? $f_type;
+
+            $line = sprintf(
+                /* translators: 1: form field label, 2: field type. */
+                __( '%1$s — %2$s', 'block-converter-for-divi' ),
+                esc_html( $f_title ),
+                esc_html( $label )
+            );
+
+            if ( ( $f_attrs['required_mark'] ?? 'on' ) === 'on' ) {
+                $line .= ' (' . esc_html__( 'required', 'block-converter-for-divi' ) . ')';
+            }
+
+            if ( ! empty( $f_attrs['field_options'] ) ) {
+                $line .= '<br/>' . esc_html( str_replace( '|', ', ', $f_attrs['field_options'] ) );
+            }
+
+            $fields .= $this->gutenberg_block( 'list-item', [], '<li>' . $line . '</li>' );
+        }
 
         $inner = '';
         if ( $title ) {
             $inner .= $this->gutenberg_block( 'heading', [ 'level' => 3 ], '<h3>' . esc_html( $title ) . '</h3>' );
         }
 
-        // Map Divi field_type to HTML input type.
-        $type_map = [
-            'input'    => 'text',
-            'email'    => 'email',
-            'text'     => 'textarea',
-            'select'   => 'text',
-            'radio'    => 'text',
-            'checkbox' => 'text',
-        ];
+        $intro = $email
+            ? sprintf(
+                /* translators: %s: recipient email address. */
+                __( 'This was a Divi contact form sending to %s. WordPress has no stable core form block, so rebuild it with a form plugin using the fields below.', 'block-converter-for-divi' ),
+                esc_html( $email )
+            )
+            : __( 'This was a Divi contact form. WordPress has no stable core form block, so rebuild it with a form plugin using the fields below.', 'block-converter-for-divi' );
 
-        // Build wp:form-input inner blocks for each contact field.
-        $fields_markup = '';
-        foreach ( $node['children'] as $child ) {
-            if ( $child['tag'] !== 'et_pb_contact_field' ) {
-                continue;
-            }
-            $f_attrs  = $child['attrs'];
-            $f_title  = $f_attrs['field_title'] ?? ( $f_attrs['field_id'] ?? 'Field' );
-            $f_id     = $f_attrs['field_id'] ?? ( function_exists( 'sanitize_title' ) ? sanitize_title( $f_title ) : strtolower( str_replace( ' ', '-', $f_title ) ) );
-            $f_type   = $f_attrs['field_type'] ?? 'input';
-            $required = ( $f_attrs['required_mark'] ?? 'on' ) === 'on';
+        $inner .= $this->gutenberg_block( 'paragraph', [], '<p><em>' . $intro . '</em></p>' );
 
-            $input_type = $type_map[ $f_type ] ?? 'text';
-            $is_textarea = ( $input_type === 'textarea' );
-
-            $field_block_attrs = [
-                'label'    => $f_title,
-                'required' => $required,
-            ];
-            if ( ! $is_textarea ) {
-                $field_block_attrs['type'] = $input_type;
-            }
-
-            $req_attr = $required ? ' required' : '';
-            $name_attr = esc_attr( strtolower( $f_id ) );
-
-            if ( $is_textarea ) {
-                $input_html = '<textarea name="' . $name_attr . '" class="wp-block-form-input__input"' . $req_attr . '></textarea>';
-                $field_block_attrs['type'] = 'textarea';
-            } else {
-                $input_html = '<input type="' . esc_attr( $input_type ) . '" name="' . $name_attr . '" class="wp-block-form-input__input"' . $req_attr . '/>';
-            }
-
-            $label_html = '<label class="wp-block-form-input__label">'
-                . '<span class="wp-block-form-input__label-content">' . esc_html( $f_title ) . '</span>'
-                . $input_html
-                . '</label>';
-
-            $fields_markup .= $this->gutenberg_block( 'form-input', $field_block_attrs, $label_html );
+        if ( '' !== $fields ) {
+            $inner .= $this->gutenberg_block( 'list', [], '<ul class="wp-block-list">' . "\n" . $fields . '</ul>', true );
         }
 
-        // Submit button.
-        $submit_markup = $this->gutenberg_block(
-            'form-submit-button',
+        $inner .= $this->gutenberg_block(
+            'paragraph',
             [],
-            '<div class="wp-block-form-submit-button"><button type="submit" class="wp-block-button__link wp-element-button">' . esc_html( $submit_text ) . '</button></div>'
+            '<p><em>' . sprintf(
+                /* translators: %s: submit button label. */
+                esc_html__( 'Submit button label: %s', 'block-converter-for-divi' ),
+                esc_html( $submit_text )
+            ) . '</em></p>'
         );
 
-        // Wrap in wp:form.
-        $form_attrs = [];
-        if ( $email ) {
-            $form_attrs['submissionMethod'] = 'email';
-            $form_attrs['email'] = $email;
-        }
+        $this->add_warning(
+            'et_pb_contact_form',
+            __( 'Contact forms cannot be converted to core blocks — WordPress has no stable form block. The fields and recipient address were preserved as text so the form can be rebuilt with a form plugin.', 'block-converter-for-divi' )
+        );
 
-        $form_html = '<form class="wp-block-form" method="post">' . "\n" . $fields_markup . $submit_markup . '</form>';
-        $inner .= $this->gutenberg_block( 'form', $form_attrs, $form_html, true );
+        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
+        $markup = $this->gutenberg_block( 'group', [], $html, true );
 
-        return $inner;
+        /**
+         * Filter the blocks emitted for a Divi contact form.
+         *
+         * @param string $markup Block markup produced by the converter.
+         * @param array  $node   The parsed et_pb_contact_form node.
+         */
+        return (string) apply_filters( 'd2g_contact_form_markup', $markup, $node );
     }
 
     // =========================================================================
@@ -1475,6 +1894,11 @@ class D2G_Converter {
     private function convert_sidebar( array $node ): string {
         $attrs = $node['attrs'];
         $area  = $attrs['area'] ?? 'sidebar-1';
+        $this->add_warning(
+            'et_pb_sidebar',
+            __( 'A sidebar module became a text placeholder. Core has no drop-in equivalent — rebuild it with the widget blocks you need.', 'block-converter-for-divi' )
+        );
+
         return $this->gutenberg_block( 'paragraph', [], '<p><em>[Sidebar: ' . esc_html( $area ) . ' — use a Widgets block or shortcode to display this sidebar.]</em></p>' );
     }
 
@@ -1515,6 +1939,11 @@ class D2G_Converter {
         if ( $desc ) {
             $inner .= $this->gutenberg_block( 'paragraph', [], '<p>' . esc_html( $desc ) . '</p>' );
         }
+        $this->add_warning(
+            'et_pb_signup',
+            __( 'An email opt-in module became a text placeholder. Rebuild it with your email marketing plugin.', 'block-converter-for-divi' )
+        );
+
         $inner .= $this->gutenberg_block( 'paragraph', [], '<p><em>[Email signup form — configure with your email marketing plugin.]</em></p>' );
 
         $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
@@ -1537,19 +1966,49 @@ class D2G_Converter {
     // Menu
     // =========================================================================
 
+    /**
+     * Convert a Divi menu module to core/navigation.
+     *
+     * Divi's menu_id is a classic nav_menu term ID. core/navigation has no
+     * menuId attribute — it points at a wp_navigation post through `ref`, and a
+     * term ID is not a post ID. Writing the term ID into a made-up menuId
+     * attribute produced a block that parsed but resolved to nothing, so the
+     * converted page showed an empty navigation.
+     *
+     * A bare core/navigation is emitted instead. It falls back to the site's
+     * menu, and the classic menu is named in a warning so the user can point
+     * the block at the right one — WordPress offers exactly that as a one-click
+     * import in the block's own toolbar.
+     */
     private function convert_menu( array $node ): string {
-        $attrs = $node['attrs'];
-        $menu_id = $attrs['menu_id'] ?? '';
-        $block_attrs = [];
+        $menu_id = $node['attrs']['menu_id'] ?? '';
+
         if ( $menu_id ) {
-            $block_attrs['menuId'] = (int) $menu_id;
+            $menu_name = '';
+            if ( function_exists( 'wp_get_nav_menu_object' ) ) {
+                $menu_object = wp_get_nav_menu_object( (int) $menu_id );
+                if ( $menu_object && ! is_wp_error( $menu_object ) ) {
+                    $menu_name = $menu_object->name;
+                }
+            }
+
+            $this->add_warning(
+                'et_pb_menu',
+                $menu_name
+                    ? sprintf(
+                        /* translators: %s: classic menu name. */
+                        __( 'A menu module became an empty Navigation block. Use the block\'s toolbar to import the classic menu "%s".', 'block-converter-for-divi' ),
+                        $menu_name
+                    )
+                    : sprintf(
+                        /* translators: %s: classic menu ID. */
+                        __( 'A menu module became an empty Navigation block. Use the block\'s toolbar to import classic menu ID %s.', 'block-converter-for-divi' ),
+                        (int) $menu_id
+                    )
+            );
         }
-        if ( empty( $block_attrs ) ) {
-            return "<!-- wp:navigation /-->\n\n";
-        }
-        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
-        $json = $encode( $block_attrs, JSON_UNESCAPED_SLASHES );
-        return "<!-- wp:navigation $json /-->\n\n";
+
+        return "<!-- wp:navigation /-->\n\n";
     }
 
     // =========================================================================
@@ -1589,8 +2048,24 @@ class D2G_Converter {
         $categories = $attrs['include_categories'] ?? '';
         $fullwidth  = ( $attrs['fullwidth'] ?? '' ) === 'on';
 
-        // Determine the portfolio post type (Divi uses 'project' by default).
-        $post_type = 'project';
+        // The `project` post type and `project_category` taxonomy are Divi's,
+        // not WordPress's — this plugin does not register them and nothing else
+        // will once Divi is removed. The query block below is only as portable
+        // as its post type, so both are filterable and the dependency is
+        // reported rather than left for the user to discover as an empty grid.
+        $post_type = (string) apply_filters( 'd2g_portfolio_post_type', 'project', $attrs );
+        $taxonomy  = (string) apply_filters( 'd2g_portfolio_taxonomy', 'project_category', $attrs );
+
+        if ( ! function_exists( 'post_type_exists' ) || ! post_type_exists( $post_type ) ) {
+            $this->add_warning(
+                'et_pb_portfolio',
+                sprintf(
+                    /* translators: %s: post type slug. */
+                    __( 'A portfolio module became a Query Loop over the "%s" post type, which Divi registers. The block will list nothing once Divi is removed unless that post type is registered by something else — migrate the projects to a core post type, or use the d2g_portfolio_post_type filter.', 'block-converter-for-divi' ),
+                    $post_type
+                )
+            );
+        }
 
         $query = [
             'postType' => $post_type,
@@ -1602,7 +2077,7 @@ class D2G_Converter {
         if ( $categories ) {
             $cat_ids = array_map( 'intval', explode( ',', $categories ) );
             $query['taxQuery'] = [
-                'project_category' => $cat_ids,
+                $taxonomy => $cat_ids,
             ];
         }
 
@@ -1654,6 +2129,11 @@ class D2G_Converter {
         $columns = $attrs['columns_number'] ?? '4';
         $rows    = $attrs['posts_number'] ?? '4';
 
+        $this->add_warning(
+            'et_pb_shop',
+            __( 'A shop module became a text placeholder. Rebuild it with the WooCommerce Products block.', 'block-converter-for-divi' )
+        );
+
         return $this->gutenberg_block( 'paragraph', [], '<p><em>[WooCommerce Products — type: ' . esc_html( $type ) . ', columns: ' . esc_html( $columns ) . ', count: ' . esc_html( $rows ) . '. Install WooCommerce and use the Products block.]</em></p>' );
     }
 
@@ -1662,6 +2142,17 @@ class D2G_Converter {
     // =========================================================================
 
     private function convert_unknown( array $node ): string {
+        if ( '__text__' !== $node['tag'] ) {
+            $this->add_warning(
+                $node['tag'],
+                sprintf(
+                    /* translators: %s: Divi shortcode tag. */
+                    __( 'The module "%s" has no mapping. Its contents were preserved, but its layout and settings were not.', 'block-converter-for-divi' ),
+                    $node['tag']
+                )
+            );
+        }
+
         // Render children if present, otherwise render content.
         if ( ! empty( $node['children'] ) ) {
             return $this->render_nodes( $node['children'] );
@@ -1683,43 +2174,9 @@ class D2G_Converter {
      * Format a Gutenberg block comment.
      */
     private function gutenberg_block( string $name, array $attrs = [], string $html = '', bool $has_inner = false ): string {
-        $full_name = 'core/' . $name;
-
-        // Some blocks use short names.
-        $name_map = [
-            'core/paragraph'           => 'paragraph',
-            'core/heading'             => 'heading',
-            'core/image'               => 'image',
-            'core/list'                => 'list',
-            'core/quote'               => 'quote',
-            'core/button'              => 'button',
-            'core/buttons'             => 'buttons',
-            'core/columns'             => 'columns',
-            'core/column'              => 'column',
-            'core/group'               => 'group',
-            'core/cover'               => 'cover',
-            'core/separator'           => 'separator',
-            'core/html'                => 'html',
-            'core/embed'               => 'embed',
-            'core/video'               => 'video',
-            'core/audio'               => 'audio',
-            'core/gallery'             => 'gallery',
-            'core/table'               => 'table',
-            'core/preformatted'        => 'preformatted',
-            'core/details'             => 'details',
-            'core/social-links'        => 'social-links',
-            'core/social-link'         => 'social-link',
-            'core/form'                => 'form',
-            'core/form-input'          => 'form-input',
-            'core/form-submit-button'  => 'form-submit-button',
-            'core/query'               => 'query',
-            'core/post-template'       => 'post-template',
-            'core/post-title'          => 'post-title',
-            'core/post-featured-image' => 'post-featured-image',
-            'core/post-excerpt'        => 'post-excerpt',
-        ];
-
-        $block_name = $name_map[ $full_name ] ?? $name;
+        // Core blocks are written without their namespace in block comments,
+        // which is exactly the name passed in here.
+        $block_name = $name;
 
         $attrs_json = '';
         if ( ! empty( $attrs ) ) {
@@ -1746,20 +2203,33 @@ class D2G_Converter {
      * Get the text/HTML content of a node, preferring non-shortcode content.
      */
     private function get_inner_content( array $node ): string {
-        $content = $node['content'] ?? '';
+        $children = $node['children'] ?? [];
 
-        // If content has child shortcodes, the text content is in __text__ children.
-        if ( '' === $content && ! empty( $node['children'] ) ) {
+        // The parser stores the full raw inner span on every paired node, child
+        // shortcodes and all. Handing that raw span to a renderer that wants
+        // text is how [et_pb_pricing_item] markup ended up printed inside a
+        // paragraph. When a node has real child modules, only the loose text
+        // between them is this node's own content — the modules are rendered
+        // separately by whoever owns them.
+        $has_module_children = false;
+        foreach ( $children as $child ) {
+            if ( '__text__' !== $child['tag'] ) {
+                $has_module_children = true;
+                break;
+            }
+        }
+
+        if ( $has_module_children ) {
             $text_parts = [];
-            foreach ( $node['children'] as $child ) {
-                if ( $child['tag'] === '__text__' ) {
+            foreach ( $children as $child ) {
+                if ( '__text__' === $child['tag'] ) {
                     $text_parts[] = $child['content'];
                 }
             }
-            $content = implode( "\n", $text_parts );
+            return trim( implode( "\n", $text_parts ) );
         }
 
-        return trim( $content );
+        return trim( (string) ( $node['content'] ?? '' ) );
     }
 
     /**

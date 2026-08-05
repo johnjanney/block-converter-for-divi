@@ -1,10 +1,10 @@
 === Block Converter for Divi ===
 Contributors: johnjanney
 Tags: divi, gutenberg, block editor, migration, converter
-Requires at least: 5.0
+Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -40,28 +40,46 @@ to their closest core block:
 * Images, galleries, and fullwidth images
 * Buttons and calls to action
 * Video, video sliders, and YouTube/Vimeo embeds
-* Blurbs, testimonials, team members, and pricing tables
+* Blurbs, testimonials, team members, and pricing tables (features become lists)
 * Accordions, toggles, and tabs
 * Sliders and fullwidth headers (as cover blocks)
 * Dividers, code, audio, and social media follow
 * Blog, portfolio, search, comments, login, navigation, and post title
-* Contact forms
 
-Anything the converter does not recognise is preserved rather than dropped.
+Anything the converter does not recognise is preserved rather than dropped, and
+reported in the preview so you know it needs attention.
 
 = What needs manual work =
 
 A few modules have no close equivalent in core blocks and convert to clearly
 labelled placeholders for you to rebuild:
 
+* Contact forms — WordPress has no stable core form block, so the fields, their
+  types, and the recipient address are written out as text for you to rebuild
+  with a form plugin
 * Maps — the address and coordinates are preserved as text
 * Sidebars
 * Email opt-in forms
 * WooCommerce shop modules
+* Menus — these become a Navigation block that you point at your menu with one
+  click from the block toolbar
+* Portfolios — these become a Query Loop over Divi's `project` post type, which
+  stops existing once Divi is removed
 
 Divi Theme Builder templates (headers, footers, global layouts) and Divi Library
-global modules are not converted. Hover states, animations, and per-breakpoint
-responsive spacing are not carried over.
+global modules are not converted.
+
+= What styling carries over =
+
+Design *intent*, not a pixel copy. Specifically, these are preserved: text
+alignment, section and call-to-action background colours, button background and
+text colours, column widths, divider colours, and heading levels.
+
+These are **not** preserved: padding and margin, max-width, borders, border
+radii, box shadows, fonts, font sizes, line heights, module-level custom CSS,
+hover states, animations, and per-breakpoint responsive spacing. Divi renders
+most of these from its own stylesheet, which stops applying when you leave the
+theme, so budget time for theme-side styling after migrating.
 
 = Before you convert =
 
@@ -108,7 +126,7 @@ styling after migrating.
 = Which post types are scanned? =
 
 Pages and posts. Custom post types, including Divi Projects, are not currently
-scanned.
+scanned. Conversion also refuses any post you do not have permission to edit.
 
 = What happens to my backups if I delete the plugin? =
 
@@ -132,6 +150,44 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.1.0 =
+* Fixed backslashes being stripped from content on backup, conversion, and
+  restore. Code samples, regular expressions, and JSON in a page are now
+  preserved exactly.
+* Fixed a repeated conversion being able to overwrite a page's backup with
+  already-converted content, destroying the only way back. The original snapshot
+  is now written once and never replaced, and the server refuses to convert a
+  page that holds no Divi content.
+* The backup now captures Divi's builder meta as well as the content, so Restore
+  returns the full builder state rather than just the text.
+* Conversion and restore now require permission to edit that specific page, and
+  refuse revisions, autosaves, and unsupported post types.
+* Fixed text modules producing invalid blocks. Each paragraph, heading, list,
+  quote, and table now becomes its own block instead of being packed into one
+  paragraph block.
+* Fixed alignment, open toggles, lists, quotes, and tables producing markup that
+  disagreed with their block attributes and tripped "this block contains
+  unexpected or invalid content".
+* Fixed pricing table features being left on the page as raw
+  `[et_pb_pricing_item]` shortcode text. They are now list items.
+* Fixed unrecognised Divi modules being left on the page as raw shortcode text.
+* Contact forms no longer convert to experimental blocks that a normal
+  WordPress install cannot render. The form's fields and recipient are preserved
+  as text to rebuild with a form plugin.
+* Fixed menu modules producing an empty Navigation block from an attribute that
+  does not exist.
+* The preview now lists every module that needs manual attention.
+* Batch conversion now reports successes and failures separately, instead of
+  counting a failed page as converted.
+* Removed a dependency on the `mbstring` extension, and a PHP 8.2 deprecation.
+* Accessibility: the preview is a proper dialog with Escape and focus handling,
+  sortable headers and pagination are real buttons, and status messages announce
+  themselves.
+* All interface text is now translatable.
+* Raised the minimum WordPress version to 6.0, which is what the blocks this
+  plugin emits actually require.
+* Added a fixture test suite (`php tests/run.php`).
 
 = 2.0.0 =
 * Renamed the plugin to "Block Converter for Divi". It was previously "Divi to
@@ -173,6 +229,13 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.1.0 =
+Important correctness and data-safety fixes. Converting twice can no longer
+destroy a page's backup, backslashes are no longer stripped from content, and
+common pages no longer produce invalid blocks. Requires WordPress 6.0 or later.
+Pages converted with an earlier version are unaffected; re-run Restore and
+convert again to pick up the output fixes.
 
 = 2.0.0 =
 The plugin has been renamed. Upgrading is not automatic — deactivate and delete

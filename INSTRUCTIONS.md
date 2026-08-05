@@ -9,9 +9,9 @@ preserving content, images, and design intent.
 
 | | |
 | --- | --- |
-| WordPress | 5.0 or later (6.5+ recommended — some output uses `core/details` and `core/form`) |
-| PHP | 7.4 or later, with the `dom` extension |
-| User role | Administrator (`manage_options` capability) |
+| WordPress | 6.0 or later. 6.3+ recommended — Divi toggles and accordions convert to `core/details`, which arrived in 6.3; on 6.0–6.2 they degrade to a heading plus text |
+| PHP | 7.4 or later. The `dom` extension is recommended: without it, rich text is preserved in Custom HTML blocks instead of being split into individual blocks |
+| User role | Administrator (`manage_options`), and edit permission on each page you convert |
 | Divi | **Not required.** The plugin reads raw shortcodes, so it works after Divi is deactivated |
 
 ---
@@ -287,8 +287,17 @@ returns if you reinstall.
 Once your migration is finished and you are certain you will not need to roll
 anything back, tick **Delete all Divi backups when this plugin is deleted** in
 the *Data retention* box on the tools screen. With that on, deleting the plugin
-removes all `_d2g_divi_backup` and `_d2g_backup_date` meta across the site — on
-multisite, across every site in the network.
+removes all `_d2g_divi_backup`, `_d2g_backup_date`, and `_d2g_builder_meta` meta
+across that site.
+
+**On multisite the setting is per site, not network-wide.** Deleting the plugin
+walks every site in the network, but it reads each site's own setting and only
+clears backups on the sites where an administrator turned it on. A site that
+left the setting off keeps its backups even when the plugin is deleted
+network-wide. This is deliberate: one administrator should not be able to
+destroy another site's only rollback path. To clear a whole network, turn the
+setting on for each site first — or use `wp post meta delete` with
+`wp site list` to script it.
 
 The setting only takes effect when the plugin is **deleted**, not deactivated,
 and it cannot be undone afterwards. Turning it on asks for confirmation.
