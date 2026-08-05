@@ -38,6 +38,27 @@ declare -A PHP_FOR=(
     [6.5]=8.1 [6.6]=8.2 [6.7]=8.2 [6.8]=8.2
 )
 
+# The floor the plugin declares. Versions below it are *expected* to fail — that
+# is what makes them worth testing. WordPress enforces the header itself and
+# refuses to activate the plugin, which is the protection the number exists to
+# provide, so a below-floor version that passed would mean the floor is higher
+# than it needs to be.
+FLOOR="$(grep -m1 -E '^\s*\*\s*Requires at least:' block-converter-for-divi.php \
+    | sed -E 's/.*Requires at least:[[:space:]]*//' | tr -d '[:space:]')"
+
+if [[ -z "$FLOOR" ]]; then
+    echo "error: could not read 'Requires at least' from the plugin header." >&2
+    exit 1
+fi
+
+echo "Plugin declares WordPress ${FLOOR} or newer."
+
+# Is $1 at least $FLOOR?
+version_supported() {
+    [[ "$1" == "latest" ]] && return 0
+    [[ "$( printf '%s\n%s\n' "$FLOOR" "$1" | sort -V | head -1 )" == "$FLOOR" ]]
+}
+
 if [[ $# -gt 0 ]]; then
     VERSIONS=( "$@" )
 else
@@ -93,11 +114,23 @@ EOF
     MISSING="$(echo "$OUTPUT" | grep -oE 'not registered here: .*' | sed 's/not registered here: //' | head -1)"
     [[ -z "$MISSING" ]] && MISSING='-'
 
-    if [[ $STATUS -eq 0 ]]; then
-        printf '%s\tPASS\t%s\t%s\n' "${ACTUAL_WP:-$VERSION} (PHP ${ACTUAL_PHP:-?})" "${SUMMARY:-?}" "$MISSING" >> "$RESULTS"
+    # Judge the result against what the declared floor says should happen.
+    if version_supported "$VERSION"; then
+        if [[ $STATUS -eq 0 ]]; then
+            VERDICT="PASS"          # supported, and it works
+        else
+            VERDICT="BROKEN"        # supported, and it does not — a real failure
+        fi
     else
-        printf '%s\tFAIL\t%s\t%s\n' "${ACTUAL_WP:-$VERSION} (PHP ${ACTUAL_PHP:-?})" "${SUMMARY:-?}" "$MISSING" >> "$RESULTS"
+        if [[ $STATUS -eq 0 ]]; then
+            VERDICT="FLOOR HIGH"    # unsupported, but works: the floor is too high
+        else
+            VERDICT="as declared"   # unsupported and refused, which is the point
+        fi
     fi
+
+    printf '%s\t%s\t%s\t%s\n' \
+        "${ACTUAL_WP:-$VERSION} (PHP ${ACTUAL_PHP:-?})" "$VERDICT" "${SUMMARY:-refused}" "$MISSING" >> "$RESULTS"
 
     LOG="$(npx wp-env run cli cat wp-content/debug.log 2>/dev/null | grep -vE '^\s*$' | head -5)"
     if [[ -n "$LOG" ]]; then
@@ -110,17 +143,26 @@ echo
 echo "============================================================"
 echo "  Matrix"
 echo "============================================================"
-printf '%-24s %-6s %-22s %s\n' "WORDPRESS" "RESULT" "CHECKS" "BLOCKS NOT REGISTERED"
-while IFS=$'\t' read -r wp result summary missing; do
-    printf '%-24s %-6s %-22s %s\n' "$wp" "$result" "$summary" "$missing"
+printf '%-24s %-12s %-22s %s\n' "WORDPRESS" "VERDICT" "CHECKS" "BLOCKS NOT REGISTERED"
+while IFS=$'\t' read -r wp verdict summary missing; do
+    printf '%-24s %-12s %-22s %s\n' "$wp" "$verdict" "$summary" "$missing"
 done < "$RESULTS"
 
-FAILURES="$(grep -c 'FAIL' "$RESULTS" || true)"
+BROKEN="$(grep -c 'BROKEN' "$RESULTS" || true)"
+TOO_HIGH="$(grep -c 'FLOOR HIGH' "$RESULTS" || true)"
 rm -f "$RESULTS"
 
 echo
-if [[ "$FAILURES" -gt 0 ]]; then
-    echo "${FAILURES} version(s) failed. 'Requires at least' must not claim any of them."
+if [[ "$BROKEN" -gt 0 ]]; then
+    echo "${BROKEN} version(s) at or above the declared floor of ${FLOOR} do not work." >&2
+    echo "Either fix them, or raise 'Requires at least'." >&2
     exit 1
 fi
-echo "All versions passed."
+
+if [[ "$TOO_HIGH" -gt 0 ]]; then
+    echo "${TOO_HIGH} version(s) below the declared floor of ${FLOOR} work fine." >&2
+    echo "'Requires at least' is higher than it needs to be; consider lowering it." >&2
+    exit 1
+fi
+
+echo "Every version behaves as 'Requires at least: ${FLOOR}' says it should."
