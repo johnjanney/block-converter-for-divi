@@ -140,16 +140,50 @@ silently reports a pass it did not make.
 
 ---
 
+## The live suite
+
+Everything above runs against a shim. `tests/live/` runs against a real
+WordPress in Docker:
+
+```bash
+bash bin/live-check.sh
+```
+
+It starts `wp-env`, then checks the things that are not the converter and
+therefore cannot be checked offline:
+
+- **The endpoint contract** — a bad nonce, a missing source token, a stale
+  source token, an editor without `manage_options`, and lock exclusivity.
+- **The database round trip** — every fixture is inserted as a post, converted
+  through the real AJAX endpoint, and compared byte for byte against the
+  offline conversion. `wp_slash()`, KSES and MySQL all sit in that gap, and the
+  worst defect this plugin ever shipped lived there.
+- **Restore byte-identity**, on every fixture.
+- **Real block validation of stored content** — what comes back *out of the
+  database* is fed to `js/validate.mjs`, not what the converter emitted.
+- **WordPress's own debug log**, which must be empty. A notice or deprecation
+  is a finding even when every assertion passes.
+
+The log is truncated at the start of each run, so what it holds afterwards
+belongs to that run.
+
+To test another WordPress version, create `.wp-env.override.json`:
+
+```json
+{ "core": "WordPress/WordPress#tags/6.0" }
+```
+
 ## What this still does not cover
 
 Stated here so a green run is not read as more than it is:
 
-- The plugin bootstrap, AJAX endpoints, capability and nonce checks, the scan
-  SQL, the write lock, backup and restore state, uninstall. None of it is
-  loaded here — it needs a WordPress install. Tracked as **Q27**.
-- The admin JavaScript, including batch result handling.
-- Any WordPress version. Layer 4 proves the output is valid against the block
-  library pinned in `js/package-lock.json`, which is not the same as proving a
-  given WordPress release opens it. Tracked as **Q18**.
-- Whether a converted page *looks* like the Divi original. Valid is not
+- **A WordPress version matrix.** The live suite proves the plugin works on the
+  version `wp-env` installs (7.0.2 at the time of writing). One version is not
+  a range, and 6.0 — the declared floor — has not been run. **Q18**.
+- **Multisite**, where KSES strips markup for any non-super-admin. **Q15**.
+- **The admin JavaScript**, including batch result handling.
+- **Uninstall.**
+- **A corpus of real Divi pages.** Every fixture here was written by someone who
+  already knew what the converter does.
+- **Whether a converted page *looks* like the Divi original.** Valid is not
   faithful, and nothing here measures fidelity.

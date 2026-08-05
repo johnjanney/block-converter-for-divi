@@ -41,9 +41,16 @@ define( 'D2G_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
  *
  * is_admin() is true inside admin-ajax.php as well as the admin screens,
  * because admin-ajax.php defines WP_ADMIN before WordPress loads plugins, so
- * this covers every request that can reach the endpoints below.
+ * it covers every request that can reach the endpoints below.
+ *
+ * WP-CLI is admitted explicitly. is_admin() is false under WP-CLI, so the guard
+ * on its own made the whole plugin unreachable from the command line — which
+ * broke nothing for users today, because there is no WP-CLI command yet, but
+ * did mean the endpoints could not be tested against a real WordPress at all.
+ * A guard that also blocks the only way to test what it guards is the wrong
+ * guard. It is also what a WP-CLI migration command would need (Q11).
  */
-if ( ! is_admin() ) {
+if ( ! is_admin() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
     return;
 }
 
