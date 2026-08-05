@@ -1,11 +1,14 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.1.0` released — tagged, packaged, and published as the latest
-GitHub release, on a public repository. **Not validated:** `Tested up to` is
-still a placeholder rather than a test result, and no converted page has been
-opened in a real block editor, so the release notes tell users to convert on
-staging only (`OPENQUESTIONS.md` Q18, Q23). WordPress.org submission remains
-blocked on those two.
+**Status:** `2.2.0` — validated and released. Runs against real WordPress
+6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
+checked by WordPress's own block validator and the admin screen driven in a
+browser. `Requires at least` and `Tested up to` are both measurements now, not
+estimates. **Remaining caveat:** no page from a real Divi site has ever been
+converted — every fixture was written by someone who already knew what the
+converter does — so it is best described as an assisted migration tool that
+produces a first block draft for review. WordPress.org submission is a separate
+decision, not yet made.
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
