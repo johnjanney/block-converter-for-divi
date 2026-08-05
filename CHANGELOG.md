@@ -105,10 +105,20 @@ Security and content-integrity release, following a second external review
 one high-severity injection path and several content-loss paths that 2.1.0's own
 test suite could not see.
 
-**It has still not been run against a live WordPress install.** `Tested up to:`
-remains a placeholder and no converted page has been opened in a real block
-editor. Convert on staging first. See `OPENQUESTIONS.md` Q18 and Q23;
-WordPress.org submission stays blocked.
+Unlike every release before it, this one was validated against real WordPress
+rather than reasoned about. It runs on 6.1, 6.2, 6.3, 6.8 and 7.0.2, on single
+site and multisite; its output is checked by WordPress's own block validator;
+and its admin screen is driven in a browser. `Requires at least` and
+`Tested up to` are measurements.
+
+Doing that measuring is what found most of what is fixed below — including an
+injection path, a `Requires at least` that was simply wrong, a block that was
+invalid on every converted page, and silent content destruction on multisite.
+
+**One caveat stands:** no page from a real Divi site has ever been converted.
+Every fixture here was written by someone who already knew what the converter
+does, which is a blind spot no amount of self-written testing closes. Convert a
+copy of your site before you convert your site.
 
 ### Security
 
