@@ -42,6 +42,23 @@ class D2G_Admin {
             <?php // aria-live so a screen reader hears scan and conversion results, which are otherwise silent. ?>
             <div id="d2g-status" class="d2g-status" role="status" aria-live="polite" aria-atomic="true" style="display:none;"></div>
 
+            <?php
+            /*
+             * Loss warnings for conversions that already happened.
+             *
+             * The preview has its own warnings panel inside the dialog, but a
+             * user who clicks Convert without previewing never opens it — and
+             * until this existed, the warnings the server returned with every
+             * conversion response were simply discarded by the browser. That
+             * made the whole "we tell you what could not be carried over"
+             * feature invisible on the most direct path through the screen.
+             */
+            ?>
+            <div id="d2g-warnings" class="d2g-preview-warnings d2g-conversion-warnings"
+                role="region" aria-live="polite"
+                aria-label="<?php esc_attr_e( 'What needs manual attention after conversion', 'block-converter-for-divi' ); ?>"
+                style="display:none;"></div>
+
             <div id="d2g-filters" class="d2g-filters" style="display:none;">
                 <div class="d2g-filter-group">
                     <label for="d2g-filter-type"><?php esc_html_e( 'Show:', 'block-converter-for-divi' ); ?></label>

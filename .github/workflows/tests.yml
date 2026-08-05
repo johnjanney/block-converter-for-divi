@@ -126,6 +126,43 @@ jobs:
       - name: Live check
         run: bash bin/live-check.sh
 
+  # The Tools screen in a real browser. The batch runner is the reason this
+  # exists: it counted failed pages as successes in 2.0.0, and until now nothing
+  # tested it at all.
+  e2e:
+    name: Admin screen (browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # bin/e2e.sh runs the browser inside Playwright's own container, so the
+      # job does not depend on which system libraries the runner happens to
+      # carry — the same reason it is done that way locally.
+      - name: Browser tests
+        run: bash bin/e2e.sh
+
+      - name: Keep the traces from a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
   static-checks:
     name: Syntax and whitespace
     runs-on: ubuntu-latest

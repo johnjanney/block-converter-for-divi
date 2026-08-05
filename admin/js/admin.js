@@ -266,6 +266,7 @@
         $table.hide();
         $batchBar.hide();
         $pagination.hide();
+        resetConversionWarnings();
         busy = {};
 
         $.post(d2g.ajax_url, {
@@ -411,7 +412,7 @@
             $('#d2g-preview-original').text(res.data.original);
             $('#d2g-preview-converted').text(res.data.converted);
             renderWarnings(res.data.warnings);
-            openModal();
+            openModal($btn);
         }).fail(function () {
             setRowBusy(postId, false);
             $btn.text(t('preview'));
@@ -419,8 +420,41 @@
         });
     });
 
+    // Warnings accumulated by conversions on this screen, keyed so the same
+    // loss reported for forty sections is listed once.
+    var conversionWarnings = {};
+
+    function resetConversionWarnings() {
+        conversionWarnings = {};
+        $('#d2g-warnings').empty().hide();
+    }
+
+    /**
+     * Record the warnings a conversion returned, and show them.
+     *
+     * The server returns these with every conversion response, and the browser
+     * used to drop them: they were rendered for a preview and nowhere else, so
+     * converting without previewing lost them entirely. That is the one path
+     * most users take.
+     */
+    function addConversionWarnings(warnings) {
+        if (!warnings || !warnings.length) {
+            return;
+        }
+
+        $.each(warnings, function (i, warning) {
+            conversionWarnings[warning.module + '\u0000' + warning.message] = warning;
+        });
+
+        var list = $.map(conversionWarnings, function (w) { return w; });
+        renderWarningsInto($('#d2g-warnings'), list);
+    }
+
     function renderWarnings(warnings) {
-        var $box = $('#d2g-preview-warnings');
+        renderWarningsInto($('#d2g-preview-warnings'), warnings);
+    }
+
+    function renderWarningsInto($box, warnings) {
         $box.empty();
 
         if (!warnings || !warnings.length) {
@@ -442,8 +476,18 @@
 
     var $lastFocus = null;
 
-    function openModal() {
-        $lastFocus = $(document.activeElement);
+    /**
+     * @param {jQuery} [$returnTo] Control to focus when the dialog closes.
+     *
+     * The element has to be passed in rather than read from
+     * document.activeElement here. Opening the preview disables the row's
+     * buttons for the duration of the request, and disabling the focused
+     * element moves focus to <body> — so by the time this ran, "where focus
+     * came from" was the document, and closing the dialog dumped a keyboard
+     * user at the top of the page with no way back but tabbing.
+     */
+    function openModal($returnTo) {
+        $lastFocus = ($returnTo && $returnTo.length) ? $returnTo : $(document.activeElement);
         $modal.show();
         $modal.find('.d2g-modal-close').trigger('focus');
         $(document).on('keydown.d2gModal', function (e) {
@@ -460,9 +504,16 @@
     function closeModal() {
         $modal.hide();
         $(document).off('keydown.d2gModal');
-        if ($lastFocus && $lastFocus.length) {
-            $lastFocus.trigger('focus');
+
+        // The control that opened the dialog may since have been disabled — a
+        // page converted from inside the preview, say. Focusing a disabled
+        // element silently does nothing, which leaves focus stranded on the
+        // hidden dialog, so fall back to something that can take it.
+        var $target = ($lastFocus && $lastFocus.length) ? $lastFocus : $();
+        if (!$target.length || $target.is(':disabled') || !$target.is(':visible')) {
+            $target = $scanBtn;
         }
+        $target.trigger('focus');
     }
 
     // Keep Tab inside the dialog while it is open, so a keyboard user cannot
@@ -539,6 +590,20 @@
             }
 
             markConverted($row, res.data);
+
+            // A successful conversion used to change the row and say nothing.
+            // #d2g-status is the screen's aria-live region, so a screen reader
+            // user got an announcement when a conversion failed and silence
+            // when it worked.
+            //
+            // Only for a single conversion: $btn is absent during a batch, and
+            // announcing every page in turn would talk over itself before the
+            // batch summary replaced the lot.
+            if ($btn && res.data && res.data.message) {
+                showStatus(res.data.message, 'success');
+            }
+            addConversionWarnings(res.data && res.data.warnings);
+
             return res;
         }, function () {
             // Transport-level failure: jQuery's own rejection path.

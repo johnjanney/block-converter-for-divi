@@ -199,6 +199,10 @@ the most useful thing to hear about.
   it is converting, so it cannot overwrite an edit made after you scanned.
 * Two simultaneous conversions of the same page can no longer both proceed.
 * Restore now puts Divi's builder settings back exactly as they were found.
+* Fixed conversion warnings not being shown unless you opened the preview
+  first. Converting directly now tells you what needs rebuilding by hand.
+* Fixed a successful conversion not being announced to screen readers, and
+  fixed keyboard focus being lost when the preview dialog was closed.
 * Fixed every converted Cover block (section and slide backgrounds) being
   reported by the editor as containing invalid content.
 * Fixed coloured Dividers and Comments blocks being reported as invalid.
