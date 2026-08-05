@@ -5,6 +5,11 @@ on:
     branches: [ main ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_matrix:
+        description: 'Also run the WordPress version matrix (slow, ~15 min)'
+        type: boolean
+        default: false
 
 jobs:
   # The full suite, including the real WordPress block validator. Runs on the
@@ -85,6 +90,42 @@ jobs:
       - name: Converter suite
         run: php tests/run.php --no-blocks
 
+  # A real WordPress, in Docker, on the runner. Slower than everything above
+  # (wp-env pulls images and installs core), which is why it is one version
+  # rather than the whole matrix — bin/wp-matrix.sh covers the range and is
+  # manual, because six clean environments take a quarter of an hour.
+  #
+  # Without this job the live suite would rot: it would only ever run when
+  # someone remembered to run it, which for a test is the same as not existing.
+  live:
+    name: Live WordPress (endpoints, database, restore)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tests/js/package-lock.json
+
+      - name: Install wp-env and the block validator
+        run: |
+          npm ci
+          npm --prefix tests/js ci
+
+      # Brings WordPress up, drives the real AJAX endpoints, round-trips every
+      # fixture through MySQL, checks restore byte-identity, then validates what
+      # the database holds against the real block library. Fails on any notice
+      # or deprecation WordPress logs.
+      - name: Live check
+        run: bash bin/live-check.sh
+
   static-checks:
     name: Syntax and whitespace
     runs-on: ubuntu-latest
@@ -110,3 +151,32 @@ jobs:
 
       - name: Reject whitespace errors
         run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD
+
+  # Opt-in from the Actions tab. This is what measures `Requires at least` and
+  # `Tested up to`; it should be re-run before a release and whenever the set of
+  # blocks the converter emits changes.
+  wp-version-matrix:
+    name: WordPress version matrix
+    runs-on: ubuntu-latest
+    if: inputs.run_matrix
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tests/js/package-lock.json
+
+      - name: Install wp-env and the block validator
+        run: |
+          npm ci
+          npm --prefix tests/js ci
+
+      - name: Matrix
+        run: bash bin/wp-matrix.sh

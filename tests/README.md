@@ -134,6 +134,16 @@ measurement rather than a claim.
 | `--no-blocks` | Skip layer 4 (no Node needed) |
 | `--require-validator` | Fail if layer 4 could not run. Used by `bin/build-zip.sh` and CI |
 
+## What runs where
+
+| | Offline suite | Live suite | Version matrix |
+| --- | --- | --- | --- |
+| Command | `php tests/run.php` | `bash bin/live-check.sh` | `bash bin/wp-matrix.sh` |
+| Needs | PHP (Node 22 for layer 4) | Docker, Node 22 | Docker, Node 22 |
+| Takes | ~3s | ~2 min | ~15 min |
+| CI | every push and PR | every push and PR | manual, from the Actions tab |
+| Release gate | `bin/build-zip.sh` | — | before a release |
+
 Without `--require-validator`, a missing Node harness prints a loud
 `NOT RUN — block validity is therefore UNPROVEN` and continues. It never
 silently reports a pass it did not make.
