@@ -1,0 +1,3 @@
+<!-- wp:paragraph {"align":"left"} -->
+<p class="has-text-align-left">Body</p>
+<!-- /wp:paragraph -->

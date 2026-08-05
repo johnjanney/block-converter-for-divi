@@ -1,0 +1,6 @@
+<!-- wp:paragraph -->
+<p><em>[WooCommerce Products — type: recent, columns: 4, count: 8. Install WooCommerce and use the Products block.]</em></p>
+<!-- /wp:paragraph -->
+
+===== WARNINGS =====
+[et_pb_shop] A shop module became a text placeholder. Rebuild it with the WooCommerce Products block.

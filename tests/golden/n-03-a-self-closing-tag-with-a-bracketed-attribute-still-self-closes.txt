@@ -1,0 +1,7 @@
+<!-- wp:image {"sizeSlug":"large","linkDestination":"none","url":"https://example.com/a.jpg","alt":"Fig [1]"} -->
+<figure class="wp-block-image size-large"><img src="https://example.com/a.jpg" alt="Fig [1]"/></figure>
+<!-- /wp:image -->
+
+<!-- wp:paragraph -->
+<p>After</p>
+<!-- /wp:paragraph -->

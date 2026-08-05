@@ -1,0 +1,12 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:image {"sizeSlug":"large","linkDestination":"none"} -->
+<figure class="wp-block-image size-large"><img src="https://example.com/cover.jpg" alt=""/></figure>
+<!-- /wp:image -->
+
+<!-- wp:audio {"src":"https://example.com/s.mp3"} -->
+<figure class="wp-block-audio"><audio controls src="https://example.com/s.mp3"></audio></figure>
+<!-- /wp:audio -->
+
+</div>
+<!-- /wp:group -->

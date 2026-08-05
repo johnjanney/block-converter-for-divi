@@ -1,0 +1,16 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:image {"sizeSlug":"large","linkDestination":"custom"} -->
+<figure class="wp-block-image size-large"><a href="/why"><img src="https://example.com/i.png" alt="Fast"/></a></figure>
+<!-- /wp:image -->
+
+<!-- wp:heading {"level":3} -->
+<h3><a href="/why">Fast</a></h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>Because.</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->

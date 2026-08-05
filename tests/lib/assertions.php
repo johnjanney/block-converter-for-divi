@@ -100,41 +100,43 @@ function d2g_check_block_markup( string $markup ): array {
 }
 
 /**
- * Pair opening delimiters with the markup they enclose, top level only.
+ * Pair every opening delimiter with the markup it encloses, at every depth.
+ *
+ * This used to stop at the top level, which meant the body checks below only
+ * ever saw blocks that happened to sit at the root of a document. Almost
+ * nothing does: this converter wraps practically everything in a Group, a
+ * Columns or a Cover. A Fullwidth Header emitting a paragraph block that held
+ * two <p> elements — the exact defect the paragraph check exists to catch —
+ * sailed through, because the paragraph was one level down inside a Group.
  *
  * @return array<int, array{name: string, attrs: array|null, body: string}>
  */
 function d2g_block_bodies( string $markup, array $blocks ): array {
     $bodies = [];
-    $depth  = 0;
-    $open   = null;
+    $stack  = [];
 
     foreach ( $blocks as $block ) {
         if ( $block['self_closing'] ) {
-            if ( 0 === $depth ) {
-                $bodies[] = [ 'name' => $block['name'], 'attrs' => $block['attrs'], 'body' => '' ];
-            }
+            $bodies[] = [ 'name' => $block['name'], 'attrs' => $block['attrs'], 'body' => '' ];
             continue;
         }
 
         if ( ! $block['closing'] ) {
-            if ( 0 === $depth ) {
-                $open = $block;
-            }
-            $depth++;
+            $stack[] = $block;
             continue;
         }
 
-        $depth--;
-        if ( 0 === $depth && $open ) {
-            $start    = $open['offset'] + $open['length'];
-            $bodies[] = [
-                'name'  => $open['name'],
-                'attrs' => $open['attrs'],
-                'body'  => substr( $markup, $start, $block['offset'] - $start ),
-            ];
-            $open = null;
+        $open = array_pop( $stack );
+        if ( null === $open ) {
+            continue; // Unbalanced; the delimiter check has already reported it.
         }
+
+        $start    = $open['offset'] + $open['length'];
+        $bodies[] = [
+            'name'  => $open['name'],
+            'attrs' => $open['attrs'],
+            'body'  => substr( $markup, $start, $block['offset'] - $start ),
+        ];
     }
 
     return $bodies;

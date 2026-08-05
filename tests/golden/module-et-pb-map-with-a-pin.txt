@@ -1,0 +1,11 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:html -->
+<p><strong>Map:</strong> 10 Downing Street</p><p><strong>Office</strong>: <p>Here</p></p>
+<!-- /wp:html -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_map] A map module became text. Core has no map block — the address and any pin labels were preserved so the map can be rebuilt with a maps plugin or an embed.

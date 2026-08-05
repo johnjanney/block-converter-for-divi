@@ -33,6 +33,17 @@ function d2g_uninstall_current_site() {
     // Always drop the preference row.
     delete_option( 'd2g_delete_data_on_uninstall' );
 
+    // Conversion locks are options rather than transients, because acquiring
+    // one has to be a single atomic INSERT. They are short-lived working state,
+    // never user data, so they go regardless of the backup preference. A row
+    // only survives to this point if a request died mid-conversion.
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like( 'd2g_lock_' ) . '%'
+        )
+    );
+
     if ( ! $delete_data ) {
         // Backups are kept deliberately. They can be removed later with:
         //   wp post meta delete <ID> _d2g_divi_backup

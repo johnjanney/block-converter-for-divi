@@ -1,0 +1,6 @@
+<!-- wp:html -->
+<table><caption>Rates</caption><tbody><tr><td>A</td></tr></tbody></table>
+<!-- /wp:html -->
+
+===== WARNINGS =====
+[table] A table contained a <caption> element that the core Table block does not store. The table was preserved as a Custom HTML block so nothing was lost.

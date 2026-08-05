@@ -1,0 +1,15 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:video {"src":"https://example.com/a.mp4"} -->
+<figure class="wp-block-video"><video controls src="https://example.com/a.mp4"></video></figure>
+<!-- /wp:video -->
+
+<!-- wp:video {"src":"https://example.com/b.mp4"} -->
+<figure class="wp-block-video"><video controls src="https://example.com/b.mp4"></video></figure>
+<!-- /wp:video -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_video_slider] A video slider became a stack of video blocks. Core has no video slider, so every video is now shown at once and the thumbnail navigation is gone.

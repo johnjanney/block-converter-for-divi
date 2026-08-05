@@ -1,0 +1,3 @@
+<!-- wp:html -->
+<table class="striped"><tbody><tr><td>a</td></tr></tbody></table>
+<!-- /wp:html -->

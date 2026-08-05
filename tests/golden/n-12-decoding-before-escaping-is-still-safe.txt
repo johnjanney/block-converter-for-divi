@@ -1,0 +1,8 @@
+<!-- wp:details -->
+<details class="wp-block-details"><summary>&lt;script&gt;alert(1)&lt;/script&gt;</summary>
+<!-- wp:paragraph -->
+<p>x</p>
+<!-- /wp:paragraph -->
+
+</details>
+<!-- /wp:details -->

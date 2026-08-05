@@ -59,14 +59,18 @@ if [[ -f tests/run.php ]]; then
         echo "error: php is required to run the fixture suite before building." >&2
         exit 1
     fi
-    echo "Running conversion fixtures..."
-    if ! php tests/run.php >/tmp/d2g-tests.$$ 2>&1; then
+    # --require-validator makes a missing Node harness a build failure rather
+    # than a skipped check. Block validity is the plugin's central claim; a
+    # release must not be cut on a run that could not test it.
+    echo "Running the converter suite (including real WordPress block validation)..."
+    if ! php tests/run.php --require-validator >/tmp/d2g-tests.$$ 2>&1; then
         cat /tmp/d2g-tests.$$ >&2
         rm -f /tmp/d2g-tests.$$
-        echo "error: fixtures failed; refusing to build." >&2
+        echo "error: the test suite failed; refusing to build." >&2
+        echo "       If the block validator is missing: npm --prefix tests/js ci" >&2
         exit 1
     fi
-    tail -1 /tmp/d2g-tests.$$
+    tail -3 /tmp/d2g-tests.$$
     rm -f /tmp/d2g-tests.$$
 fi
 
@@ -86,6 +90,7 @@ mkdir -p dist "build/${SLUG}"
 
 rsync -a \
     --exclude '.git' \
+    --exclude '.github' \
     --exclude '.gitignore' \
     --exclude 'dist' \
     --exclude 'build' \
@@ -95,6 +100,7 @@ rsync -a \
     --exclude 'CODEX-REVIEW.md' \
     --exclude 'CODEX-REVIEW-RESPONSE.md' \
     --exclude 'tests' \
+    --exclude 'node_modules' \
     ./ "build/${SLUG}/"
 
 # A single top-level directory, so the WordPress plugin uploader installs it

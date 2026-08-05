@@ -1,0 +1,15 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":3} -->
+<h3>Terms</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>Body</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_toggle] Toggles and accordions were converted to headings and text because this WordPress version has no Details block (added in 6.3).

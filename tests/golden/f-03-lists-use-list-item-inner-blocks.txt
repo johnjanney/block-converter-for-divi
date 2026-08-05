@@ -1,0 +1,12 @@
+<!-- wp:list -->
+<ul class="wp-block-list">
+<!-- wp:list-item -->
+<li>alpha</li>
+<!-- /wp:list-item -->
+
+<!-- wp:list-item -->
+<li>beta</li>
+<!-- /wp:list-item -->
+
+</ul>
+<!-- /wp:list -->

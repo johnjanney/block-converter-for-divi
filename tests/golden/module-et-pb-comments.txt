@@ -1,0 +1,3 @@
+<!-- wp:comments -->
+<div class="wp-block-comments"></div>
+<!-- /wp:comments -->

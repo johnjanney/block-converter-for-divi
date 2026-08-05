@@ -1,0 +1,16 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":1,"textAlign":"center"} -->
+<h1 class="has-text-align-center">T</h1>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"align":"center"} -->
+<p class="has-text-align-center">One</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph {"align":"center"} -->
+<p class="has-text-align-center">Two</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->

@@ -100,16 +100,23 @@ class D2G_Parser {
     }
 
     /**
-     * Normalize content: fix encoding issues, trim whitespace.
+     * Normalize content before parsing.
+     *
+     * Line endings only. This function used to also rewrite curly-quote
+     * entities to straight quote characters across the whole document, which
+     * meant `&#8220;quoted&#8221;` in ordinary body text came out of a
+     * conversion as `"quoted"` — a silent, unreported change to the author's
+     * words. Divi's habit of encoding an *attribute's* delimiting quotes is
+     * repaired in parse_attrs() instead, where the blast radius is one
+     * attribute string rather than the entire page.
+     *
+     * The CRLF/CR collapse is kept and is deliberate: every downstream regex
+     * and DOM step assumes "\n", and WordPress normalizes line endings on save
+     * regardless.
      */
     private function normalize( string $content ): string {
-        // Divi sometimes double-encodes quotes.
-        $content = str_replace( [ '&#8220;', '&#8221;', '&#8243;' ], '"', $content );
-        $content = str_replace( [ '&#8216;', '&#8217;' ], "'", $content );
-        // Normalize line breaks.
         $content = str_replace( "\r\n", "\n", $content );
-        $content = str_replace( "\r", "\n", $content );
-        return $content;
+        return str_replace( "\r", "\n", $content );
     }
 
     /**
@@ -230,78 +237,158 @@ class D2G_Parser {
     const TAG_NAME_PATTERN = 'et_pb_[a-z0-9_]+';
 
     /**
-     * Find the next Divi shortcode tag at or after $offset.
+     * Scan from the `[` at $open forward to the `]` that closes that tag.
+     *
+     * Quoted attribute values are opaque: a `]` inside "…" or '…' does not end
+     * the tag. Every previous scanner here was a regex built on `[^\]]*`, which
+     * cannot cross a `]` at all — so `[et_pb_text title="Array[0]"]` was read
+     * as a tag ending at the bracket inside the title, and the leftover `"]`
+     * was emitted as visible text in the converted page.
+     *
+     * @return int|false Offset of the closing `]`, or false when it never closes.
      */
-    private function find_next_shortcode( string $content, int $offset ) {
-        // Match [tag ...] or [tag ... /]
-        //
-        // The attribute group is lazy. Greedy, it swallowed the closing slash
-        // of every self-closing tag that had attributes — so
-        // `[et_pb_image src="…" /]` was read as an *opening* tag, no
-        // `[/et_pb_image]` was ever found, and the "unmatched tag" branch
-        // absorbed the entire rest of the post as that image's content. Every
-        // module after a self-closing one silently disappeared.
-        //
-        // `[^\]]` cannot cross a `]`, so the match always ends at the first
-        // one; laziness only decides whether a trailing `/` lands in the
-        // attribute group or in the self-closing group, which is the question
-        // that matters.
-        $pattern = '#\[(' . self::TAG_NAME_PATTERN . ')((?:\s+[^\]]*?)?)\s*(/)?]#';
+    private static function scan_tag_end( string $content, int $open ) {
+        $len   = strlen( $content );
+        $quote = '';
 
-        if ( ! preg_match( $pattern, $content, $m, PREG_OFFSET_CAPTURE, $offset ) ) {
-            return false;
+        for ( $i = $open + 1; $i < $len; $i++ ) {
+            $ch = $content[ $i ];
+
+            if ( '' !== $quote ) {
+                if ( $ch === $quote ) {
+                    $quote = '';
+                }
+                continue;
+            }
+
+            if ( '"' === $ch || "'" === $ch ) {
+                $quote = $ch;
+            } elseif ( ']' === $ch ) {
+                return $i;
+            } elseif ( '[' === $ch ) {
+                // A new tag opened before this one closed. Treat the first as
+                // literal text rather than swallowing the second.
+                return false;
+            }
         }
 
-        $full_match  = $m[0][0];
-        $start       = $m[0][1];
-        $tag         = $m[1][0];
-        $attrs_str   = isset( $m[2] ) ? trim( $m[2][0] ) : '';
-        $self_close  = ! empty( $m[3][0] );
-        $end         = $start + strlen( $full_match );
+        return false;
+    }
 
-        return [
-            'tag'           => $tag,
-            'attrs_str'     => $attrs_str,
-            'start'         => $start,
-            'end'           => $end,
-            'content_start' => $end,
-            'self_closing'  => $self_close,
-        ];
+    /**
+     * Find the next syntactically complete Divi tag — opening or closing.
+     *
+     * This is the single tokenizer every other entry point is built on, so the
+     * detector, the tree parser, the closing-tag matcher and the stripper all
+     * agree on exactly what counts as a tag.
+     *
+     * @return array{tag: string, start: int, end: int, attrs_str: string, closing: bool, self_closing: bool}|false
+     */
+    private static function next_tag_span( string $content, int $offset ) {
+        $len = strlen( $content );
+
+        while ( $offset < $len ) {
+            if ( ! preg_match( '#\[(/)?(' . self::TAG_NAME_PATTERN . ')#', $content, $m, PREG_OFFSET_CAPTURE, $offset ) ) {
+                return false;
+            }
+
+            $start   = $m[0][1];
+            $closing = '' !== $m[1][0];
+            $tag     = $m[2][0];
+            $after   = $start + strlen( $m[0][0] );
+
+            // The name has to be followed by something that can terminate it.
+            // Without this check `[et_pb_text-custom]` would be read as an
+            // `et_pb_text` tag with a stray suffix.
+            $next = $after < $len ? $content[ $after ] : '';
+            $end  = ( ']' === $next || '/' === $next || ( '' !== $next && ctype_space( $next ) ) )
+                ? self::scan_tag_end( $content, $start )
+                : false;
+
+            if ( false === $end ) {
+                $offset = $after;
+                continue;
+            }
+
+            $body    = substr( $content, $after, $end - $after );
+            $trimmed = rtrim( $body );
+
+            // A trailing `/` outside quotes is the self-closing marker. It can
+            // only be found after the quote-aware scan, because `src="a/"` ends
+            // in a slash too.
+            $self_close = ( '' !== $trimmed && '/' === substr( $trimmed, -1 ) );
+            if ( $self_close ) {
+                $trimmed = substr( $trimmed, 0, -1 );
+            }
+
+            return [
+                'tag'          => $tag,
+                'start'        => $start,
+                'end'          => $end + 1,
+                'attrs_str'    => trim( $trimmed ),
+                'closing'      => $closing,
+                'self_closing' => $self_close && ! $closing,
+            ];
+        }
+
+        return false;
+    }
+
+    /**
+     * Find the next Divi shortcode *opening* tag at or after $offset.
+     */
+    private function find_next_shortcode( string $content, int $offset ) {
+        $pos = $offset;
+
+        while ( false !== ( $span = self::next_tag_span( $content, $pos ) ) ) {
+            $pos = $span['end'];
+
+            if ( $span['closing'] ) {
+                continue; // An orphan closer is text, not the start of a node.
+            }
+
+            return [
+                'tag'           => $span['tag'],
+                'attrs_str'     => $span['attrs_str'],
+                'start'         => $span['start'],
+                'end'           => $span['end'],
+                'content_start' => $span['end'],
+                'self_closing'  => $span['self_closing'],
+            ];
+        }
+
+        return false;
     }
 
     /**
      * Find the matching closing tag [/tag], respecting nesting.
      */
     private function find_closing_tag( string $content, string $tag, int $offset ) {
-        // A self-closing occurrence of the same tag must not raise the depth,
-        // or the closer that follows would be matched to it instead.
-        $open_pattern  = '#\[' . preg_quote( $tag, '#' ) . '(?:\s[^\]]*?)?(?<!/)]#';
-        $close_pattern = '#\[/' . preg_quote( $tag, '#' ) . ']#';
-
         $depth = 1;
         $pos   = $offset;
-        $len   = strlen( $content );
 
-        while ( $pos < $len && $depth > 0 ) {
-            $next_open  = preg_match( $open_pattern, $content, $om, PREG_OFFSET_CAPTURE, $pos ) ? $om[0][1] : PHP_INT_MAX;
-            $next_close = preg_match( $close_pattern, $content, $cm, PREG_OFFSET_CAPTURE, $pos ) ? $cm[0][1] : PHP_INT_MAX;
+        while ( false !== ( $span = self::next_tag_span( $content, $pos ) ) ) {
+            $pos = $span['end'];
 
-            if ( $next_close === PHP_INT_MAX ) {
-                return false; // No closing tag found.
+            if ( $span['tag'] !== $tag ) {
+                continue;
             }
 
-            if ( $next_open < $next_close ) {
-                $depth++;
-                $pos = $next_open + strlen( $om[0][0] );
-            } else {
+            if ( $span['closing'] ) {
                 $depth--;
                 if ( 0 === $depth ) {
                     return [
-                        'content_end' => $next_close,
-                        'end'         => $next_close + strlen( $cm[0][0] ),
+                        'content_end' => $span['start'],
+                        'end'         => $span['end'],
                     ];
                 }
-                $pos = $next_close + strlen( $cm[0][0] );
+                continue;
+            }
+
+            // A self-closing occurrence of the same tag must not raise the
+            // depth, or the closer that follows would be matched to it instead.
+            if ( ! $span['self_closing'] ) {
+                $depth++;
             }
         }
 
@@ -316,6 +403,12 @@ class D2G_Parser {
         if ( '' === $str ) {
             return $attrs;
         }
+
+        // Divi sometimes writes an attribute's delimiting quotes as HTML
+        // entities. Repaired here, on one attribute string, rather than across
+        // the whole document — see normalize().
+        $str = str_replace( [ '&#8220;', '&#8221;', '&#8243;' ], '"', $str );
+        $str = str_replace( [ '&#8216;', '&#8217;' ], "'", $str );
 
         // Match key="value" pairs. Divi uses double quotes.
         if ( preg_match_all( '#([\w_-]+)\s*=\s*"([^"]*)"#s', $str, $matches, PREG_SET_ORDER ) ) {
@@ -348,10 +441,18 @@ class D2G_Parser {
      */
     public static function has_divi_content( string $content ): bool {
         if ( false === strpos( $content, '[et_pb_' ) ) {
-            return false; // Cheap rejection before running the pattern.
+            return false; // Cheap rejection before running the tokenizer.
         }
 
-        return (bool) preg_match( '#\[' . self::TAG_NAME_PATTERN . '(?:\s[^\]]*)?\s*/?\]#', $content );
+        $pos = 0;
+        while ( false !== ( $span = self::next_tag_span( $content, $pos ) ) ) {
+            if ( ! $span['closing'] ) {
+                return true;
+            }
+            $pos = $span['end'];
+        }
+
+        return false;
     }
 
     /**
@@ -360,10 +461,17 @@ class D2G_Parser {
      * @return string[]
      */
     public static function found_tags( string $content ): array {
-        if ( ! preg_match_all( '#\[(' . self::TAG_NAME_PATTERN . ')(?:\s[^\]]*)?\s*/?\]#', $content, $m ) ) {
-            return [];
+        $tags = [];
+        $pos  = 0;
+
+        while ( false !== ( $span = self::next_tag_span( $content, $pos ) ) ) {
+            if ( ! $span['closing'] ) {
+                $tags[ $span['tag'] ] = true;
+            }
+            $pos = $span['end'];
         }
-        return array_values( array_unique( $m[1] ) );
+
+        return array_keys( $tags );
     }
 
     /**
@@ -374,16 +482,33 @@ class D2G_Parser {
     }
 
     /**
+     * Every Divi tag this plugin claims to handle.
+     *
+     * Exposed so the fixture suite can assert that each one is actually
+     * exercised. A module with no fixture is a module a refactor can silently
+     * break, and until this existed there was no way to tell which those were.
+     *
+     * @return string[]
+     */
+    public static function known_tags(): array {
+        return self::$tags;
+    }
+
+    /**
      * Remove Divi shortcode syntax from a string, keeping the text inside it.
      *
      * Only used where parsing has given up — past the nesting limit — so that
      * content is still preserved without leaving shortcode text on the page.
      */
     public static function strip_divi_tags( string $content ): string {
-        return (string) preg_replace(
-            '#\[/?' . self::TAG_NAME_PATTERN . '(?:\s[^\]]*)?\s*/?\]#',
-            '',
-            $content
-        );
+        $out = '';
+        $pos = 0;
+
+        while ( false !== ( $span = self::next_tag_span( $content, $pos ) ) ) {
+            $out .= substr( $content, $pos, $span['start'] - $pos );
+            $pos  = $span['end'];
+        }
+
+        return $out . substr( $content, $pos );
     }
 }

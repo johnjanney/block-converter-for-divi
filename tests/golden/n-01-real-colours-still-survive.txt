@@ -1,0 +1,8 @@
+<!-- wp:buttons -->
+<div class="wp-block-buttons">
+<!-- wp:button {"style":{"color":{"background":"#ff0000","text":"rgba(0,0,0,0.8)"}}} -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button has-background has-text-color" style="background-color:#ff0000;color:rgba(0,0,0,0.8)" href="#">Go</a></div>
+<!-- /wp:button -->
+
+</div>
+<!-- /wp:buttons -->

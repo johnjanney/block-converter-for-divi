@@ -1,0 +1,25 @@
+<!-- wp:group {"layout":{"type":"constrained"}} -->
+<div class="wp-block-group">
+<!-- wp:columns -->
+<div class="wp-block-columns">
+<!-- wp:column {"width":"100%"} -->
+<div class="wp-block-column" style="flex-basis:100%">
+<!-- wp:html -->
+<table><caption>A</caption><tbody><tr><td>1</td></tr></tbody></table>
+<!-- /wp:html -->
+
+<!-- wp:html -->
+<table><caption>B</caption><tbody><tr><td>2</td></tr></tbody></table>
+<!-- /wp:html -->
+
+</div>
+<!-- /wp:column -->
+
+</div>
+<!-- /wp:columns -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[table] A table contained a <caption> element that the core Table block does not store. The table was preserved as a Custom HTML block so nothing was lost.

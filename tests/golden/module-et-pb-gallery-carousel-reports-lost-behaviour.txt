@@ -1,0 +1,11 @@
+<!-- wp:gallery {"columns":3,"linkTo":"media","imageCrop":true,"className":"d2g-gallery-slider"} -->
+<figure class="wp-block-gallery has-nested-images columns-3 is-cropped d2g-gallery-slider">
+<!-- wp:image {"id":11,"sizeSlug":"large","linkDestination":"media","url":"https://example.com/uploads/attachment-11.jpg","alt":""} -->
+<figure class="wp-block-image size-large"><img src="https://example.com/uploads/attachment-11.jpg" alt="" class="wp-image-11"/></figure>
+<!-- /wp:image -->
+
+</figure>
+<!-- /wp:gallery -->
+
+===== WARNINGS =====
+[et_pb_gallery] A gallery slider became a static grid gallery tagged with the d2g-gallery-slider class. Core has no carousel gallery; style or script that class in your theme if you need the slider behaviour back.

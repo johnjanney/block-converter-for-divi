@@ -1,0 +1,3 @@
+<!-- wp:separator {"style":{"color":{"background":"#cccccc"}}} -->
+<hr class="wp-block-separator has-text-color has-alpha-channel-opacity has-background" style="background-color:#cccccc;color:#cccccc"/>
+<!-- /wp:separator -->

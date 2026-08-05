@@ -1,0 +1,10 @@
+<!-- wp:paragraph -->
+<p>Before</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>After</p>
+<!-- /wp:paragraph -->
+
+===== WARNINGS =====
+[html-comment] A block-delimiter comment was found inside Divi content and removed. Re-emitting it would have corrupted the converted document.

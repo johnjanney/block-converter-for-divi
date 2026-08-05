@@ -77,3 +77,69 @@ function post_type_exists( $post_type ) {
     // ends up in — so the portfolio warning is expected to fire.
     return in_array( $post_type, [ 'post', 'page', 'attachment' ], true );
 }
+
+/**
+ * Resolve an attachment ID to a predictable URL.
+ *
+ * Stubbed because without it the gallery renderer skips every image and the
+ * whole image-emitting path — the bulk of what convert_gallery() does — was
+ * never executed by any fixture.
+ *
+ * get_post_meta() and wp_get_attachment_caption() are deliberately left
+ * undefined. The renderer guards both with function_exists(), so leaving them
+ * out keeps proving those guards work while the main path is still covered.
+ */
+function wp_get_attachment_url( $id ) {
+    // 999 stands for an attachment that no longer exists. get_post_meta() and
+    // wp_get_upload_dir() are left undefined, so the two fallback strategies
+    // are skipped and the renderer takes its "attachment not found" path —
+    // which is the branch that decides whether a dead gallery image becomes a
+    // broken <img src=""> or is dropped.
+    if ( 999 === (int) $id ) {
+        return '';
+    }
+    return 'https://example.com/uploads/attachment-' . (int) $id . '.jpg';
+}
+
+/**
+ * A classic menu lookup that answers for exactly one ID.
+ *
+ * Both branches of convert_menu() matter — the warning names the menu when it
+ * can resolve it and falls back to the ID when it cannot — so the stub resolves
+ * menu 99 and nothing else.
+ */
+function wp_get_nav_menu_object( $id ) {
+    if ( 99 !== (int) $id ) {
+        return false;
+    }
+    return (object) [ 'term_id' => 99, 'name' => 'Primary Menu' ];
+}
+
+/**
+ * Stand-in for the block registry, so the suite can exercise what the converter
+ * does on a WordPress that lacks a block.
+ *
+ * core/details arrived in 6.3 and the converter degrades to a heading plus text
+ * below that. Without this the degradation path was unreachable outside a real
+ * old WordPress, so nothing tested the one thing that keeps 6.0–6.2 users from
+ * seeing "your site doesn't include support for this block".
+ *
+ * A fixture opts in with 'unregistered' => [ 'core/details' ]; by default every
+ * block is registered, which is the same answer the converter got before this
+ * class existed.
+ */
+class WP_Block_Type_Registry {
+
+    private static $instance = null;
+
+    public static function get_instance() {
+        if ( null === self::$instance ) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    public function is_registered( $name ) {
+        return ! in_array( $name, $GLOBALS['d2g_test_unregistered'] ?? [], true );
+    }
+}

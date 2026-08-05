@@ -1,0 +1,18 @@
+<!-- wp:list -->
+<ul class="wp-block-list">
+<!-- wp:list-item -->
+<li>outer
+<!-- wp:list -->
+<ul class="wp-block-list">
+<!-- wp:list-item -->
+<li>inner</li>
+<!-- /wp:list-item -->
+
+</ul>
+<!-- /wp:list -->
+
+</li>
+<!-- /wp:list-item -->
+
+</ul>
+<!-- /wp:list -->

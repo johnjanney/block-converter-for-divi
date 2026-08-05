@@ -1,0 +1,7 @@
+<!-- wp:paragraph -->
+<p>Before</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:html -->
+<table></table>
+<!-- /wp:html -->

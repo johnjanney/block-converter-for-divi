@@ -1,0 +1,44 @@
+<!-- wp:group {"layout":{"type":"constrained"}} -->
+<div class="wp-block-group">
+<!-- wp:columns -->
+<div class="wp-block-columns">
+<!-- wp:column {"width":"100%"} -->
+<div class="wp-block-column" style="flex-basis:100%">
+<!-- wp:group -->
+<div class="wp-block-group">
+
+</div>
+<!-- /wp:group -->
+
+<!-- wp:gallery {"columns":3,"linkTo":"media","imageCrop":true} -->
+<figure class="wp-block-gallery has-nested-images columns-3 is-cropped">
+</figure>
+<!-- /wp:gallery -->
+
+<!-- wp:columns -->
+<div class="wp-block-columns">
+
+</div>
+<!-- /wp:columns -->
+
+<!-- wp:group -->
+<div class="wp-block-group">
+
+</div>
+<!-- /wp:group -->
+
+<!-- wp:paragraph -->
+<p>Only this survives</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:column -->
+
+</div>
+<!-- /wp:columns -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_nothinghere] The module "et_pb_nothinghere" has no mapping. Its contents were preserved, but its layout and settings were not.

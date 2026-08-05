@@ -1,0 +1,33 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":3} -->
+<h3>One</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>A</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":3} -->
+<h3>Two</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>B</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_tabs] A tabs module became a stack of headed sections, one per tab. Core has no tabs block, so all panels are now visible at once instead of one at a time.
