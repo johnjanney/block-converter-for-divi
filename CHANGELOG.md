@@ -268,9 +268,16 @@ were invalid block markup, which is the one thing the project exists to avoid.
   which is why the Fullwidth Header defect above went undetected — the offending
   paragraph sat one level down inside a Group. `tests/run.php` now also
   documents, at the top of the file, exactly what it does *not* cover.
-- The parser, converter, style mapper, and admin class are loaded only for admin
-  and AJAX requests. The plugin has no front-end runtime feature, so roughly
-  2,700 lines were being parsed on every visitor request for nothing.
+- The parser, converter, style mapper, and admin class are loaded only for admin,
+  AJAX and WP-CLI requests. The plugin has no front-end runtime feature, so
+  roughly 2,700 lines were being parsed on every visitor request for nothing.
+  WP-CLI is admitted explicitly: `is_admin()` is false there, so the guard alone
+  made the plugin unreachable from the command line — which broke nothing for
+  users today, since there is no WP-CLI command yet, but did mean the endpoints
+  could not be tested against a real WordPress at all.
+- `bin/build-zip.sh` asserts the archive contains exactly the files the plugin
+  is made of. The exclude list is a denylist, and a denylist silently ships
+  whatever nobody remembered to add to it.
 - Gallery conversion primes the attachment cache once for all image IDs instead
   of issuing three uncached lookups per image.
 - Converted-content strings that were still hard-coded English — `Click Here`,

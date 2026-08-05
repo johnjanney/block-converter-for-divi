@@ -1,0 +1,19 @@
+{
+  "name": "block-converter-for-divi-dev",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Development-only tooling. Not shipped in the plugin ZIP — see bin/build-zip.sh.",
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "scripts": {
+    "env:start": "wp-env start",
+    "env:stop": "wp-env stop",
+    "env:destroy": "wp-env destroy",
+    "env:cli": "wp-env run cli wp",
+    "test:live": "bash bin/live-check.sh"
+  },
+  "devDependencies": {
+    "@wordpress/env": "^10.34.0"
+  }
+}

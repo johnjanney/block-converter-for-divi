@@ -9,3 +9,10 @@
 # lockfile a newer block-library could change what "valid" means underneath
 # the suite.
 /tests/js/node_modules/
+
+# Development-only tooling: wp-env's WordPress lives in Docker, not here.
+/node_modules/
+# Written by the live suite from the database; regenerated on every run.
+/tests/live/stored-output.json
+# Local wp-env overrides (e.g. pinning a different WordPress version).
+/.wp-env.override.json

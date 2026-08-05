@@ -101,6 +101,10 @@ rsync -a \
     --exclude 'CODEX-REVIEW-RESPONSE.md' \
     --exclude 'tests' \
     --exclude 'node_modules' \
+    --exclude 'package.json' \
+    --exclude 'package-lock.json' \
+    --exclude '.wp-env.json' \
+    --exclude '.wp-env.override.json' \
     ./ "build/${SLUG}/"
 
 # A single top-level directory, so the WordPress plugin uploader installs it
@@ -108,6 +112,42 @@ rsync -a \
 ( cd build && zip -rq "../${ARCHIVE}" "$SLUG" )
 
 rm -rf build
+
+# ---- Refuse to ship anything that is not the plugin ------------------------
+#
+# The exclude list above is a denylist, and a denylist silently ships whatever
+# nobody remembered to add to it. This is the backstop: the archive's top level
+# must contain exactly the files and directories the plugin is made of, so a new
+# development file added at the root fails the build instead of being published.
+
+EXPECTED="$(printf '%s\n' \
+    "${SLUG}/" \
+    "${SLUG}/CHANGELOG.md" \
+    "${SLUG}/INSTRUCTIONS.md" \
+    "${SLUG}/LICENSE" \
+    "${SLUG}/README.md" \
+    "${SLUG}/admin/" \
+    "${SLUG}/block-converter-for-divi.php" \
+    "${SLUG}/includes/" \
+    "${SLUG}/readme.txt" \
+    "${SLUG}/uninstall.php" | sort)"
+
+# Reduce every entry to its top level inside the archive: a path with a
+# second-level directory becomes "slug/dir/", a root file stays as it is.
+ACTUAL="$(unzip -Z1 "$ARCHIVE" | sed -E "s#^(${SLUG}/[^/]+/).*#\1#" | sort -u)"
+
+if [[ "$EXPECTED" != "$ACTUAL" ]]; then
+    echo "error: the archive does not contain what the plugin is made of." >&2
+    # `|| true`: diff exits non-zero when it finds a difference, which is the
+    # expected case here, and `set -o pipefail` would otherwise abort the script
+    # on this line — skipping the cleanup below and leaving an archive that
+    # failed validation on disk, where the no-overwrite rule then blocks
+    # rebuilding it.
+    { diff <(echo "$EXPECTED") <(echo "$ACTUAL") || true; } | sed 's/^/       /' >&2
+    echo "       Update bin/build-zip.sh if this change is intended." >&2
+    rm -f "$ARCHIVE"
+    exit 1
+fi
 
 echo "Built ${ARCHIVE}"
 unzip -l "$ARCHIVE" | tail -n +2
