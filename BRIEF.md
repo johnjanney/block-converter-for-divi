@@ -1,9 +1,11 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.1.0` committed and pushed; the repository is public. **Not
-released** — not tagged and no ZIP built. One thing still blocks publication:
-`Tested up to` is a placeholder rather than a test result, and no converted page
-has been opened in a real block editor (`OPENQUESTIONS.md` Q18, Q23).
+**Status:** `2.1.0` released — tagged, packaged, and published as the latest
+GitHub release, on a public repository. **Not validated:** `Tested up to` is
+still a placeholder rather than a test result, and no converted page has been
+opened in a real block editor, so the release notes tell users to convert on
+staging only (`OPENQUESTIONS.md` Q18, Q23). WordPress.org submission remains
+blocked on those two.
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
@@ -127,7 +129,7 @@ server-side; the `ORDER BY` clause is assembled only from a fixed column map.
 | `et_pb_section` | `core/group` |
 | `et_pb_row`, `et_pb_row_inner` | `core/columns` (or passthrough if single column) |
 | `et_pb_column`, `et_pb_column_inner` | `core/column` with derived `%` width |
-| `et_pb_text` | `core/paragraph`, `core/html`, or `core/embed` (heuristic) |
+| `et_pb_text` | One block per top-level element — `core/paragraph`, `core/heading`, `core/list`, `core/quote`, `core/table`, `core/preformatted`, `core/embed`, or `core/html` as a fallback |
 | `et_pb_image`, `et_pb_fullwidth_image` | `core/image` |
 | `et_pb_button` | `core/buttons` › `core/button` |
 | `et_pb_video` | `core/embed` (YouTube/Vimeo) or `core/video` |

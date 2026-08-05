@@ -103,8 +103,11 @@ _Nothing yet._
 Correctness and data-safety release, following an external review of 2.0.0
 (`CODEX-REVIEW.md`, answered in `CODEX-REVIEW-RESPONSE.md`).
 
-**Do not publish this version until `Tested up to:` reflects a real test run**
-against a live WordPress install — see `OPENQUESTIONS.md` Q18 and Q23.
+Released on GitHub as `v2.1.0` and marked latest. **It has still not been run
+against a live WordPress install** — `Tested up to:` remains a placeholder and
+no converted page has been opened in a real block editor. Convert on staging
+first. See `OPENQUESTIONS.md` Q18 and Q23; WordPress.org submission stays
+blocked on them.
 
 ### Fixed — data safety
 

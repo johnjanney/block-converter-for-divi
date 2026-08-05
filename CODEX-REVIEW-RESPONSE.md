@@ -271,7 +271,7 @@ Every factual claim confirmed.
 **Not fixed: `Tested up to: 6.8`.** It is still a placeholder. Setting it to any
 other number without running that test would be the same false claim with a
 different value, so it was left alone and escalated instead: `BRIEF.md` now
-states plainly that the plugin is not published and why, `OPENQUESTIONS.md` Q18
+states the release and validation position plainly, `OPENQUESTIONS.md` Q18
 is marked as blocking publication, and `CHANGELOG.md` carries a do-not-publish
 note on the 2.1.0 section. This needs a live WordPress install to close.
 
@@ -589,11 +589,14 @@ same thing about its work, and it remains true of this one.
 `D2G_VERSION`, and `Stable tag`. `bin/build-zip.sh` will not package it unless
 the fixtures pass.
 
-The repository is public and its URLs resolve, so the distribution half of the
+The repository is public, the tag and ZIP exist, and `v2.1.0` is the latest
+GitHub release with the archive attached — so the distribution half of the
 review's release objection is closed.
 
-It should still **not** be published until someone runs the conversion against a
-live WordPress install, opens converted pages in the block editor, and records
-the version it passes on — closing Q18 and Q23. That is the last thing standing
-between this and a release, and it is the one step that cannot be done from
-here. Everything else is done.
+The validation half is not, and the release was published knowingly without it.
+`Tested up to:` is still a placeholder and no converted page has been opened in
+a real block editor, so every release page carries that caveat and tells users
+to convert on staging. Closing it means running the conversion against a live
+WordPress install and recording the version it passes on — Q18 and Q23. That is
+the one step that could not be done from here, and it also gates WordPress.org
+submission. Everything else is done.
