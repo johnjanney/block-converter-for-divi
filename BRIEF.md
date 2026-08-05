@@ -286,9 +286,11 @@ one-line change.
    `post_content` outright. If the backup checkbox was unticked there is no
    `_d2g_divi_backup`, no Restore button, and recovery falls back to WordPress
    revisions or a database backup.
-3. **kses filtering on multisite.** `wp_update_post()` strips markup for users
-   without `unfiltered_html`, which on multisite means every non-super-admin.
-   Affects both convert and restore. See `OPENQUESTIONS.md` Q15.
+3. ~~**kses filtering on multisite.**~~ Measured and handled in 2.2.0. On a
+   network, a site administrator's writes go through KSES, and a Divi Code
+   module loses its scripts and iframes to it. Conversion and restore now detect
+   that and refuse, naming what would be removed, rather than writing damaged
+   content and reporting success. See `OPENQUESTIONS.md` Q15.
 4. **Style fidelity is partial** and mostly unmapped — see §5.1 for the exact
    matrix. Spacing, borders, shadows, fonts, and module custom CSS are lost.
    Since 2.2.0 those losses are detected and named in the preview rather than

@@ -12,7 +12,8 @@
     "env:destroy": "wp-env destroy",
     "env:cli": "wp-env run cli wp",
     "test:live": "bash bin/live-check.sh",
-    "test:e2e": "bash bin/e2e.sh"
+    "test:e2e": "bash bin/e2e.sh",
+    "test:multisite": "bash bin/multisite-check.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

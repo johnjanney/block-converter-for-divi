@@ -163,6 +163,31 @@ jobs:
             playwright-report/
           retention-days: 7
 
+  # Multisite is the one configuration where the plugin's capability check is
+  # not sufficient on its own: any site administrator has manage_options, but
+  # only super admins hold unfiltered_html, so everyone else writes through
+  # KSES. A Divi Code module loses its scripts and iframes to that filter.
+  multisite:
+    name: Multisite (KSES)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Multisite check
+        run: bash bin/multisite-check.sh
+
   static-checks:
     name: Syntax and whitespace
     runs-on: ubuntu-latest
