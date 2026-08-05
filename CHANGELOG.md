@@ -304,6 +304,11 @@ were invalid block markup, which is the one thing the project exists to avoid.
   verified to handle exactly the same 55 tags as the switch it replaced. The
   split was made only once the suite could prove that — doing it earlier would
   have been a rewrite with no way to check it.
+- CI runs the live suite on every push and pull request, so it cannot rot. The
+  version matrix is opt-in from the Actions tab: six clean environments take a
+  quarter of an hour, which is too slow to gate a pull request but is what
+  should be re-run before a release, and whenever the set of blocks the
+  converter emits changes.
 - `includes/load.php` is now the single dependency-ordered require list, used by
   both the plugin and the test suite. They were two lists in two files, which is
   a standing invitation for the tests to exercise different code than ships.
