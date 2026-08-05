@@ -1,9 +1,12 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.1.0` built and tagged locally. **Not published** — the
-repository and release URLs below 404 (see `OPENQUESTIONS.md` Q21), and
-`Tested up to` is still a placeholder rather than a test result (Q18).
-**Repository (intended):** https://github.com/johnjanney/block-converter-for-divi
+**Status:** `2.1.0` committed and pushed. **Not released** — not tagged, no
+ZIP built, and two things block publication: `Tested up to` is still a
+placeholder rather than a test result (`OPENQUESTIONS.md` Q18, Q23), and the
+repository is private, so every public URL this plugin ships still 404s for
+users (Q25).
+**Repository:** https://github.com/johnjanney/block-converter-for-divi
+*(private — the rename in Q21 is done, but the link does not resolve publicly)*
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
 **Last brief update:** 2026-08-05

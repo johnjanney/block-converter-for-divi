@@ -464,15 +464,21 @@ there were no tags, ZIPs, readme, or uninstall handler.
 - The risk register is rewritten against the current code, with a "Closed in
   2.1.0" section so the history is not lost.
 - The roadmap marks what actually shipped.
-- `OPENQUESTIONS.md`: Q6, Q10, Q12, Q16, and Q20 moved to Resolved with their
-  decisions and where they were implemented. Q18 rewritten as an explicit
-  publication blocker. Q22, Q23, and Q24 added.
+- `OPENQUESTIONS.md`: Q6, Q10, Q12, Q16, Q20, and Q21 moved to Resolved with
+  their decisions and where they were implemented. Q18 rewritten as an explicit
+  publication blocker. Q22, Q23, Q24, and Q25 added.
 - The build script now excludes `tests/` and the review documents from the
   distributed ZIP, and `CHANGELOG.md`'s packaging section matches.
 
-The repository and release URLs were not made to work — publishing is not
-something that can be done from here. Q21 stays open, and the brief no longer
-asserts otherwise.
+**On the 404s specifically.** The review's anonymous checks on 2026-08-04 found
+the repository and releases URLs returning 404. Pushing 2.1.0 confirmed the
+repository has since been renamed to `block-converter-for-divi`, which is what
+Q21 asked about — but the 404 itself is *not* resolved: the repository is
+private, so the same URLs still fail for everyone except its owner. The cause
+changed; the user-visible symptom did not. The brief now says so plainly, and
+the remaining decision — publish the repository, host the download elsewhere, or
+drop the public URLs from the shipped files — is tracked as **Q25** alongside
+Q18 as a publication blocker.
 
 ---
 
@@ -530,7 +536,7 @@ content past its own end. Fixed with a negative lookbehind. Fixture:
 
 ## What is not fixed
 
-Four items, each with a tracked question:
+Five items, each with a tracked question:
 
 | Item | Why not | Tracked |
 | --- | --- | --- |
@@ -538,6 +544,7 @@ Four items, each with a tracked question:
 | The style mapper is still not wired in | Requires a style layer that reproduces the style engine's serialization; wiring it naively would recreate the F-03 class of bug. Scope is now documented accurately and losses are reported. | Q22 |
 | The scan still uses a leading-wildcard `LIKE` | A resumable, keyset-paginated inventory job with WP-CLI support is a feature. The unbounded-memory path is closed. | Q11 |
 | KSES stripping for users without `unfiltered_html` on multisite | A product decision between requiring the capability, warning, or blocking. The review's advice against a `$wpdb` bypass was followed. | Q15 |
+| The public repository and download URLs still 404 | The repository was renamed, but it is private, so the URLs the plugin ships still fail for users. Making it public publishes the full history and is the owner's call. **This blocks publication.** | Q25 |
 
 Also deliberately not done: splitting the converter into module classes behind a
 registry (F-16), and a downloadable batch report (F-12). Both are sound; neither
@@ -577,7 +584,12 @@ same thing about its work, and it remains true of this one.
 `D2G_VERSION`, and `Stable tag`. `bin/build-zip.sh` will not package it unless
 the fixtures pass.
 
-It should **not** be published until someone runs the conversion against a live
-WordPress install, opens converted pages in the block editor, and records the
-version it passes on. That single step closes Q18 and Q23 and is the last thing
-standing between this and a release.
+It should **not** be published until two things happen:
+
+1. Someone runs the conversion against a live WordPress install, opens converted
+   pages in the block editor, and records the version it passes on — closing
+   Q18 and Q23.
+2. The repository is made public, or the download and issue URLs the plugin
+   ships are pointed somewhere that resolves — closing Q25.
+
+Neither can be done from here. Everything else is done.
