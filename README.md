@@ -3,7 +3,7 @@
 WordPress plugin that converts pages built with the Divi Builder into native
 Gutenberg blocks — with preview, batch conversion, and one-click restore.
 
-Requires WordPress 6.0+ and PHP 7.4+.
+Requires WordPress 6.1+ and PHP 7.4+.
 
 - [Installation and usage](INSTRUCTIONS.md)
 - [Release history and versioning policy](CHANGELOG.md)

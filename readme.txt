@@ -1,8 +1,8 @@
 === Block Converter for Divi ===
 Contributors: johnjanney
 Tags: divi, gutenberg, block editor, migration, converter
-Requires at least: 6.0
-Tested up to: 6.8
+Requires at least: 6.1
+Tested up to: 7.0
 Requires PHP: 7.4
 Stable tag: 2.2.0
 License: GPLv2 or later
@@ -166,6 +166,12 @@ the most useful thing to hear about.
 == Changelog ==
 
 = 2.2.0 =
+* Tested against WordPress 6.1, 6.2, 6.3, 6.8 and 7.0.2. Previous releases
+  declared a "tested up to" version that had never been tested at all.
+* The minimum WordPress version is now 6.1, and it was measured rather than
+  guessed. 2.0.0-2.1.0 claimed 6.0, but WordPress 6.0 has no List Item block,
+  so every converted list showed "your site doesn't include support for this
+  block". If you are on 6.0, update WordPress before converting anything.
 * Security: fixed shortcode attribute values being able to inject HTML
   attributes into converted markup. A crafted image or button alignment could
   close the class attribute it was written into and add an event handler.
@@ -279,6 +285,8 @@ the most useful thing to hear about.
 
 = 2.2.0 =
 Security and content-integrity release. Upgrade before converting anything.
+Now requires WordPress 6.1 — earlier releases claimed 6.0, which testing showed
+was wrong: lists convert to blocks that do not exist on 6.0.
 Crafted Divi content could previously inject an HTML attribute into a converted
 page, and several kinds of content — nested modules, table captions, HTML
 comments, counter labels — were being dropped silently. Pages already converted
@@ -288,7 +296,9 @@ up the fixes.
 = 2.1.0 =
 Important correctness and data-safety fixes. Converting twice can no longer
 destroy a page's backup, backslashes are no longer stripped from content, and
-common pages no longer produce invalid blocks. Requires WordPress 6.0 or later.
+common pages no longer produce invalid blocks. Requires WordPress 6.1 or later
+(2.1.0 and 2.2.0 both claimed 6.0; testing against real WordPress showed the
+List and Comments blocks do not exist there).
 Pages converted with an earlier version are unaffected; re-run Restore and
 convert again to pick up the output fixes.
 

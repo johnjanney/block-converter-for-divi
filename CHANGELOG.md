@@ -178,6 +178,54 @@ WordPress.org submission stays blocked.
 - `$price` in `convert_pricing_table()`, which 2.1.0's changelog claimed to have
   removed and had not.
 
+### Changed — `Tested up to` is a measurement now, not a placeholder
+
+`bin/wp-matrix.sh` runs the live suite against a series of WordPress versions,
+each on a clean environment and paired with a PHP version that release actually
+supported. Results:
+
+| WordPress | PHP | Result | Blocks not registered |
+| --- | --- | --- | --- |
+| 6.0 | 7.4.33 | **fail** | `core/comments`, `core/list-item` |
+| 6.1 | 7.4.33 | pass | — |
+| 6.2 | 8.0.30 | pass | — |
+| 6.3 | 8.0.30 | pass | — |
+| 6.8 | 8.2.33 | pass | — |
+| 7.0.2 | 8.3.33 | pass | — |
+
+Each passing run covers the endpoint contract, all 138 fixtures through the
+database, restore byte-identity, block registration, and an empty WordPress
+debug log. `Tested up to` is therefore `7.0`, and `Requires at least` is `6.1`.
+Both had been unverified since the plugin was written, and `Tested up to` was
+the single item blocking publication.
+
+The distinct-block count rises from 32 to 33 at WordPress 6.3, which is the
+`core/details` feature detection working — visible here as data rather than as
+a stubbed registry.
+
+### Changed — the minimum WordPress version is now 6.1, and it was measured
+
+`Requires at least` was `6.0`, derived in 2.1.0 by reading which blocks the
+converter emits and looking up when each arrived. Running the plugin against a
+real WordPress 6.0 showed the derivation was wrong on both counts:
+
+- **`core/list-item` does not exist on 6.0.** It arrived in 6.1, and it was not
+  in the derivation at all — so *every converted list* rendered as "your site
+  doesn't include support for this block", once per item. Lists are among the
+  commonest things this plugin emits.
+- **`core/comments` is 6.1, not 6.0**, which the derivation stated explicitly.
+
+6.1 passes with all 32 distinct emitted blocks registered. The floor is now 6.1
+in the plugin header, `readme.txt`, `README.md` and `BRIEF.md`, and the two code
+comments that asserted "core/list has held its items as inner blocks since
+WordPress 6.0" are corrected.
+
+`bin/wp-matrix.sh` runs the live suite across WordPress versions on clean
+environments, and the live suite asserts that every block it emits is registered
+on the version under test. That assertion cannot be made offline: the fixture
+suite assumes a current install, and core's own validator only knows the block
+library npm ships.
+
 ### Fixed — found by the new block validator
 
 Three defects that four rounds of static checks had missed, found within

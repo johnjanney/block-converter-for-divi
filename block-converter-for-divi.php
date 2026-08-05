@@ -7,7 +7,7 @@
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
- * Requires at least: 6.0
+ * Requires at least: 6.1
  * Requires PHP: 7.4
  */
 

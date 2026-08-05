@@ -260,7 +260,7 @@ one-line change.
 
 | | |
 | --- | --- |
-| WordPress | 6.0+. Derived from the blocks emitted: `core/comments` needs 6.0, `core/navigation` 5.9, `core/query` / `core/post-template` / `core/loginout` 5.8. `core/details` (6.3) is feature-detected and degrades to a heading + text below that |
+| WordPress | **6.1+, measured; tested through 7.0.2.** The live suite passes on 6.1, 6.2, 6.3, 6.8 and 7.0.2, and fails on 6.0.<br>**6.1+, measured** by running the live suite against 6.0 and 6.1 (`bin/wp-matrix.sh`). 6.0 does not register `core/list-item` or `core/comments`, so every converted list broke there. The previous `6.0` was *derived* from looking up when each emitted block arrived, and the derivation was wrong on both counts — `core/comments` is 6.1, and `core/list-item` was not in the derivation at all. `core/details` (6.3) is still feature-detected and degrades to a heading + text on 6.1–6.2 |
 | PHP | 7.4+ |
 | Capability | `manage_options`, plus `edit_post` on each target post |
 | Dependencies | jQuery (bundled with WP). `DOMDocument` (`ext-dom`) recommended — without it rich text falls back to `core/html`. No `mbstring` requirement |
@@ -268,14 +268,20 @@ one-line change.
 
 ## 7. Known gaps / risk register
 
-1. **No live WordPress run has happened.** Since 2.2.0 the suite *does* execute
-   core's real block parser and `save()` functions — every fixture is validated
-   by `@wordpress/blocks` with the 113 core blocks registered, which found three
-   invalid-markup defects the static checks had missed (Q23, resolved). What is
-   still unmeasured is a *live install*: whether a given WordPress release opens
-   a converted page, and whether the plugin's admin screen, endpoints, backup
-   and restore behave against a real database. Validity is proven; compatibility
-   is not. This gates publication. See `OPENQUESTIONS.md` Q18 and Q27.
+1. **The admin screen has never been opened in a browser.** Everything else on
+   this list has been measured. Conversion, the AJAX endpoints, the database
+   round trip, restore byte-identity and block registration all run against real
+   WordPress across 6.1–7.0.2 (`bin/wp-matrix.sh`), and every fixture is
+   validated by core's own block validator. What no test touches is the Tools
+   screen itself: the scan table, the preview modal, the batch runner, the
+   progress and error reporting. Those are jQuery against a real DOM, and
+   nothing here exercises them. See `OPENQUESTIONS.md` Q30.
+
+   A second, narrower gap: block *validity* is proven against one block library
+   (the version pinned in `tests/js/package-lock.json`, WordPress 7.0-era). The
+   matrix proves each emitted block *exists* on 6.1+, but PHP cannot run a
+   block's `save()`, so markup valid on 7.0 is not automatically valid on 6.1.
+   Older `@wordpress/block-library` majors are published, so this is buildable.
 2. **Restore depends on the backup being taken.** Conversion still overwrites
    `post_content` outright. If the backup checkbox was unticked there is no
    `_d2g_divi_backup`, no Restore button, and recovery falls back to WordPress
