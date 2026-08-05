@@ -199,7 +199,9 @@ function d2g_check_block_body( string $name, $attrs, string $body ): array {
             if ( ( 'ol' === strtolower( $lm[1] ) ) !== $ordered ) {
                 $errors[] = sprintf( 'list uses <%s> but ordered is %s', $lm[1], $ordered ? 'true' : 'absent' );
             }
-            // Items have been inner blocks since WordPress 6.0.
+            // Items have been inner blocks since WordPress 6.1. This said 6.0
+            // until the version matrix showed core/list-item is not registered
+            // there — which is why the plugin's floor is now 6.1.
             if ( preg_match( '#<li[\s>]#i', $body ) && ! preg_match( '#<!--\s*wp:list-item#', $body ) ) {
                 $errors[] = 'list has <li> elements but no core/list-item inner blocks';
             }

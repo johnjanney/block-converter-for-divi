@@ -157,6 +157,7 @@ wp_delete_post( $post_id, true );
 // converted — which is invisible to every offline test.
 
 $fixtures = require dirname( __DIR__ ) . '/fixtures.php';
+$GLOBALS['d2g_emitted_blocks'] = [];
 $mismatch = [];
 $invalid  = [];
 $checked  = 0;
@@ -193,12 +194,21 @@ foreach ( $fixtures as $name => $fixture ) {
     }
 
     // What WordPress parses back out of the database, not what we handed it.
-    foreach ( parse_blocks( $stored ) as $block ) {
-        if ( null === $block['blockName'] && '' !== trim( $block['innerHTML'] ) ) {
-            $invalid[] = $name . ' — content outside any block';
-            break;
+    $collect = function ( array $blocks ) use ( &$collect, $name, &$invalid ) {
+        foreach ( $blocks as $block ) {
+            if ( null === $block['blockName'] ) {
+                if ( '' !== trim( $block['innerHTML'] ) ) {
+                    $invalid[] = $name . ' — content outside any block';
+                }
+                continue;
+            }
+            $GLOBALS['d2g_emitted_blocks'][] = $block['blockName'];
+            if ( ! empty( $block['innerBlocks'] ) ) {
+                $collect( $block['innerBlocks'] );
+            }
         }
-    }
+    };
+    $collect( parse_blocks( $stored ) );
 
     // Restore has to return the original bytes.
     $restore  = d2g_call( 'd2g_restore_page', [ 'post_id' => $id ] );
@@ -215,6 +225,35 @@ d2g_ok( sprintf( 'all %d fixtures survive the database round trip unchanged', $c
 
 d2g_ok( 'no fixture leaves content outside a block once re-read',
     empty( $invalid ), implode( "\n        ", array_slice( $invalid, 0, 10 ) ) );
+
+// -------------------------------------- every emitted block exists *here* --
+//
+// This is the check that gives "Requires at least" a meaning. A block the
+// converter emits that this WordPress does not register shows the user "your
+// site doesn't include support for this block" where their content used to be.
+// It cannot be tested offline at all: the fixture suite assumes a current
+// install, and core's own validator only knows the block library npm ships.
+//
+// $emitted is collected above from content read back out of the database.
+
+$registry   = WP_Block_Type_Registry::get_instance();
+$unsupported = [];
+foreach ( array_unique( $GLOBALS['d2g_emitted_blocks'] ) as $block_name ) {
+    if ( ! $registry->is_registered( $block_name ) ) {
+        $unsupported[] = $block_name;
+    }
+}
+sort( $unsupported );
+
+d2g_ok(
+    sprintf(
+        'every one of the %d distinct blocks emitted is registered on WordPress %s',
+        count( array_unique( $GLOBALS['d2g_emitted_blocks'] ) ),
+        get_bloginfo( 'version' )
+    ),
+    empty( $unsupported ),
+    'not registered here: ' . implode( ', ', $unsupported )
+);
 
 // ----------------------------------------------------- hand the JS the truth --
 // Write what the database actually holds, so the block validator checks stored

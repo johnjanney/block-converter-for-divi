@@ -294,8 +294,14 @@ class D2G_HTML_Converter {
     /**
      * Emit a core/list block with one core/list-item per <li>.
      *
-     * core/list has held its items as inner blocks since WordPress 6.0; a bare
-     * <ul><li>…</li></ul> body only survives through a deprecation path.
+     * core/list has held its items as inner blocks since WordPress 6.1 — not
+     * 6.0, which this comment claimed until the version matrix measured it.
+     * core/list-item simply does not exist on 6.0, so every converted list
+     * showed "your site doesn't include support for this block", once per item.
+     * That mistake set the plugin's declared minimum for two releases; the floor
+     * is now 6.1. See bin/wp-matrix.sh.
+     *
+     * A bare <ul><li>…</li></ul> body only survives through a deprecation path.
      */
     private function list_block( DOMNode $el, array $attrs, int $depth ): string {
         $tag_name    = strtolower( $el->nodeName );

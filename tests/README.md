@@ -170,16 +170,45 @@ belongs to that run.
 To test another WordPress version, create `.wp-env.override.json`:
 
 ```json
-{ "core": "WordPress/WordPress#tags/6.0" }
+{ "core": "WordPress/WordPress#6.1", "phpVersion": "7.4" }
 ```
+
+Or run the whole matrix, which does that for you on a clean environment per
+version — reusing one carries a bundled theme forward that older core cannot
+load:
+
+```bash
+bash bin/wp-matrix.sh            # the default set
+bash bin/wp-matrix.sh 6.5 6.6    # only these
+```
+
+This is what found that `Requires at least: 6.0` was wrong. Last full run:
+
+| WordPress | PHP | Result | Blocks not registered |
+| --- | --- | --- | --- |
+| 6.0 | 7.4.33 | **fail** | `core/comments`, `core/list-item` |
+| 6.1 | 7.4.33 | pass | — |
+| 6.2 | 8.0.30 | pass | — |
+| 6.3 | 8.0.30 | pass | — |
+| 6.8 | 8.2.33 | pass | — |
+| 7.0.2 | 8.3.33 | pass | — |
+
+The block count rises from 32 to 33 at 6.3: that is `core/details` becoming
+available and the feature detection stopping. Offline, that path can only be
+tested by stubbing the registry.
 
 ## What this still does not cover
 
 Stated here so a green run is not read as more than it is:
 
-- **A WordPress version matrix.** The live suite proves the plugin works on the
-  version `wp-env` installs (7.0.2 at the time of writing). One version is not
-  a range, and 6.0 — the declared floor — has not been run. **Q18**.
+- **Block *validity* on older WordPress.** `bin/wp-matrix.sh` runs the live
+  suite across versions and asserts every emitted block is *registered* there —
+  which is how the 6.0 floor was found to be wrong. But that check is PHP, and
+  PHP cannot run a block's `save()`. Validity is still only proven against the
+  single block library pinned in `js/package-lock.json`, and core block markup
+  does change between versions (the Cover fix in 2.2.0 is exactly such a
+  change). Older `@wordpress/block-library` majors are published, so per-version
+  JS validation is feasible; it is not built. **Q18**.
 - **Multisite**, where KSES strips markup for any non-super-admin. **Q15**.
 - **The admin JavaScript**, including batch result handling.
 - **Uninstall.**
