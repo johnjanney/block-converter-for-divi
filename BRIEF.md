@@ -1,6 +1,6 @@
 # Project Brief — Divi to Gutenberg Converter (`divi2gutenberg`)
 
-**Status:** Working prototype at `1.1.0` (not yet tagged or packaged)
+**Status:** Released at `1.2.0` (tagged, packaged, published)
 **Repository:** https://github.com/johnjanney/divi2gutenberg
 **Owner:** John Janney
 **License:** GPL-2.0-or-later

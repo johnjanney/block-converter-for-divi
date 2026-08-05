@@ -86,6 +86,15 @@ gh release create "v${VERSION}" "dist/divi2gutenberg-${VERSION}.zip" \
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [1.2.0] — 2026-08-04
+
+Release-hygiene release: adds the licence text and a delete-time cleanup
+handler, with backup removal opt-in rather than automatic.
+
 ### Added
 - `LICENSE` — the full GPL-2.0 text, matching the licence declared in the plugin
   header.
@@ -201,6 +210,7 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/divi2gutenberg/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/johnjanney/divi2gutenberg/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/johnjanney/divi2gutenberg/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/johnjanney/divi2gutenberg/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/johnjanney/divi2gutenberg/releases/tag/v1.0.0

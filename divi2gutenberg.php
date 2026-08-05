@@ -3,7 +3,7 @@
  * Plugin Name: Divi to Gutenberg Converter
  * Plugin URI:  https://github.com/johnjanney/divi2gutenberg
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: divi2gutenberg
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'D2G_VERSION', '1.1.0' );
+define( 'D2G_VERSION', '1.2.0' );
 define( 'D2G_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'D2G_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
