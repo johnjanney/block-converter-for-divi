@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin page for Divi to Gutenberg Converter.
+ * Admin page for Block Converter for Divi.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -24,18 +24,18 @@ class D2G_Admin {
     public function render_page() {
         ?>
         <div class="wrap d2g-wrap">
-            <h1><?php esc_html_e( 'Divi to Gutenberg Converter', 'divi2gutenberg' ); ?></h1>
+            <h1><?php esc_html_e( 'Block Converter for Divi', 'block-converter-for-divi' ); ?></h1>
             <p class="d2g-description">
-                <?php esc_html_e( 'Scan your site for pages built with the Divi Builder and convert them to native Gutenberg blocks.', 'divi2gutenberg' ); ?>
+                <?php esc_html_e( 'Scan your site for pages built with the Divi Builder and convert them to native Gutenberg blocks.', 'block-converter-for-divi' ); ?>
             </p>
 
             <div class="d2g-toolbar">
                 <button type="button" id="d2g-scan" class="button button-primary">
-                    <?php esc_html_e( 'Scan for Divi Pages', 'divi2gutenberg' ); ?>
+                    <?php esc_html_e( 'Scan for Divi Pages', 'block-converter-for-divi' ); ?>
                 </button>
                 <label class="d2g-backup-label">
                     <input type="checkbox" id="d2g-backup" checked />
-                    <?php esc_html_e( 'Create backup before converting', 'divi2gutenberg' ); ?>
+                    <?php esc_html_e( 'Create backup before converting', 'block-converter-for-divi' ); ?>
                 </label>
             </div>
 
@@ -43,33 +43,33 @@ class D2G_Admin {
 
             <div id="d2g-filters" class="d2g-filters" style="display:none;">
                 <div class="d2g-filter-group">
-                    <label for="d2g-filter-type"><?php esc_html_e( 'Show:', 'divi2gutenberg' ); ?></label>
+                    <label for="d2g-filter-type"><?php esc_html_e( 'Show:', 'block-converter-for-divi' ); ?></label>
                     <select id="d2g-filter-type">
-                        <option value="all"><?php esc_html_e( 'All', 'divi2gutenberg' ); ?></option>
-                        <option value="page"><?php esc_html_e( 'Pages', 'divi2gutenberg' ); ?></option>
-                        <option value="post"><?php esc_html_e( 'Posts', 'divi2gutenberg' ); ?></option>
+                        <option value="all"><?php esc_html_e( 'All', 'block-converter-for-divi' ); ?></option>
+                        <option value="page"><?php esc_html_e( 'Pages', 'block-converter-for-divi' ); ?></option>
+                        <option value="post"><?php esc_html_e( 'Posts', 'block-converter-for-divi' ); ?></option>
                     </select>
                 </div>
                 <div class="d2g-filter-group">
-                    <label for="d2g-sort-by"><?php esc_html_e( 'Sort by:', 'divi2gutenberg' ); ?></label>
+                    <label for="d2g-sort-by"><?php esc_html_e( 'Sort by:', 'block-converter-for-divi' ); ?></label>
                     <select id="d2g-sort-by">
-                        <option value="title-asc"><?php esc_html_e( 'Title (A–Z)', 'divi2gutenberg' ); ?></option>
-                        <option value="title-desc"><?php esc_html_e( 'Title (Z–A)', 'divi2gutenberg' ); ?></option>
-                        <option value="date-desc"><?php esc_html_e( 'Date (Newest)', 'divi2gutenberg' ); ?></option>
-                        <option value="date-asc"><?php esc_html_e( 'Date (Oldest)', 'divi2gutenberg' ); ?></option>
-                        <option value="type-asc"><?php esc_html_e( 'Type (A–Z)', 'divi2gutenberg' ); ?></option>
-                        <option value="type-desc"><?php esc_html_e( 'Type (Z–A)', 'divi2gutenberg' ); ?></option>
-                        <option value="status-asc"><?php esc_html_e( 'Status (A–Z)', 'divi2gutenberg' ); ?></option>
-                        <option value="status-desc"><?php esc_html_e( 'Status (Z–A)', 'divi2gutenberg' ); ?></option>
+                        <option value="title-asc"><?php esc_html_e( 'Title (A–Z)', 'block-converter-for-divi' ); ?></option>
+                        <option value="title-desc"><?php esc_html_e( 'Title (Z–A)', 'block-converter-for-divi' ); ?></option>
+                        <option value="date-desc"><?php esc_html_e( 'Date (Newest)', 'block-converter-for-divi' ); ?></option>
+                        <option value="date-asc"><?php esc_html_e( 'Date (Oldest)', 'block-converter-for-divi' ); ?></option>
+                        <option value="type-asc"><?php esc_html_e( 'Type (A–Z)', 'block-converter-for-divi' ); ?></option>
+                        <option value="type-desc"><?php esc_html_e( 'Type (Z–A)', 'block-converter-for-divi' ); ?></option>
+                        <option value="status-asc"><?php esc_html_e( 'Status (A–Z)', 'block-converter-for-divi' ); ?></option>
+                        <option value="status-desc"><?php esc_html_e( 'Status (Z–A)', 'block-converter-for-divi' ); ?></option>
                     </select>
                 </div>
                 <div class="d2g-filter-group">
-                    <label for="d2g-per-page"><?php esc_html_e( 'Per page:', 'divi2gutenberg' ); ?></label>
+                    <label for="d2g-per-page"><?php esc_html_e( 'Per page:', 'block-converter-for-divi' ); ?></label>
                     <select id="d2g-per-page">
                         <option value="20">20</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
-                        <option value="all"><?php esc_html_e( 'All', 'divi2gutenberg' ); ?></option>
+                        <option value="all"><?php esc_html_e( 'All', 'block-converter-for-divi' ); ?></option>
                     </select>
                 </div>
             </div>
@@ -78,12 +78,12 @@ class D2G_Admin {
                 <thead>
                     <tr>
                         <th class="check-column"><input type="checkbox" id="d2g-select-all" /></th>
-                        <th class="d2g-sortable" data-sort="title"><span><?php esc_html_e( 'Title', 'divi2gutenberg' ); ?></span></th>
-                        <th class="d2g-sortable" data-sort="type"><span><?php esc_html_e( 'Type', 'divi2gutenberg' ); ?></span></th>
-                        <th class="d2g-sortable" data-sort="status"><span><?php esc_html_e( 'Status', 'divi2gutenberg' ); ?></span></th>
-                        <th class="d2g-sortable" data-sort="date"><span><?php esc_html_e( 'Date', 'divi2gutenberg' ); ?></span></th>
-                        <th><?php esc_html_e( 'Backup', 'divi2gutenberg' ); ?></th>
-                        <th><?php esc_html_e( 'Actions', 'divi2gutenberg' ); ?></th>
+                        <th class="d2g-sortable" data-sort="title"><span><?php esc_html_e( 'Title', 'block-converter-for-divi' ); ?></span></th>
+                        <th class="d2g-sortable" data-sort="type"><span><?php esc_html_e( 'Type', 'block-converter-for-divi' ); ?></span></th>
+                        <th class="d2g-sortable" data-sort="status"><span><?php esc_html_e( 'Status', 'block-converter-for-divi' ); ?></span></th>
+                        <th class="d2g-sortable" data-sort="date"><span><?php esc_html_e( 'Date', 'block-converter-for-divi' ); ?></span></th>
+                        <th><?php esc_html_e( 'Backup', 'block-converter-for-divi' ); ?></th>
+                        <th><?php esc_html_e( 'Actions', 'block-converter-for-divi' ); ?></th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -98,20 +98,20 @@ class D2G_Admin {
 
             <div id="d2g-batch-bar" class="d2g-batch-bar" style="display:none;">
                 <button type="button" id="d2g-convert-selected" class="button button-primary">
-                    <?php esc_html_e( 'Convert Selected', 'divi2gutenberg' ); ?>
+                    <?php esc_html_e( 'Convert Selected', 'block-converter-for-divi' ); ?>
                 </button>
                 <span id="d2g-batch-progress"></span>
             </div>
 
             <div class="d2g-settings">
-                <h2 class="d2g-settings-heading"><?php esc_html_e( 'Data retention', 'divi2gutenberg' ); ?></h2>
+                <h2 class="d2g-settings-heading"><?php esc_html_e( 'Data retention', 'block-converter-for-divi' ); ?></h2>
                 <label class="d2g-setting-label">
                     <input type="checkbox" id="d2g-delete-data"
                         <?php checked( (bool) get_option( 'd2g_delete_data_on_uninstall', false ) ); ?> />
-                    <?php esc_html_e( 'Delete all Divi backups when this plugin is deleted', 'divi2gutenberg' ); ?>
+                    <?php esc_html_e( 'Delete all Divi backups when this plugin is deleted', 'block-converter-for-divi' ); ?>
                 </label>
                 <p class="d2g-setting-help">
-                    <?php esc_html_e( 'Off by default. Backups are the only way to restore a converted page, so they are kept even after the plugin is removed. Turn this on once your migration is finished and you no longer need to roll anything back.', 'divi2gutenberg' ); ?>
+                    <?php esc_html_e( 'Off by default. Backups are the only way to restore a converted page, so they are kept even after the plugin is removed. Turn this on once your migration is finished and you no longer need to roll anything back.', 'block-converter-for-divi' ); ?>
                 </p>
                 <span id="d2g-settings-feedback" class="d2g-setting-feedback"></span>
             </div>
@@ -119,17 +119,17 @@ class D2G_Admin {
             <div id="d2g-preview-modal" class="d2g-modal" style="display:none;">
                 <div class="d2g-modal-content">
                     <div class="d2g-modal-header">
-                        <h2><?php esc_html_e( 'Conversion Preview', 'divi2gutenberg' ); ?></h2>
+                        <h2><?php esc_html_e( 'Conversion Preview', 'block-converter-for-divi' ); ?></h2>
                         <button type="button" class="d2g-modal-close">&times;</button>
                     </div>
                     <div class="d2g-modal-body">
                         <div class="d2g-preview-panes">
                             <div class="d2g-pane">
-                                <h3><?php esc_html_e( 'Original (Divi)', 'divi2gutenberg' ); ?></h3>
+                                <h3><?php esc_html_e( 'Original (Divi)', 'block-converter-for-divi' ); ?></h3>
                                 <pre id="d2g-preview-original"></pre>
                             </div>
                             <div class="d2g-pane">
-                                <h3><?php esc_html_e( 'Converted (Gutenberg)', 'divi2gutenberg' ); ?></h3>
+                                <h3><?php esc_html_e( 'Converted (Gutenberg)', 'block-converter-for-divi' ); ?></h3>
                                 <pre id="d2g-preview-converted"></pre>
                             </div>
                         </div>

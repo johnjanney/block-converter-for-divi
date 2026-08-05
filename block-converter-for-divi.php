@@ -1,12 +1,12 @@
 <?php
 /**
- * Plugin Name: Divi to Gutenberg Converter
- * Plugin URI:  https://github.com/johnjanney/divi2gutenberg
+ * Plugin Name: Block Converter for Divi
+ * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
  * Version:     1.2.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
- * Text Domain: divi2gutenberg
+ * Text Domain: block-converter-for-divi
  * Requires at least: 5.0
  * Requires PHP: 7.4
  */
@@ -15,6 +15,19 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+/*
+ * The plugin was renamed from "Divi to Gutenberg Converter" (divi2gutenberg) to
+ * satisfy the WordPress.org rule against leading a plugin name or slug with
+ * someone else's trademark.
+ *
+ * The D2G_ / d2g_ prefixes below were deliberately NOT renamed along with it.
+ * They are internal and already unique, but more importantly the storage keys
+ * built from them — the _d2g_divi_backup and _d2g_backup_date post meta, and the
+ * d2g_delete_data_on_uninstall option — hold real data on every site that ran
+ * 1.0.0 through 1.2.0. Those backups are the only way to restore a converted
+ * page. Renaming the keys would orphan every one of them, so they stay as they
+ * are and existing backups keep working after the upgrade.
+ */
 define( 'D2G_VERSION', '1.2.0' );
 define( 'D2G_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'D2G_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -27,7 +40,7 @@ require_once D2G_PLUGIN_DIR . 'admin/class-d2g-admin.php';
 /**
  * Main plugin class.
  */
-final class Divi2Gutenberg {
+final class Block_Converter_For_Divi {
 
     private static $instance = null;
 
@@ -50,16 +63,16 @@ final class Divi2Gutenberg {
 
     public function register_admin_menu() {
         add_management_page(
-            __( 'Divi to Gutenberg', 'divi2gutenberg' ),
-            __( 'Divi to Gutenberg', 'divi2gutenberg' ),
+            __( 'Block Converter for Divi', 'block-converter-for-divi' ),
+            __( 'Block Converter for Divi', 'block-converter-for-divi' ),
             'manage_options',
-            'divi2gutenberg',
+            'block-converter-for-divi',
             [ D2G_Admin::instance(), 'render_page' ]
         );
     }
 
     public function enqueue_admin_assets( $hook ) {
-        if ( 'tools_page_divi2gutenberg' !== $hook ) {
+        if ( 'tools_page_block-converter-for-divi' !== $hook ) {
             return;
         }
         wp_enqueue_style(
@@ -373,4 +386,4 @@ final class Divi2Gutenberg {
     }
 }
 
-Divi2Gutenberg::instance();
+Block_Converter_For_Divi::instance();

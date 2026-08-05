@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-SLUG="divi2gutenberg"
+SLUG="block-converter-for-divi"
 MAIN="${SLUG}.php"
 
 # ---- Resolve and cross-check the version -----------------------------------
@@ -31,6 +31,18 @@ if [[ "$HEADER_VERSION" != "$CONST_VERSION" ]]; then
     echo "error: version mismatch — header is '${HEADER_VERSION}', D2G_VERSION is '${CONST_VERSION}'." >&2
     echo "       Both must match; D2G_VERSION is used for asset cache-busting." >&2
     exit 1
+fi
+
+# WordPress.org serves whatever Stable tag points at, so a stale value here
+# publishes the wrong version.
+if [[ -f readme.txt ]]; then
+    STABLE_TAG="$(grep -m1 -E '^Stable tag:' readme.txt | sed -E 's/^Stable tag:[[:space:]]*//' | tr -d '[:space:]')"
+
+    if [[ "$STABLE_TAG" != "$HEADER_VERSION" ]]; then
+        echo "error: readme.txt 'Stable tag: ${STABLE_TAG}' does not match version '${HEADER_VERSION}'." >&2
+        echo "       WordPress.org serves the version named by Stable tag." >&2
+        exit 1
+    fi
 fi
 
 VERSION="$HEADER_VERSION"
@@ -61,7 +73,7 @@ rsync -a \
     ./ "build/${SLUG}/"
 
 # A single top-level directory, so the WordPress plugin uploader installs it
-# to wp-content/plugins/divi2gutenberg/.
+# to wp-content/plugins/block-converter-for-divi/.
 ( cd build && zip -rq "../${ARCHIVE}" "$SLUG" )
 
 rm -rf build

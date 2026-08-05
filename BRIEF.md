@@ -1,7 +1,7 @@
-# Project Brief — Divi to Gutenberg Converter (`divi2gutenberg`)
+# Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
 **Status:** Released at `1.2.0` (tagged, packaged, published)
-**Repository:** https://github.com/johnjanney/divi2gutenberg
+**Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
 **Last brief update:** 2026-08-04
@@ -60,19 +60,24 @@ without requiring Divi to remain installed afterward.
 ## 4. Architecture
 
 ```
-divi2gutenberg.php            Bootstrap, constants, admin menu, 5 AJAX endpoints
+block-converter-for-divi.php  Bootstrap, constants, admin menu, 5 AJAX endpoints
 uninstall.php                 Delete-time cleanup; opt-in backup removal
 LICENSE                       GPL-2.0
+readme.txt                    WordPress.org listing (not yet submitted)
 bin/build-zip.sh              Versioned release packaging
 ├── includes/
 │   ├── class-d2g-parser.php        Divi shortcode → node tree
 │   ├── class-d2g-converter.php     Node tree → Gutenberg block markup (~1800 LOC)
 │   └── class-d2g-style-mapper.php  Divi attrs → CSS / block attributes
 └── admin/
-    ├── class-d2g-admin.php   Tools › Divi to Gutenberg screen markup
+    ├── class-d2g-admin.php   Tools › Block Converter for Divi screen markup
     ├── js/admin.js           Scan, paginate, preview, convert (jQuery + AJAX)
     └── css/admin.css         Admin screen + preview modal styling
 ```
+
+The `D2G_` / `d2g_` prefixes and the `class-d2g-*.php` filenames predate the
+rename and were kept: the storage keys derived from them hold live backup data
+on existing installs (see `OPENQUESTIONS.md` Q17).
 
 **Data flow:**
 `post_content` → `D2G_Parser::parse()` → node tree (`tag` / `attrs` / `content` /
@@ -203,7 +208,9 @@ emits nothing.
   reads the version from the plugin header and refuses to overwrite an archive
 - ~~Add `uninstall.php` and `LICENSE`~~ — done
 - ~~Populate `CHANGELOG.md`~~ — done
-- `readme.txt` in WordPress.org format — only needed if we distribute there (Q8)
+- ~~`readme.txt` in WordPress.org format~~ — written; submission blocked on the
+  name/slug trademark question (Q17), a real `Tested up to` value (Q18), and
+  screenshots plus a WP.org username (Q19)
 
 **Phase 2 — Safety** *(partly delivered in 1.1.0)*
 - ~~Restore-from-backup UI and endpoint~~ — done in 1.1.0

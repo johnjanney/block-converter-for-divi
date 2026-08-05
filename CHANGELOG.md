@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **Divi to Gutenberg Converter** are documented in this
+All notable changes to **Block Converter for Divi** are documented in this
 file.
 
 ---
@@ -25,13 +25,13 @@ The changelog format follows
 Every release **must**:
 
 1. **Bump the version in both places** — the `Version:` header in
-   `divi2gutenberg.php` and the `D2G_VERSION` constant. They must always match;
+   `block-converter-for-divi.php` and the `D2G_VERSION` constant. They must always match;
    `D2G_VERSION` is used for asset cache-busting.
 2. **Have a dated section in this file** listing every user-visible change.
 3. **Be tagged in git** as `vX.Y.Z` on the release commit.
 4. **Produce a distributable plugin ZIP named with its version number** —
-   `divi2gutenberg-X.Y.Z.zip` (for example `divi2gutenberg-1.2.3.zip`). The ZIP
-   must contain a single top-level `divi2gutenberg/` directory so that it
+   `block-converter-for-divi-X.Y.Z.zip` (for example `block-converter-for-divi-1.2.3.zip`). The ZIP
+   must contain a single top-level `block-converter-for-divi/` directory so that it
    installs correctly through the WordPress plugin uploader.
 5. **Preserve all previously built ZIPs.** Old version archives are **never
    deleted or overwritten** — they are the rollback path for anyone who needs to
@@ -40,9 +40,11 @@ Every release **must**:
 
 ### What goes in the ZIP
 
-Ships to users: the plugin code, `LICENSE`, `README.md`, `INSTRUCTIONS.md`, and
-`CHANGELOG.md`. `LICENSE` is not optional — the GPL requires the licence text to
-accompany the distributed work.
+Ships to users: the plugin code, `LICENSE`, `readme.txt`, `README.md`,
+`INSTRUCTIONS.md`, and `CHANGELOG.md`. `LICENSE` is not optional — the GPL
+requires the licence text to accompany the distributed work. `readme.txt` must
+sit at the plugin root and its `Stable tag:` must match the version being
+released, or WordPress.org will serve the wrong version.
 
 Excluded as internal: `BRIEF.md`, `OPENQUESTIONS.md`, `.git/`, `dist/`, and
 `build/`.
@@ -56,18 +58,17 @@ built locally:
 
 ```
 dist/
-  divi2gutenberg-1.0.0.zip
-  divi2gutenberg-1.0.1.zip
-  divi2gutenberg-1.1.0.zip
+  block-converter-for-divi-1.0.0.zip
+  block-converter-for-divi-1.0.1.zip
+  block-converter-for-divi-1.1.0.zip
   ...
 ```
 
 ### Building a release ZIP
 
-From the repository root:
-
-Use the build script, which reads the version from the plugin header and refuses
-to overwrite an archive that already exists:
+From the repository root, use the build script. It reads the version from the
+plugin header, checks it against `D2G_VERSION` and the readme's `Stable tag`,
+and refuses to overwrite an archive that already exists:
 
 ```bash
 ./bin/build-zip.sh
@@ -78,7 +79,7 @@ Then tag and publish:
 ```bash
 git tag -a "v${VERSION}" -m "Release ${VERSION}"
 git push origin "v${VERSION}"
-gh release create "v${VERSION}" "dist/divi2gutenberg-${VERSION}.zip" \
+gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
    --title "v${VERSION}" --notes-file <(sed -n '/## \['"${VERSION}"'\]/,/## \[/p' CHANGELOG.md)
 ```
 
@@ -86,7 +87,34 @@ gh release create "v${VERSION}" "dist/divi2gutenberg-${VERSION}.zip" \
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+- **Renamed the plugin to "Block Converter for Divi" (slug
+  `block-converter-for-divi`).** WordPress.org does not allow a plugin name or
+  slug to lead with someone else's trademark; trailing attribution is the
+  accepted form. Covers the plugin name, slug, main file, text domain, admin
+  menu slug, and main class.
+- The admin screen moved from **Tools → Divi to Gutenberg** to **Tools → Block
+  Converter for Divi**. Its URL changed from `tools.php?page=divi2gutenberg` to
+  `tools.php?page=block-converter-for-divi`, so old bookmarks will not resolve.
+
+  > **Upgrading is not automatic.** The plugin directory name changed, so
+  > WordPress treats this as a different plugin. Deactivate and delete the old
+  > "Divi to Gutenberg Converter", then install this one. **Your backups
+  > survive** — they are stored as post meta, not plugin files.
+
+### Added
+- `readme.txt` in WordPress.org format, with description, installation, FAQ,
+  changelog, and upgrade notices. Not yet submitted — see `OPENQUESTIONS.md`
+  Q18–Q19 for the remaining blockers.
+
+### Not changed (deliberately)
+- The `D2G_` / `d2g_` internal prefixes, class names, AJAX actions, nonce, and
+  CSS classes.
+- **The storage keys: `_d2g_divi_backup` and `_d2g_backup_date` post meta, and
+  the `d2g_delete_data_on_uninstall` option.** Every site running 1.0.0–1.2.0
+  holds real data under these keys, and those backups are the only way to
+  restore a converted page. Renaming them would orphan every backup, so they
+  stay put and existing backups keep working after the rename.
 
 ---
 
@@ -185,7 +213,7 @@ Initial implementation of the plugin.
   blog, signup, login, post title, menus, comments, search, portfolios, video
   sliders, and shop. Unknown modules fall back to rendering children or wrapping
   raw content in `core/html`.
-- Admin screen under **Tools › Divi to Gutenberg** for scanning, previewing, and
+- Admin screen under **Tools › Block Converter for Divi** for scanning, previewing, and
   converting.
 - AJAX endpoint `d2g_scan_pages` — finds `page` and `post` records containing
   `[et_pb_` in `publish`, `draft`, `private`, or `pending` status.
@@ -210,7 +238,7 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/divi2gutenberg/compare/v1.2.0...HEAD
-[1.2.0]: https://github.com/johnjanney/divi2gutenberg/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/johnjanney/divi2gutenberg/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/johnjanney/divi2gutenberg/releases/tag/v1.0.0
+[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/johnjanney/block-converter-for-divi/releases/tag/v1.0.0

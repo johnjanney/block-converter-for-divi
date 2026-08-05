@@ -1,4 +1,4 @@
-# Divi to Gutenberg Converter — Installation & Usage
+# Block Converter for Divi — Installation & Usage
 
 Converts pages built with the Divi Builder into native Gutenberg blocks,
 preserving content, images, and design intent.
@@ -39,24 +39,24 @@ Do this first:
 
 ### Option A — Upload the ZIP (recommended)
 
-1. Download `divi2gutenberg-X.Y.Z.zip` from the
-   [Releases page](https://github.com/johnjanney/divi2gutenberg/releases).
+1. Download `block-converter-for-divi-X.Y.Z.zip` from the
+   [Releases page](https://github.com/johnjanney/block-converter-for-divi/releases).
    Pick the version you want — older versions are kept permanently.
 2. In WordPress: **Plugins → Add New → Upload Plugin**.
 3. Choose the ZIP, click **Install Now**, then **Activate Plugin**.
 
 ### Option B — Manual / FTP
 
-1. Unzip the archive locally. It contains a single `divi2gutenberg/` folder.
+1. Unzip the archive locally. It contains a single `block-converter-for-divi/` folder.
 2. Upload that folder to `wp-content/plugins/` on the server.
-3. In WordPress: **Plugins**, find *Divi to Gutenberg Converter*, click
+3. In WordPress: **Plugins**, find *Block Converter for Divi*, click
    **Activate**.
 
 ### Option C — From source
 
 ```bash
 cd wp-content/plugins
-git clone https://github.com/johnjanney/divi2gutenberg.git
+git clone https://github.com/johnjanney/block-converter-for-divi.git
 ```
 
 Then activate under **Plugins**. Source checkouts track `main` and may be ahead
@@ -64,7 +64,7 @@ of the last release — see [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Verify
 
-Log in as an administrator and open **Tools → Divi to Gutenberg**. If the screen
+Log in as an administrator and open **Tools → Block Converter for Divi**. If the screen
 loads, the plugin is working.
 
 ---
@@ -73,7 +73,7 @@ loads, the plugin is working.
 
 ### 1. Scan for Divi pages
 
-Go to **Tools → Divi to Gutenberg** and click **Scan for Divi Pages**.
+Go to **Tools → Block Converter for Divi** and click **Scan for Divi Pages**.
 
 The plugin searches all `page` and `post` records with status *published*,
 *draft*, *private*, or *pending* and lists everything that either **contains
@@ -222,7 +222,7 @@ exists.
 
 ## Troubleshooting
 
-**"Tools → Divi to Gutenberg" doesn't appear**
+**"Tools → Block Converter for Divi" doesn't appear**
 You are not an administrator, or the plugin is not activated. The menu requires
 the `manage_options` capability.
 
@@ -309,7 +309,7 @@ wp post meta delete <POST_ID> _d2g_backup_date
 - Known gaps and risks — [`BRIEF.md`](BRIEF.md#7-known-gaps--risk-register)
 - Unresolved design decisions — [`OPENQUESTIONS.md`](OPENQUESTIONS.md)
 - Release history — [`CHANGELOG.md`](CHANGELOG.md)
-- Issues — https://github.com/johnjanney/divi2gutenberg/issues
+- Issues — https://github.com/johnjanney/block-converter-for-divi/issues
 
 When reporting a conversion bug, include the original Divi shortcode (the
 Preview modal's left pane), the block markup produced (right pane), and your

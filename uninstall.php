@@ -1,6 +1,6 @@
 <?php
 /**
- * Uninstall handler for Divi to Gutenberg Converter.
+ * Uninstall handler for Block Converter for Divi.
  *
  * Runs when the plugin is deleted through the WordPress admin — not on
  * deactivation.
@@ -15,7 +15,7 @@
  * The preference itself is always cleaned up — it is a setting, not user data,
  * and a reinstall should start from the safe default again.
  *
- * @package divi2gutenberg
+ * @package block-converter-for-divi
  */
 
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
