@@ -1,12 +1,10 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.1.0` committed and pushed. **Not released** — not tagged, no
-ZIP built, and two things block publication: `Tested up to` is still a
-placeholder rather than a test result (`OPENQUESTIONS.md` Q18, Q23), and the
-repository is private, so every public URL this plugin ships still 404s for
-users (Q25).
+**Status:** `2.1.0` committed and pushed; the repository is public. **Not
+released** — not tagged and no ZIP built. One thing still blocks publication:
+`Tested up to` is a placeholder rather than a test result, and no converted page
+has been opened in a real block editor (`OPENQUESTIONS.md` Q18, Q23).
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
-*(private — the rename in Q21 is done, but the link does not resolve publicly)*
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
 **Last brief update:** 2026-08-05
@@ -91,10 +89,13 @@ Gutenberg block comment markup → `wp_update_post()`.
 
 **Key classes**
 
-- **`D2G_Parser`** — regex-driven tokenizer over a fixed whitelist of known
-  `et_pb_*` tags. Handles nesting via depth counting, self-closing tags,
-  unmatched closers, smart-quote entity normalization, and wraps loose text in
-  synthetic `__text__` nodes. Static helper `has_divi_content()`.
+- **`D2G_Parser`** — regex-driven tokenizer matching the *shape*
+  `et_pb_[a-z0-9_]+`, so a module with no renderer is still tokenized rather
+  than left on the page as shortcode text; `is_known_tag()` distinguishes the
+  two. Handles nesting via depth counting (bounded at `MAX_DEPTH`),
+  self-closing tags, unmatched closers, smart-quote entity normalization, and
+  wraps loose text in synthetic `__text__` nodes. Static helper
+  `has_divi_content()` requires a syntactically complete tag, not a prefix.
 - **`D2G_Style_Mapper`** — translation of Divi style attributes. Only
   `text_align_class()` is wired into conversion today; see §5.1 for what that
   means in practice and why the rest is not connected.
