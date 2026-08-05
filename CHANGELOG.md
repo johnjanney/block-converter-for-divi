@@ -226,6 +226,27 @@ on the version under test. That assertion cannot be made offline: the fixture
 suite assumes a current install, and core's own validator only knows the block
 library npm ships.
 
+### Fixed — found by driving the admin screen in a browser
+
+- **A successful conversion said nothing.** `#d2g-status` is the screen's
+  `aria-live` region, and only *errors* wrote to it — so a conversion that
+  failed was announced and one that succeeded was silent. The row changed
+  colour, which is no use to a screen reader.
+- **Conversion warnings never reached the user unless they previewed first.**
+  The server returns them with every conversion response and the browser
+  discarded them: they were rendered into the preview dialog and nowhere else.
+  Anyone who clicked Convert directly — the most direct path through the
+  screen — learned nothing about what could not be carried over, which is the
+  entire point of the loss reporting added earlier in this release. Warnings now
+  appear in a persistent region below the status line, deduplicated, for both
+  single and batch conversions.
+- **Closing the preview dialog dumped keyboard users at the top of the page.**
+  Opening the preview disables the row's buttons while the request runs, and
+  disabling the focused element moves focus to `<body>` — so the dialog captured
+  "where focus came from" *after* it had already been lost, and returned it
+  there. The control to restore focus to is now passed in explicitly, with a
+  fallback for when it has since been disabled.
+
 ### Fixed — found by the new block validator
 
 Three defects that four rounds of static checks had missed, found within

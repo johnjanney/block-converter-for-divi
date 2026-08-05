@@ -16,3 +16,6 @@
 /tests/live/stored-output.json
 # Local wp-env overrides (e.g. pinning a different WordPress version).
 /.wp-env.override.json
+tests/e2e/.auth.json
+test-results/
+playwright-report/

@@ -134,15 +134,49 @@ measurement rather than a claim.
 | `--no-blocks` | Skip layer 4 (no Node needed) |
 | `--require-validator` | Fail if layer 4 could not run. Used by `bin/build-zip.sh` and CI |
 
+## The browser suite
+
+```bash
+bash bin/e2e.sh
+```
+
+The Tools screen driven by Playwright against `wp-env`. It exists mainly for the
+batch runner: that is where 2.0.0 counted failed pages as successes and told the
+user everything had converted, and nothing tested it.
+
+Its central test seeds four pages, selects three, then edits one of them behind
+the browser's back — via a test-only mu-plugin — so its source token goes stale
+and the endpoint refuses it. The batch must then report **two converted, one
+failed**, and name the page that failed.
+
+The browser runs inside Playwright's own container. That is not a preference:
+Chromium needs system libraries this project cannot assume, and pinning the
+container to the installed Playwright version means the run does not depend on
+the host. It needs `--network host`, so Linux (including GitHub runners).
+
+Two real defects came out of writing it, both invisible to every other layer:
+
+- A successful single conversion set **no status message at all**. `#d2g-status`
+  is the screen's `aria-live` region, so a failed conversion spoke and a
+  successful one was silent.
+- Conversion warnings were returned by the server and **dropped by the browser**.
+  They were rendered for a preview and nowhere else, so anyone who clicked
+  Convert without previewing never learned what could not be carried over —
+  which is the most direct path through the screen.
+
+Each test re-seeds first. That is not tidiness: conversions are not reversible
+from the next test's point of view, and without it the restore test kept finding
+a page the convert test had already converted.
+
 ## What runs where
 
-| | Offline suite | Live suite | Version matrix |
-| --- | --- | --- | --- |
-| Command | `php tests/run.php` | `bash bin/live-check.sh` | `bash bin/wp-matrix.sh` |
-| Needs | PHP (Node 22 for layer 4) | Docker, Node 22 | Docker, Node 22 |
-| Takes | ~3s | ~2 min | ~15 min |
-| CI | every push and PR | every push and PR | manual, from the Actions tab |
-| Release gate | `bin/build-zip.sh` | — | before a release |
+| | Offline suite | Live suite | Browser suite | Version matrix |
+| --- | --- | --- | --- | --- |
+| Command | `php tests/run.php` | `bash bin/live-check.sh` | `bash bin/e2e.sh` | `bash bin/wp-matrix.sh` |
+| Needs | PHP (Node 22 for layer 4) | Docker, Node 22 | Docker, Node 22 | Docker, Node 22 |
+| Takes | ~3s | ~2 min | ~1 min | ~15 min |
+| CI | every push and PR | every push and PR | every push and PR | manual, from the Actions tab |
+| Release gate | `bin/build-zip.sh` | — | — | before a release |
 
 Without `--require-validator`, a missing Node harness prints a loud
 `NOT RUN — block validity is therefore UNPROVEN` and continues. It never
@@ -220,7 +254,8 @@ Stated here so a green run is not read as more than it is:
   change). Older `@wordpress/block-library` majors are published, so per-version
   JS validation is feasible; it is not built. **Q18**.
 - **Multisite**, where KSES strips markup for any non-super-admin. **Q15**.
-- **The admin JavaScript**, including batch result handling.
+- **The admin screen beyond the paths above** — pagination, per-page sizes, the
+  select-all checkbox, and multi-page batches are not covered.
 - **Uninstall.**
 - **A corpus of real Divi pages.** Every fixture here was written by someone who
   already knew what the converter does.

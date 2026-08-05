@@ -5,6 +5,10 @@
     "WP_DEBUG": true,
     "WP_DEBUG_LOG": true,
     "WP_DEBUG_DISPLAY": false,
-    "WP_DISABLE_FATAL_ERROR_HANDLER": true
+    "WP_DISABLE_FATAL_ERROR_HANDLER": true,
+    "D2G_E2E": true
+  },
+  "mappings": {
+    "wp-content/mu-plugins/d2g-e2e.php": "./tests/e2e/mu-plugin.php"
   }
 }
