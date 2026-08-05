@@ -58,7 +58,9 @@ class D2G_Admin {
                         <option value="date-desc"><?php esc_html_e( 'Date (Newest)', 'divi2gutenberg' ); ?></option>
                         <option value="date-asc"><?php esc_html_e( 'Date (Oldest)', 'divi2gutenberg' ); ?></option>
                         <option value="type-asc"><?php esc_html_e( 'Type (A–Z)', 'divi2gutenberg' ); ?></option>
+                        <option value="type-desc"><?php esc_html_e( 'Type (Z–A)', 'divi2gutenberg' ); ?></option>
                         <option value="status-asc"><?php esc_html_e( 'Status (A–Z)', 'divi2gutenberg' ); ?></option>
+                        <option value="status-desc"><?php esc_html_e( 'Status (Z–A)', 'divi2gutenberg' ); ?></option>
                     </select>
                 </div>
                 <div class="d2g-filter-group">
@@ -76,10 +78,11 @@ class D2G_Admin {
                 <thead>
                     <tr>
                         <th class="check-column"><input type="checkbox" id="d2g-select-all" /></th>
-                        <th class="d2g-sortable" data-sort="title"><?php esc_html_e( 'Title', 'divi2gutenberg' ); ?></th>
-                        <th class="d2g-sortable" data-sort="type"><?php esc_html_e( 'Type', 'divi2gutenberg' ); ?></th>
-                        <th class="d2g-sortable" data-sort="status"><?php esc_html_e( 'Status', 'divi2gutenberg' ); ?></th>
-                        <th><?php esc_html_e( 'Date', 'divi2gutenberg' ); ?></th>
+                        <th class="d2g-sortable" data-sort="title"><span><?php esc_html_e( 'Title', 'divi2gutenberg' ); ?></span></th>
+                        <th class="d2g-sortable" data-sort="type"><span><?php esc_html_e( 'Type', 'divi2gutenberg' ); ?></span></th>
+                        <th class="d2g-sortable" data-sort="status"><span><?php esc_html_e( 'Status', 'divi2gutenberg' ); ?></span></th>
+                        <th class="d2g-sortable" data-sort="date"><span><?php esc_html_e( 'Date', 'divi2gutenberg' ); ?></span></th>
+                        <th><?php esc_html_e( 'Backup', 'divi2gutenberg' ); ?></th>
                         <th><?php esc_html_e( 'Actions', 'divi2gutenberg' ); ?></th>
                     </tr>
                 </thead>

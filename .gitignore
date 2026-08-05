@@ -1,0 +1,4 @@
+# Build artefacts. Release ZIPs live in dist/ locally and are published
+# permanently as GitHub release assets on their tag.
+/dist/
+/build/
