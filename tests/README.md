@@ -168,15 +168,41 @@ Each test re-seeds first. That is not tidiness: conversions are not reversible
 from the next test's point of view, and without it the restore test kept finding
 a page the convert test had already converted.
 
+## The multisite suite
+
+```bash
+bash bin/multisite-check.sh            # build a network, test, leave it up
+bash bin/multisite-check.sh --restore  # rebuild as single-site afterwards
+```
+
+Multisite is the one configuration where `manage_options` is not the whole
+story. Any site administrator has it and can reach this plugin, but only *super*
+admins hold `unfiltered_html` — so everyone else's writes go through KSES.
+
+That is not theoretical. Measured on 7.0.2, a Divi Code module holding a script
+converts to a `core/html` block and KSES stores the JavaScript as visible text
+with the `<script>` tags gone and any `<iframe>` deleted, while reporting
+success. The suite builds a real network, creates a genuine non-super-admin site
+administrator, and checks that such a conversion is refused with the loss named,
+that the page is untouched, that ordinary pages still convert, and that a super
+admin is unaffected.
+
+The network is built from scratch each time, because converting an install to
+multisite is one-way and the other suites expect single-site.
+
+> An early version of this suite fooled itself into passing: it created its
+> fixture *as* the site administrator, so KSES stripped the script on the way in
+> and the converter never saw it. If you add a case here, seed it as user 1.
+
 ## What runs where
 
-| | Offline suite | Live suite | Browser suite | Version matrix |
-| --- | --- | --- | --- | --- |
-| Command | `php tests/run.php` | `bash bin/live-check.sh` | `bash bin/e2e.sh` | `bash bin/wp-matrix.sh` |
-| Needs | PHP (Node 22 for layer 4) | Docker, Node 22 | Docker, Node 22 | Docker, Node 22 |
-| Takes | ~3s | ~2 min | ~1 min | ~15 min |
-| CI | every push and PR | every push and PR | every push and PR | manual, from the Actions tab |
-| Release gate | `bin/build-zip.sh` | — | — | before a release |
+| | Offline | Live | Browser | Multisite | Version matrix |
+| --- | --- | --- | --- | --- | --- |
+| Command | `php tests/run.php` | `bin/live-check.sh` | `bin/e2e.sh` | `bin/multisite-check.sh` | `bin/wp-matrix.sh` |
+| Needs | PHP (Node 22 for layer 4) | Docker, Node 22 | Docker, Node 22 | Docker, Node 22 | Docker, Node 22 |
+| Takes | ~3s | ~2 min | ~1 min | ~3 min | ~15 min |
+| CI | every push | every push | every push | every push | manual |
+| Release gate | `bin/build-zip.sh` | — | — | — | before a release |
 
 Without `--require-validator`, a missing Node harness prints a loud
 `NOT RUN — block validity is therefore UNPROVEN` and continues. It never
@@ -253,7 +279,7 @@ Stated here so a green run is not read as more than it is:
   does change between versions (the Cover fix in 2.2.0 is exactly such a
   change). Older `@wordpress/block-library` majors are published, so per-version
   JS validation is feasible; it is not built. **Q18**.
-- **Multisite**, where KSES strips markup for any non-super-admin. **Q15**.
+
 - **The admin screen beyond the paths above** — pagination, per-page sizes, the
   select-all checkbox, and multi-page batches are not covered.
 - **Uninstall.**

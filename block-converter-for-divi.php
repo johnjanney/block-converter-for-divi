@@ -562,6 +562,90 @@ Backups are the only way to restore a converted page. Once the plugin is removed
     }
 
     /**
+     * What WordPress would strip from this content on the way into the database.
+     *
+     * wp_update_post() runs post_content through wp_filter_post_kses for any
+     * user without `unfiltered_html`. Single-site administrators have that
+     * capability; on multisite **only super admins do**, so a site administrator
+     * — who has `manage_options` and can therefore reach this plugin — writes
+     * through KSES.
+     *
+     * Measured, on WordPress 7.0.2, that is not a theoretical concern. A Divi
+     * Code module holding a tracking script converts to:
+     *
+     *     <!-- wp:html --><script>…</script><iframe src="…"></iframe><!-- /wp:html -->
+     *
+     * and KSES stores:
+     *
+     *     <!-- wp:html -->…<!-- /wp:html -->
+     *
+     * The script tags are gone and their JavaScript is left as visible text on
+     * the page; the iframe is gone entirely. That is exactly the silent content
+     * destruction this plugin exists to avoid, so the conversion is refused and
+     * the loss is named rather than performed.
+     *
+     * Writing directly with $wpdb to dodge KSES was considered and rejected:
+     * the capability exists to stop users storing markup the site does not
+     * trust them with, and a plugin is not entitled to overrule it.
+     *
+     * @return string[] Human-readable descriptions of what would be lost.
+     */
+    private static function kses_losses( $content ) {
+        if ( current_user_can( 'unfiltered_html' ) ) {
+            return [];
+        }
+
+        $filtered = wp_kses_post( $content );
+
+        // KSES rewrites `<br/>` as `<br />`. That is cosmetic — core's block
+        // validator tokenizes rather than string-compares, and 19 of the 24
+        // fixtures KSES touches differ only in this way. Treating it as damage
+        // would refuse almost every conversion on multisite for no reason.
+        $normalise = static function ( $markup ) {
+            return preg_replace( '#\s*/>#', '/>', (string) $markup );
+        };
+
+        if ( $normalise( $filtered ) === $normalise( $content ) ) {
+            return [];
+        }
+
+        $losses = [];
+
+        foreach ( [ 'script', 'iframe', 'object', 'embed', 'form', 'style' ] as $tag ) {
+            $before = preg_match_all( '#<' . $tag . '\b#i', $content );
+            $after  = preg_match_all( '#<' . $tag . '\b#i', $filtered );
+
+            if ( $before > $after ) {
+                $losses[] = sprintf(
+                    /* translators: 1: number of elements, 2: HTML tag name. */
+                    _n( '%1$d <%2$s> element', '%1$d <%2$s> elements', $before - $after, 'block-converter-for-divi' ),
+                    $before - $after,
+                    $tag
+                );
+            }
+        }
+
+        if ( ! $losses ) {
+            // Something changed that is not a whole element — an inline style
+            // declaration, or an attribute KSES does not allow.
+            $losses[] = __( 'some inline styles or HTML attributes', 'block-converter-for-divi' );
+        }
+
+        return $losses;
+    }
+
+    /**
+     * The message shown when a write would lose content to KSES.
+     */
+    private static function kses_refusal( array $losses ) {
+        return sprintf(
+            /* translators: %s: comma-separated list of what would be removed, e.g. "1 <script> element". */
+            __( 'This would remove content. Your account cannot save unfiltered HTML — on a multisite network only super admins can — so WordPress would strip %s from this page as it saved. Nothing has been changed. Ask a super admin to run this conversion, or remove that content from the page first.', 'block-converter-for-divi' ),
+            implode( ', ', $losses )
+        );
+    }
+
+    /**
      * AJAX: Convert a page and save.
      */
     public function ajax_convert_page() {
@@ -629,6 +713,15 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         if ( '' === trim( $converted ) ) {
             self::release_lock( $post_id, $lock );
             wp_send_json_error( __( 'Conversion produced no content. Nothing was saved.', 'block-converter-for-divi' ) );
+        }
+
+        // Refuse rather than let WordPress quietly strip the result. See
+        // kses_losses(): on multisite a site administrator writes through KSES,
+        // and a page with a Divi Code module loses its scripts and iframes.
+        $losses = self::kses_losses( $converted );
+        if ( $losses ) {
+            self::release_lock( $post_id, $lock );
+            wp_send_json_error( self::kses_refusal( $losses ) );
         }
 
         // wp_update_post() unslashes what it is given, so content that is not
@@ -813,6 +906,16 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         $lock = self::acquire_lock( $post_id );
         if ( ! $lock ) {
             wp_send_json_error( __( 'Another operation on this post is already running.', 'block-converter-for-divi' ) );
+        }
+
+        // A restore writes the original Divi content, which can hold scripts in
+        // a Code module exactly as the converted version can. Restoring through
+        // KSES would hand back something that is not the backup, while
+        // reporting success — so it is refused on the same terms.
+        $losses = self::kses_losses( $backup );
+        if ( $losses ) {
+            self::release_lock( $post_id, $lock );
+            wp_send_json_error( self::kses_refusal( $losses ) );
         }
 
         // Slashed for the same reason as the conversion write: wp_update_post()

@@ -149,6 +149,69 @@ d2g_ok( 'the write lock is exclusive', $locked[0] && ! $locked[1],
 
 wp_delete_post( $post_id, true );
 
+// ------------------------------------------------------- KSES / multisite --
+//
+// wp_update_post() filters post_content through KSES for any user without
+// `unfiltered_html`. Single-site admins have it; on multisite only super admins
+// do, so a site administrator — who has manage_options and can reach this
+// plugin — writes through the filter.
+//
+// Measured on 7.0.2: a Divi Code module holding a script converts to a
+// core/html block, and KSES stores the JavaScript as visible text with the
+// <script> tags removed and any <iframe> deleted. The plugin must refuse.
+//
+// The capability is removed with a filter rather than by building a network,
+// because KSES keys off exactly this check — the condition is identical.
+
+$deny_unfiltered = static function ( $caps, $cap ) {
+    if ( 'unfiltered_html' === $cap ) {
+        return [ 'do_not_allow' ];
+    }
+    return $caps;
+};
+
+add_filter( 'map_meta_cap', static function ( $caps, $cap ) use ( $deny_unfiltered ) {
+    return $deny_unfiltered( $caps, $cap );
+}, 10, 2 );
+
+d2g_ok( 'the test really did remove unfiltered_html', ! current_user_can( 'unfiltered_html' ) );
+
+$dangerous = '[et_pb_code]<script>window.track=1;</script><iframe src="https://maps.example.com/x"></iframe>[/et_pb_code]';
+$id        = d2g_make_post( $dangerous, 'kses: code module' );
+$before    = get_post( $id )->post_content;
+
+$refused = d2g_call( 'd2g_convert_page', [
+    'post_id' => $id, 'backup' => 'yes', 'source_hash' => md5( $before ),
+] );
+
+d2g_ok( 'a conversion that KSES would strip is refused',
+    isset( $refused['success'] ) && false === $refused['success'],
+    'response: ' . wp_json_encode( $refused ) );
+
+d2g_ok( 'the refusal names what would have been removed',
+    isset( $refused['data'] ) && false !== strpos( (string) $refused['data'], 'script' ),
+    'message: ' . ( $refused['data'] ?? '(none)' ) );
+
+d2g_ok( 'the page is left exactly as it was', get_post( $id )->post_content === $before );
+
+// An ordinary page must still convert: refusing everything on multisite would
+// be its own kind of broken.
+$safe_id   = d2g_make_post( '[et_pb_text]<p>Ordinary</p>[/et_pb_text]', 'kses: ordinary' );
+$safe_hash = md5( get_post( $safe_id )->post_content );
+$allowed   = d2g_call( 'd2g_convert_page', [
+    'post_id' => $safe_id, 'backup' => 'yes', 'source_hash' => $safe_hash,
+] );
+
+d2g_ok( 'an ordinary page still converts without unfiltered_html',
+    ! empty( $allowed['success'] ),
+    'response: ' . wp_json_encode( $allowed ) );
+
+wp_delete_post( $id, true );
+wp_delete_post( $safe_id, true );
+
+remove_all_filters( 'map_meta_cap' );
+d2g_ok( 'unfiltered_html is restored for the rest of the run', current_user_can( 'unfiltered_html' ) );
+
 // -------------------------------------------- every fixture, through the DB --
 //
 // The converter's output is already checked offline. What this adds is the

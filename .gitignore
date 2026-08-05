@@ -14,6 +14,7 @@
 /node_modules/
 # Written by the live suite from the database; regenerated on every run.
 /tests/live/stored-output.json
+/tests/live/kses-filtered.json
 # Local wp-env overrides (e.g. pinning a different WordPress version).
 /.wp-env.override.json
 tests/e2e/.auth.json

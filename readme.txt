@@ -199,6 +199,11 @@ the most useful thing to hear about.
   it is converting, so it cannot overwrite an edit made after you scanned.
 * Two simultaneous conversions of the same page can no longer both proceed.
 * Restore now puts Divi's builder settings back exactly as they were found.
+* Multisite: fixed pages losing scripts and embedded frames when converted by a
+  site administrator. On a network, only super admins may save unfiltered HTML,
+  so WordPress was stripping that content as it saved — and the conversion still
+  reported success. Such conversions are now refused, and tell you exactly what
+  would have been removed and who can run them instead.
 * Fixed conversion warnings not being shown unless you opened the preview
   first. Converting directly now tells you what needs rebuilding by hand.
 * Fixed a successful conversion not being announced to screen readers, and

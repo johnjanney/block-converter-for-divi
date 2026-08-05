@@ -23,6 +23,9 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# shellcheck source=bin/_wp-env.sh
+. "${ROOT}/bin/_wp-env.sh"
+
 PLUGIN_PATH="wp-content/plugins/block-converter-for-divi"
 OVERRIDE="${ROOT}/.wp-env.override.json"
 RESULTS="$(mktemp)"
@@ -68,9 +71,9 @@ EOF
 
     # A clean environment per version. Reusing one carries wp-content forward,
     # and a theme from a newer release fatals on an older core.
-    echo "y" | npx wp-env destroy >/dev/null 2>&1 || true
+    d2g_wp_env_reset
 
-    if ! npx wp-env start >/dev/null 2>&1; then
+    if ! d2g_wp_env_start; then
         echo "  ERROR: the environment would not start"
         printf '%s\tENV FAILED\t-\t-\n' "$VERSION" >> "$RESULTS"
         continue

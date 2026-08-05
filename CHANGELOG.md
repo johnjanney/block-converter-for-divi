@@ -226,6 +226,37 @@ on the version under test. That assertion cannot be made offline: the fixture
 suite assumes a current install, and core's own validator only knows the block
 library npm ships.
 
+### Fixed — content loss on multisite
+
+On a multisite network only super admins hold `unfiltered_html`, while any site
+administrator holds `manage_options` and can therefore reach this plugin. Every
+write by such a user goes through KSES.
+
+Measured on WordPress 7.0.2, with a real network and a real non-super-admin site
+administrator: a Divi Code module holding a tracking script converts to a
+`core/html` block, and KSES stores
+
+    <!-- wp:html --> window.track=1; <!-- /wp:html -->
+
+where the conversion produced
+
+    <!-- wp:html --> <script>window.track=1;</script><iframe src="…"></iframe> <!-- /wp:html -->
+
+The script tags are gone and their JavaScript is left as visible text on the
+published page; the iframe is deleted. The conversion reported success.
+
+Conversion and restore now compare their output against what KSES would store
+and **refuse rather than write**, naming the elements that would be removed.
+Harmless differences are excluded: KSES rewrites `<br/>` as `<br />`, which
+accounts for 19 of the 24 fixtures it touches and which core's block validator
+tolerates — treating those as damage would have refused nearly every conversion
+on a network for no reason.
+
+Bypassing KSES with a direct database write was considered and rejected. The
+capability exists to stop users storing markup the site does not trust them
+with, and a plugin is not entitled to overrule it. A super admin can convert the
+same page, and site administrators can still convert ordinary pages.
+
 ### Fixed — found by driving the admin screen in a browser
 
 - **A successful conversion said nothing.** `#d2g-status` is the screen's
