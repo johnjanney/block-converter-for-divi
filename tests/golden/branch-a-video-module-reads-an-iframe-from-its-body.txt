@@ -1,0 +1,5 @@
+<!-- wp:embed {"url":"https://vimeo.com/12345","type":"video","providerNameSlug":"vimeo"} -->
+<figure class="wp-block-embed is-type-video is-provider-vimeo wp-block-embed-vimeo"><div class="wp-block-embed__wrapper">
+https://vimeo.com/12345
+</div></figure>
+<!-- /wp:embed -->

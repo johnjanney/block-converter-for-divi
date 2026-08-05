@@ -1,0 +1,3 @@
+<!-- wp:html -->
+<object data="https://example.com/f.pdf"></object>
+<!-- /wp:html -->

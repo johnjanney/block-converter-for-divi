@@ -1,0 +1,27 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:image {"sizeSlug":"large","linkDestination":"none"} -->
+<figure class="wp-block-image size-large"><img src="https://example.com/ada.jpg" alt="Ada"/></figure>
+<!-- /wp:image -->
+
+<!-- wp:heading {"level":3} -->
+<h3>Ada</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"fontSize":"small"} -->
+<p class="has-small-font-size"><em>Engineer</em></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p>Bio.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:social-links -->
+<ul class="wp-block-social-links">
+<!-- wp:social-link {"url":"https://facebook.com/ada","service":"facebook"} /-->
+
+</ul>
+<!-- /wp:social-links -->
+
+</div>
+<!-- /wp:group -->

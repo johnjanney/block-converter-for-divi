@@ -1,0 +1,11 @@
+<!-- wp:paragraph -->
+<p>Before</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:html -->
+<!-- keepme -->
+<!-- /wp:html -->
+
+<!-- wp:paragraph -->
+<p>After</p>
+<!-- /wp:paragraph -->

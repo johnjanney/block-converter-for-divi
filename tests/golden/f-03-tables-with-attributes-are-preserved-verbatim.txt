@@ -1,0 +1,6 @@
+<!-- wp:html -->
+<table><tr><td colspan="2" style="color:red">a</td></tr></table>
+<!-- /wp:html -->
+
+===== WARNINGS =====
+[table] A table used HTML attributes that the core Table block does not store. It was preserved as a Custom HTML block instead.

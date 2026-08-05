@@ -1,0 +1,3 @@
+<!-- wp:paragraph -->
+<p>Hello <strong>world</strong> and <a href="/x">a link</a>.</p>
+<!-- /wp:paragraph -->

@@ -1,0 +1,12 @@
+<!-- wp:group {"style":{"color":{"background":"#123456"}}} -->
+<div class="wp-block-group has-background" style="background-color:#123456">
+<!-- wp:heading {"level":2} -->
+<h2>Act</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>Now</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->

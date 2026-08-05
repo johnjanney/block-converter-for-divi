@@ -1,0 +1,3 @@
+<!-- wp:html -->
+<script>var re = /\d+\n/; var s = "a\b";</script>
+<!-- /wp:html -->

@@ -1,0 +1,12 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":2} -->
+<h2><a href="https://example.com/x" target="_blank" rel="noopener noreferrer">Linked</a></h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>B</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->

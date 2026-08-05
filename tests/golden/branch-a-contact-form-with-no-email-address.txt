@@ -1,0 +1,19 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":3} -->
+<h3>Enquiries</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p><em>This was a Divi contact form. WordPress has no stable core form block, so rebuild it with a form plugin using the fields below.</em></p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p><em>Submit button label: Send</em></p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_contact_form] Contact forms cannot be converted to core blocks — WordPress has no stable form block. The fields and recipient address were preserved as text so the form can be rebuilt with a form plugin.

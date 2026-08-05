@@ -1,0 +1,13 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:quote -->
+<blockquote class="wp-block-quote">
+<!-- wp:paragraph -->
+<p>It worked.</p>
+<!-- /wp:paragraph -->
+
+<cite><strong>Ada</strong>, Analytical Ltd</cite></blockquote>
+<!-- /wp:quote -->
+
+</div>
+<!-- /wp:group -->

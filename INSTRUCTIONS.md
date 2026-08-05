@@ -87,7 +87,12 @@ greyed out and a **Restore** button available.
 
 - **Show** — limit to pages only, posts only, or both.
 - **Sort by** — title, date, type, or status, ascending or descending.
-- **Per page** — 20, 50, 100, or all.
+- **Per page** — 20, 50, 100, or all. "All" is capped at 500 rows so the scan
+  cannot exhaust memory on a large site; when the cap applies, the status line
+  above the table says so and gives the true total. Work through the pages with
+  a smaller per-page setting to reach everything beyond the cap. Site owners who
+  know their site is small can raise the cap with the `d2g_scan_hard_cap`
+  filter.
 - **Column headers** — click Title, Type, Status, or Date to sort by it; click
   the active column again to reverse the direction.
 
@@ -120,7 +125,7 @@ The plugin will:
 - Delete the `_et_pb_use_builder` and `_et_pb_old_content` meta so WordPress
   opens the page in the block editor rather than the Divi Builder
 
-The row turns green and the button reads **Done**.
+The row turns green and the button reads **Converted**.
 
 ### 4. Convert several pages at once
 
@@ -186,8 +191,12 @@ column; pages without one show `—` and no button.
 Restoring will:
 
 - Replace the current Gutenberg content with the original Divi shortcodes
-- Set `_et_pb_use_builder` back to `on`, so the page opens in the Divi Builder
-  again
+- Put the Divi builder meta back exactly as the backup found it. Both
+  `_et_pb_use_builder` and `_et_pb_old_content` are cleared first, then only the
+  rows that existed before the conversion are written back — so a key that was
+  absent stays absent and one that held an empty value comes back empty. Pages
+  backed up by version 1.x predate that snapshot; for those, restore falls back
+  to setting `_et_pb_use_builder` to `on`
 - **Keep** the backup, so the page can be converted and restored again
 
 The row turns yellow and the Convert button becomes available again.
@@ -309,7 +318,11 @@ To remove a single page's backup without touching the setting:
 ```bash
 wp post meta delete <POST_ID> _d2g_divi_backup
 wp post meta delete <POST_ID> _d2g_backup_date
+wp post meta delete <POST_ID> _d2g_builder_meta
 ```
+
+All three keys belong to one snapshot. Deleting only the first two leaves
+`_d2g_builder_meta` behind as an orphan row.
 
 ---
 

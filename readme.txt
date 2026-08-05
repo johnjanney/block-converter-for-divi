@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,11 +75,20 @@ Design *intent*, not a pixel copy. Specifically, these are preserved: text
 alignment, section and call-to-action background colours, button background and
 text colours, column widths, divider colours, and heading levels.
 
-These are **not** preserved: padding and margin, max-width, borders, border
-radii, box shadows, fonts, font sizes, line heights, module-level custom CSS,
-hover states, animations, and per-breakpoint responsive spacing. Divi renders
-most of these from its own stylesheet, which stops applying when you leave the
-theme, so budget time for theme-side styling after migrating.
+These are **not** preserved: padding and margin, max-width and min-height,
+borders and border radii, box and text shadows, fonts, font sizes, line heights,
+letter spacing, background gradients and parallax, module-level custom CSS,
+module IDs and classes, hover states, animations and filters, positioning and
+transforms, per-device visibility, and per-breakpoint responsive overrides. Divi
+renders most of these from its own stylesheet, which stops applying when you
+leave the theme, so budget time for theme-side styling after migrating.
+
+The preview tells you which of these a page actually uses, module by module, so
+you know what needs rebuilding before you commit to converting. Interactive
+modules also report the behaviour that does not survive: tabs become stacked
+sections with every panel visible, sliders and video sliders show all their
+slides at once, accordions become independent Details blocks that no longer
+close each other, and counters become static text.
 
 = Before you convert =
 
@@ -98,6 +107,11 @@ and check the result before running a batch.
 You need administrator access (the `manage_options` capability). Divi itself
 does not need to be active for conversion to work, but leave it installed until
 you are satisfied with the results — unconverted pages need it to render.
+
+The plugin runs on PHP 7.4 and above, but 7.4 and 8.1 have both reached end of
+life and no longer receive security fixes. If your host offers a currently
+supported PHP branch, migrate to it — that is worth doing for the site as a
+whole, not just for this plugin.
 
 == Frequently Asked Questions ==
 
@@ -150,6 +164,39 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.2.0 =
+* Security: fixed shortcode attribute values being able to inject HTML
+  attributes into converted markup. A crafted image or button alignment could
+  close the class attribute it was written into and add an event handler.
+  Alignment values are now restricted to the ones the blocks actually support.
+* Security: fixed colour values being able to inject extra CSS declarations.
+  Colours are now validated against the CSS colour formats.
+* Fixed Fullwidth Header packing its whole body into one paragraph block,
+  producing nested paragraphs that the editor reports as invalid.
+* Fixed modules nested inside another module — a button inside a text module,
+  for example — being dropped from the converted page entirely.
+* Fixed table captions being deleted. Tables that the Table block cannot hold
+  whole are now preserved as Custom HTML instead.
+* Fixed HTML comments being deleted.
+* Fixed a bar counter's body being published as visible escaped markup.
+* Fixed a square bracket inside a shortcode attribute value truncating the tag
+  and leaving stray characters on the page.
+* Fixed curly quotation marks in your text being rewritten as straight quotes.
+* Fixed ampersands and other special characters in headings, button labels and
+  image alt text being published as `&amp;` instead of `&`.
+* Added reporting for design settings that cannot be carried over — spacing,
+  borders, shadows, fonts, animations, custom CSS, per-device visibility and
+  more — and for interactive behaviour lost by tabs, sliders and accordions.
+  The preview now names what will need rebuilding by hand.
+* Conversion now refuses to run unless it can confirm which version of the page
+  it is converting, so it cannot overwrite an edit made after you scanned.
+* Two simultaneous conversions of the same page can no longer both proceed.
+* Restore now puts Divi's builder settings back exactly as they were found.
+* Fixed every converted Cover block (section and slide backgrounds) being
+  reported by the editor as containing invalid content.
+* Fixed coloured Dividers and Comments blocks being reported as invalid.
+* The plugin no longer loads any of its conversion code on front-end requests.
 
 = 2.1.0 =
 * Fixed backslashes being stripped from content on backup, conversion, and
@@ -229,6 +276,14 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.2.0 =
+Security and content-integrity release. Upgrade before converting anything.
+Crafted Divi content could previously inject an HTML attribute into a converted
+page, and several kinds of content — nested modules, table captions, HTML
+comments, counter labels — were being dropped silently. Pages already converted
+with 2.1.0 are not changed by upgrading; use Restore and convert again to pick
+up the fixes.
 
 = 2.1.0 =
 Important correctness and data-safety fixes. Converting twice can no longer

@@ -1,0 +1,13 @@
+{
+  "name": "d2g-block-validator",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Runs converted markup through the real WordPress block parser and validator.",
+  "dependencies": {
+    "@wordpress/block-library": "^10.3.0",
+    "@wordpress/blocks": "^15.25.0",
+    "@wordpress/element": "^8.4.0",
+    "jsdom": "^30.0.1"
+  }
+}

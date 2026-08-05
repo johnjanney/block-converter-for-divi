@@ -1,0 +1,11 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:paragraph -->
+<p><strong>Attr label</strong>: 25%</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_counter] Bar counters became a line of text showing their label and percentage. Core has no animated bar-counter block, so the bar and its animation were not carried over.

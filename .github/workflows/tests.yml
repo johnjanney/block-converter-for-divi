@@ -1,0 +1,110 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The full suite, including the real WordPress block validator. Runs on the
+  # PHP version most hosts are on; the matrix job below covers the rest.
+  full:
+    name: Full suite (PHP 8.3 + real block validation)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, libxml
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: tests/js/package-lock.json
+
+      # `ci` not `install`: the lockfile pins the block library the golden
+      # snapshots were generated against, and a newer one could change what
+      # "valid" means underneath the suite.
+      - name: Install the block validator
+        run: npm --prefix tests/js ci
+
+      # --require-validator turns a missing or broken harness into a failure.
+      # A green run must never mean "block validity went unchecked".
+      - name: Converter suite
+        run: php tests/run.php --require-validator
+
+      # A golden snapshot is only protection if it is committed. If running the
+      # suite rewrites one, the working tree changes and this fails.
+      - name: Golden snapshots are committed and current
+        run: |
+          php tests/run.php --update-golden --no-blocks >/dev/null
+          if ! git diff --quiet -- tests/golden; then
+            echo "::error::Golden snapshots are out of date. Run: php tests/run.php --update-golden"
+            git --no-pager diff -- tests/golden
+            exit 1
+          fi
+
+  # Every PHP version the plugin claims to support. The block validator is
+  # skipped here — it is Node, not PHP, and the full job above covers it.
+  php-matrix:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 7.4 is the declared floor (Requires PHP). The rest are the branches
+        # hosts actually run. A pass proves the converter runs on each; it does
+        # not prove WordPress compatibility, which still needs an install.
+        # See CODEX-REVIEW-RESPONSE.md, N-08.
+        php: [ '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, libxml
+          coverage: none
+
+      - name: Lint every PHP file
+        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 -P4 php -l
+
+      - name: Converter suite
+        run: php tests/run.php --no-blocks
+
+  static-checks:
+    name: Syntax and whitespace
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check the admin script parses
+        run: node --check admin/js/admin.js
+
+      - name: Check the test harness parses
+        run: |
+          node --check tests/js/validate.mjs
+          node --check tests/js/canonical.mjs
+
+      - name: Check the build script parses
+        run: bash -n bin/build-zip.sh
+
+      - name: Reject whitespace errors
+        run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD

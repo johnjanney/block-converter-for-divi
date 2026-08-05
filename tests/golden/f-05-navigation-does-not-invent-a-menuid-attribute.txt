@@ -1,0 +1,4 @@
+<!-- wp:navigation /-->
+
+===== WARNINGS =====
+[et_pb_menu] A menu module became an empty Navigation block. Use the block's toolbar to import classic menu ID 12.

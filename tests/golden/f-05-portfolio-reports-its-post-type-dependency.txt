@@ -1,0 +1,16 @@
+<!-- wp:query {"query":{"postType":"project","perPage":4,"order":"desc","orderBy":"date","taxQuery":{"project_category":[3,5]}}} -->
+<div class="wp-block-query">
+<!-- wp:post-template -->
+<!-- wp:post-featured-image /-->
+
+<!-- wp:post-title /-->
+
+<!-- wp:post-excerpt /-->
+
+<!-- /wp:post-template -->
+
+</div>
+<!-- /wp:query -->
+
+===== WARNINGS =====
+[et_pb_portfolio] A portfolio module became a Query Loop over the "project" post type, which Divi registers. The block will list nothing once Divi is removed unless that post type is registered by something else — migrate the projects to a core post type, or use the d2g_portfolio_post_type filter.

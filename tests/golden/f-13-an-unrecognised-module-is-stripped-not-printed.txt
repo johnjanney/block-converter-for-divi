@@ -1,0 +1,6 @@
+<!-- wp:paragraph -->
+<p>Inner text</p>
+<!-- /wp:paragraph -->
+
+===== WARNINGS =====
+[et_pb_nonesuch] The module "et_pb_nonesuch" has no mapping. Its contents were preserved, but its layout and settings were not.

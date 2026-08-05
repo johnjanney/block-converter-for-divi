@@ -1,0 +1,7 @@
+<!-- wp:paragraph -->
+<p>Text</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:html -->
+<dl><dt>Term</dt><dd>Definition</dd></dl>
+<!-- /wp:html -->

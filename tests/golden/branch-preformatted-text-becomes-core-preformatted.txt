@@ -1,0 +1,4 @@
+<!-- wp:preformatted -->
+<pre class="wp-block-preformatted">line one
+line two</pre>
+<!-- /wp:preformatted -->

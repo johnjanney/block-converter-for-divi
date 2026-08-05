@@ -1,0 +1,20 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:cover {"url":"https://example.com/hero.jpg"} -->
+<div class="wp-block-cover"><img class="wp-block-cover__image-background" alt="" src="https://example.com/hero.jpg" data-object-fit="cover"/><span aria-hidden="true" class="wp-block-cover__background has-background-dim-100 has-background-dim"></span><div class="wp-block-cover__inner-container">
+<!-- wp:heading {"level":2} -->
+<h2>Hero</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>D</p>
+<!-- /wp:paragraph -->
+
+</div></div>
+<!-- /wp:cover -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_slider] A slider became a stack of sections, one per slide. Core has no slider block, so every slide is now shown at once and the auto-advance, arrows and dots are gone.

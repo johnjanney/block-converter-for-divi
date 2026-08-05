@@ -43,11 +43,11 @@ without requiring Divi to remain installed afterward.
 | Detection | Scan `page` and `post` types with status `publish`, `draft`, `private`, `pending` for `[et_pb_` content |
 | Parsing | Full recursive shortcode parser producing an attribute + child tree |
 | Conversion | Map Divi modules to core Gutenberg blocks (see §5) |
-| Style mapping | Translate the Divi design attributes listed in §5.1 to block attributes. Everything else is reported as lost, not silently dropped |
+| Style mapping | Translate the small set of Divi design attributes listed in §5.1 to block attributes. Everything else is **detected and reported** as lost (since 2.2.0), not mapped and not silently dropped |
 | Preview | Side-by-side original vs. converted diff before committing |
 | Single + batch conversion | Convert one page, or a multi-select batch, via AJAX |
 | Backup | Snapshot original Divi content into post meta before overwriting |
-| Restore | Roll a converted page back to its original Divi content and re-enable the builder |
+| Restore | Roll a converted page back to its original Divi content and put the captured builder meta back exactly as it was found |
 | Builder detach | Remove `_et_pb_use_builder` so WordPress opens the block editor |
 | Packaging | Versioned, installable plugin ZIP per release |
 
@@ -71,14 +71,35 @@ LICENSE                       GPL-2.0
 readme.txt                    WordPress.org listing (not yet submitted)
 bin/build-zip.sh              Versioned release packaging
 ├── includes/
+│   ├── load.php                    One dependency-ordered require list, shared
+│   │                               with the test suite
 │   ├── class-d2g-parser.php        Divi shortcode → node tree
-│   ├── class-d2g-converter.php     Node tree → Gutenberg block markup (~1800 LOC)
-│   └── class-d2g-style-mapper.php  Divi attrs → CSS / block attributes
-└── admin/
-    ├── class-d2g-admin.php   Tools › Block Converter for Divi screen markup
-    ├── js/admin.js           Scan, paginate, preview, convert (jQuery + AJAX)
-    └── css/admin.css         Admin screen + preview modal styling
+│   ├── class-d2g-converter.php     Orchestration: dispatch, warnings, recursion
+│   ├── class-d2g-html-converter.php  Free-form HTML → blocks
+│   ├── class-d2g-block-builder.php   Block markup primitives + sanitisers
+│   ├── class-d2g-style-mapper.php  Divi attrs → CSS / block attributes
+│   └── renderers/
+│       ├── class-d2g-module-renderer.php  Abstract base; declares tags()
+│       ├── class-d2g-renderer-layout.php       sections, rows, columns
+│       ├── class-d2g-renderer-text.php         text, code
+│       ├── class-d2g-renderer-media.php        images, video, audio, gallery, maps
+│       ├── class-d2g-renderer-content.php      buttons, blurbs, CTAs, headers…
+│       ├── class-d2g-renderer-interactive.php  toggles, tabs, sliders, counters
+│       ├── class-d2g-renderer-pricing.php      pricing tables
+│       └── class-d2g-renderer-dynamic.php      loops, menus, forms, search
+├── admin/
+│   ├── class-d2g-admin.php   Tools › Block Converter for Divi screen markup
+│   ├── js/admin.js           Scan, paginate, preview, convert (jQuery + AJAX)
+│   └── css/admin.css         Admin screen + preview modal styling
+└── tests/                    See tests/README.md
 ```
+
+Until 2.2.0 everything from `class-d2g-converter.php` down was a single
+2,638-line class: every renderer, a 170-line dispatch switch, the HTML engine
+and the markup primitives. The split was deliberately made *after* the test
+suite could prove it changed nothing — 139 byte-exact golden snapshots, every
+module exercised, and every block validated by WordPress itself. Doing it
+earlier would have been a rewrite with no way to check it.
 
 The `D2G_` / `d2g_` prefixes and the `class-d2g-*.php` filenames predate the
 rename and were kept: the storage keys derived from them hold live backup data
@@ -101,8 +122,25 @@ Gutenberg block comment markup → `wp_update_post()`.
 - **`D2G_Style_Mapper`** — translation of Divi style attributes. Only
   `text_align_class()` is wired into conversion today; see §5.1 for what that
   means in practice and why the rest is not connected.
-- **`D2G_Converter`** — one renderer method per module, recursive, with a
-  fallback that renders children or wraps raw content in `core/html`.
+- **`D2G_Converter`** — the orchestrator. Walks the node tree, dispatches each
+  node to whichever renderer claims its tag, collects the warnings shown in
+  Preview, and provides the services renderers call back into (recursion, the
+  HTML engine, reading a node's own content). Unclaimed tags fall through to a
+  path that preserves their content and reports them.
+- **`D2G_Module_Renderer`** and its seven subclasses — one family of modules
+  each. A renderer declares `tags()` as a `tag => method` map, and the converter
+  builds its dispatch table by asking the renderers, so a tag cannot be routed
+  to a method that does not exist and two renderers cannot silently claim the
+  same tag. The whole table is snapshotted in `tests/golden/dispatch-table.txt`.
+- **`D2G_HTML_Converter`** — free-form HTML → blocks. The one part of the
+  conversion that knows nothing about Divi: block-level elements each become
+  their own block, and runs of text and inline elements between them become a
+  paragraph.
+- **`D2G_Block_Builder`** — static markup primitives (`block()`, `paragraph()`,
+  `cover()`) and the sanitisers every renderer needs (`allowed_value()`,
+  `css_color()`, `text()`, `attr()`). The sanitisers live here because when each
+  renderer answered "what is safe inside an attribute" for itself, the answers
+  disagreed and two injection paths resulted.
 
 **Endpoints** (all nonce-checked `d2g_nonce`, all gated on `manage_options`):
 
@@ -127,7 +165,7 @@ server-side; the `ORDER BY` clause is assembled only from a fixed column map.
 | Divi module | Gutenberg output |
 | --- | --- |
 | `et_pb_section` | `core/group` |
-| `et_pb_row`, `et_pb_row_inner` | `core/columns` (or passthrough if single column) |
+| `et_pb_row`, `et_pb_row_inner` | `core/columns`. Every row holding at least one column is wrapped, single-column rows included — a `core/column` outside a `core/columns` is not valid. A row with no column children passes its content through unwrapped |
 | `et_pb_column`, `et_pb_column_inner` | `core/column` with derived `%` width |
 | `et_pb_text` | One block per top-level element — `core/paragraph`, `core/heading`, `core/list`, `core/quote`, `core/table`, `core/preformatted`, `core/embed`, or `core/html` as a fallback |
 | `et_pb_image`, `et_pb_fullwidth_image` | `core/image` |
@@ -138,7 +176,7 @@ server-side; the `ORDER BY` clause is assembled only from a fixed column map.
 | `et_pb_divider` | `core/separator` |
 | `et_pb_fullwidth_header` | `core/cover` (with bg image) or `core/group` |
 | `et_pb_gallery` | `core/gallery` › `core/image` |
-| `et_pb_accordion` / `et_pb_toggle` | `core/group` › `core/details` › `core/summary` |
+| `et_pb_accordion` / `et_pb_toggle` | `core/group` › `core/details`, whose body opens with an HTML `<summary>` element. There is no `core/summary` block; `<summary>` is markup inside `core/details` |
 | `et_pb_tabs` / `et_pb_tab` | `core/group` › `core/group` |
 | `et_pb_slider` + fullwidth/post variants, `et_pb_slide` | `core/group` › `core/cover` |
 | `et_pb_testimonial` | `core/group` › `core/image` + `core/quote` |
@@ -189,10 +227,24 @@ preserves:
 | `background_image` (header, slide) | `core/cover` `url` |
 | `header_level` (blurb) | heading `level` |
 
-What is **not** carried over, and is reported rather than silently dropped:
-padding, margin, `max_width`, borders, `border_radii`, box shadows, fonts, font
-sizes, line heights, `custom_css_main_element`, hover states, animations, and
-per-breakpoint responsive spacing.
+What is **not** carried over: spacing (padding and margin), explicit sizing
+(`max_width`, `min_height`), borders and `border_radii`, box and text shadows,
+fonts, font sizes, line heights, letter spacing, background gradients and
+parallax, `custom_css_main_element`, module IDs and classes, hover states,
+animations and filters, positioning and transforms, per-device visibility
+(`disabled_on`), and per-breakpoint `_tablet` / `_phone` overrides.
+
+Since 2.2.0 each of these **is** detected and reported. `D2G_Converter` matches
+every module's attributes against a registry of unmapped-setting patterns and
+raises one warning per module tag naming the categories that were lost; the
+interactive modules (tabs, sliders, video sliders, accordions, counters) raise a
+second warning describing the behaviour that did not survive. Both appear in the
+Preview panel and in the response the batch runner reports.
+
+Before 2.2.0 nothing detected any of it. The claim on this page that losses were
+"reported rather than silently dropped" was false for every setting listed
+above — a Section with `custom_padding` lost its padding and produced no
+warning at all.
 
 `D2G_Style_Mapper::build_inline_style()`, `wrapper_style()`, `get_color_attrs()`,
 and `parse_font()` are retained but **not called by the converter**. Wiring them
@@ -216,13 +268,14 @@ one-line change.
 
 ## 7. Known gaps / risk register
 
-1. **No live block-editor validation has been run.** The fixture suite checks
-   that a block's saved markup agrees with its own attributes, which is what
-   caught every serialization defect fixed in 2.1.0 — but it cannot execute
-   core's JavaScript `save()` functions. Whether a converted page opens clean in
-   a real editor on a given WordPress version is still unmeasured. This is the
-   single largest remaining risk and it gates publication. See `OPENQUESTIONS.md`
-   Q18 and Q23.
+1. **No live WordPress run has happened.** Since 2.2.0 the suite *does* execute
+   core's real block parser and `save()` functions — every fixture is validated
+   by `@wordpress/blocks` with the 113 core blocks registered, which found three
+   invalid-markup defects the static checks had missed (Q23, resolved). What is
+   still unmeasured is a *live install*: whether a given WordPress release opens
+   a converted page, and whether the plugin's admin screen, endpoints, backup
+   and restore behave against a real database. Validity is proven; compatibility
+   is not. This gates publication. See `OPENQUESTIONS.md` Q18 and Q27.
 2. **Restore depends on the backup being taken.** Conversion still overwrites
    `post_content` outright. If the backup checkbox was unticked there is no
    `_d2g_divi_backup`, no Restore button, and recovery falls back to WordPress
@@ -232,10 +285,12 @@ one-line change.
    Affects both convert and restore. See `OPENQUESTIONS.md` Q15.
 4. **Style fidelity is partial** and mostly unmapped — see §5.1 for the exact
    matrix. Spacing, borders, shadows, fonts, and module custom CSS are lost.
-   Losses are now reported in the preview rather than being silent.
-5. **Attribute values containing `]` can truncate a tag.** The tokenizer stops an
-   opening tag at the first unescaped `]`, even inside a quoted value. Divi does
-   not normally produce such values, but a hand-edited layout could.
+   Since 2.2.0 those losses are detected and named in the preview rather than
+   being silent, but detection is not the same as mapping: the settings still
+   have to be rebuilt by hand.
+5. ~~**Attribute values containing `]` can truncate a tag.**~~ Fixed in 2.2.0.
+   The tokenizer is quote-aware: it scans from `[` to the closing `]` treating
+   quoted values as opaque, so `title="Array[0]"` parses correctly.
 6. **Gallery carousels** emit a `d2g-gallery-slider` class with no shipped CSS or
    JS to make it behave as a carousel.
 7. **The scan does not scale.** It uses a leading-wildcard `LIKE` over
@@ -261,6 +316,32 @@ one-line change.
 - `mbstring` dependency and the PHP 8.2 `HTML-ENTITIES` deprecation.
 - Batch conversion reporting failures as successes.
 - No automated tests — `tests/run.php` now gates `bin/build-zip.sh`.
+
+### Closed in 2.2.0
+
+- HTML attribute injection through `align`, `button_alignment`, and colour
+  values. Layout values are now reduced to allowlisted tokens, colours are
+  validated against the CSS colour grammars, and class attributes are escaped.
+- Fullwidth Header producing a paragraph block containing nested `<p>` elements.
+- Child modules nested inside a Text, Blurb, CTA, Toggle, Tab, Slide,
+  Testimonial, Team Member, or Pricing Table module being dropped entirely.
+- `<caption>` and `<colgroup>` silently deleted when a table became `core/table`.
+- HTML comments dropped by the DOM walk.
+- A bar counter's HTML body escaped and published as visible markup.
+- `]` inside a quoted shortcode attribute truncating the tag.
+- Curly-quote entities in body text rewritten to straight quotes.
+- Unmapped design settings and lost interactive behaviour going unreported.
+- A check-then-set write lock that two concurrent requests could both pass, and
+  a conversion that wrote without any source token in the two commonest paths.
+- Builder meta snapshots that could not distinguish an absent key from an empty
+  one, and a restore that never cleared the managed keys first.
+- Block assertions that only inspected top-level blocks.
+- Parser, converter, style mapper, and admin class loaded on every front-end
+  request.
+- Every converted Cover block being invalid, plus coloured Dividers and the
+  Comments block — found by running WordPress's own block validator, which the
+  suite could not do before 2.2.0.
+- 33 of 58 supported modules having no test at all.
 
 ## 8. Roadmap
 

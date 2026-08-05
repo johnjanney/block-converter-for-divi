@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.1.0
+ * Version:     2.2.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -28,13 +28,26 @@ if ( ! defined( 'ABSPATH' ) ) {
  * page. Renaming the keys would orphan every one of them, so they stay as they
  * are and existing backups keep working after the upgrade.
  */
-define( 'D2G_VERSION', '2.1.0' );
+define( 'D2G_VERSION', '2.2.0' );
 define( 'D2G_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'D2G_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-require_once D2G_PLUGIN_DIR . 'includes/class-d2g-parser.php';
-require_once D2G_PLUGIN_DIR . 'includes/class-d2g-converter.php';
-require_once D2G_PLUGIN_DIR . 'includes/class-d2g-style-mapper.php';
+/*
+ * Nothing in this plugin runs on the front end. There is no shortcode, no
+ * the_content filter, no public asset and no public route — the parser, the
+ * converter, the style mapper and the admin screen exist only to serve the
+ * Tools screen and its AJAX endpoints. Loading all four on every visitor
+ * request meant parsing roughly 2,700 lines of PHP per page view for nothing.
+ *
+ * is_admin() is true inside admin-ajax.php as well as the admin screens,
+ * because admin-ajax.php defines WP_ADMIN before WordPress loads plugins, so
+ * this covers every request that can reach the endpoints below.
+ */
+if ( ! is_admin() ) {
+    return;
+}
+
+require_once D2G_PLUGIN_DIR . 'includes/load.php';
 require_once D2G_PLUGIN_DIR . 'admin/class-d2g-admin.php';
 
 /**
@@ -264,12 +277,19 @@ Backups are the only way to restore a converted page. Once the plugin is removed
 
         $total_pages = $per_page ? (int) ceil( $total_items / $per_page ) : 1;
 
-        // Never select bk.meta_value — a backup can be megabytes of shortcode.
+        // Never select p.post_content or bk.meta_value — either can be
+        // megabytes, and 500 rows of it would be built in PHP and then shipped
+        // to the browser. MD5() is computed by the database so the conversion
+        // endpoint gets its source token for free: the token is what lets a
+        // conversion refuse to overwrite an edit made after the scan, and it
+        // has to exist for rows the user converts without opening Preview.
+        //
         // The joined columns are aggregated so the GROUP BY stays valid under
         // ONLY_FULL_GROUP_BY; the p.* columns are functionally dependent on
         // the grouped primary key.
         $sql = "SELECT p.ID, p.post_title, p.post_type, p.post_status, p.post_date,
                        ( p.post_content LIKE %s ) AS has_divi,
+                       MD5( p.post_content ) AS source_hash,
                        ( MAX(bk.meta_id) IS NOT NULL ) AS has_backup,
                        MAX(bd.meta_value) AS backup_date
                 FROM {$wpdb->posts} p
@@ -302,6 +322,7 @@ Backups are the only way to restore a converted page. Once the plugin is removed
                 'has_divi'    => (bool) $row->has_divi,
                 'has_backup'  => (bool) $row->has_backup,
                 'backup_date' => $row->backup_date ? $row->backup_date : '',
+                'source_hash' => (string) $row->source_hash,
             ];
         }
 
@@ -402,25 +423,109 @@ Backups are the only way to restore a converted page. Once the plugin is removed
     }
 
     /**
+     * How long a held lock stays valid before another request may steal it.
+     *
+     * A request that dies mid-conversion cannot release its own lock, so the
+     * lock has to age out or the post would be unconvertible forever.
+     */
+    const LOCK_TIMEOUT = 120;
+
+    private static function lock_key( $post_id ) {
+        return 'd2g_lock_' . (int) $post_id;
+    }
+
+    /**
      * Take a per-post lock for the duration of a write.
      *
      * Nonces do not stop a replay inside their validity window, and a batch run
      * can queue the same post twice, so the write path needs its own guard
      * against two conversions of one post overlapping.
      *
-     * @return bool True when the lock was acquired.
+     * The previous implementation read the lock with get_transient() and then
+     * wrote it with set_transient(). That is check-then-set: two requests both
+     * read "no lock" before either wrote one, and both proceeded. This version
+     * makes acquisition a single INSERT against the UNIQUE index on
+     * wp_options.option_name, so exactly one of any number of racing requests
+     * can succeed — the database decides, not the gap between two statements.
+     *
+     * The Options API is deliberately bypassed. add_option() resolves a
+     * duplicate with ON DUPLICATE KEY UPDATE and cannot report whether the row
+     * was new, which is the one fact this function needs. Nothing reads this
+     * key through get_option(), so no cache can go stale behind it, and
+     * autoload='no' keeps it out of alloptions.
+     *
+     * @return string|false An owner token when the lock was taken, else false.
      */
     private static function acquire_lock( $post_id ) {
-        $key = 'd2g_lock_' . (int) $post_id;
-        if ( get_transient( $key ) ) {
+        global $wpdb;
+
+        $key   = self::lock_key( $post_id );
+        $now   = time();
+        $token = $now . ':' . wp_generate_password( 20, false );
+
+        // A duplicate key is an expected outcome here, not a bug to log.
+        $suppress = $wpdb->suppress_errors( true );
+        $inserted = $wpdb->query(
+            $wpdb->prepare(
+                "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+                $key,
+                $token
+            )
+        );
+        $wpdb->suppress_errors( $suppress );
+
+        if ( $inserted ) {
+            return $token;
+        }
+
+        // Someone holds it. Steal it only if it has aged past the timeout, and
+        // only by replacing the exact value that was read — so two requests
+        // racing to steal the same stale lock cannot both win.
+        $existing = $wpdb->get_var(
+            $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $key )
+        );
+
+        if ( null === $existing ) {
+            return false; // Released in between; the caller can simply retry.
+        }
+
+        $started = (int) strtok( (string) $existing, ':' );
+        if ( $started && ( $now - $started ) < self::LOCK_TIMEOUT ) {
             return false;
         }
-        set_transient( $key, time(), 2 * MINUTE_IN_SECONDS );
-        return true;
+
+        $stolen = $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
+                $token,
+                $key,
+                $existing
+            )
+        );
+
+        return $stolen ? $token : false;
     }
 
-    private static function release_lock( $post_id ) {
-        delete_transient( 'd2g_lock_' . (int) $post_id );
+    /**
+     * Release a lock, but only if this request is the one still holding it.
+     *
+     * Without the token comparison a slow request could delete the lock that a
+     * later request had already stolen, and both would then be writing.
+     */
+    private static function release_lock( $post_id, $token ) {
+        global $wpdb;
+
+        if ( ! $token ) {
+            return;
+        }
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+                self::lock_key( $post_id ),
+                $token
+            )
+        );
     }
 
     /**
@@ -477,19 +582,36 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             wp_send_json_error( __( 'This post does not contain Divi content. It may already have been converted.', 'block-converter-for-divi' ) );
         }
 
-        // Refuse to save against a stale preview.
+        // Refuse to save against content the client has not actually seen.
+        //
+        // This check used to run only when the client chose to send a hash, and
+        // the two paths that matter — a single conversion without Preview, and
+        // every batch conversion — sent an empty one. So the common case wrote
+        // over whatever the post held, including an edit somebody had saved
+        // seconds earlier. The token is now mandatory: Scan issues one for every
+        // row it returns and Preview refreshes it, so there is no flow that
+        // legitimately lacks one.
         $expected_hash = isset( $_POST['source_hash'] ) ? sanitize_key( wp_unslash( $_POST['source_hash'] ) ) : '';
-        if ( $expected_hash && ! hash_equals( md5( $post->post_content ), $expected_hash ) ) {
-            wp_send_json_error( __( 'This post changed since it was previewed. Scan again and re-check the preview before converting.', 'block-converter-for-divi' ) );
+        if ( '' === $expected_hash ) {
+            wp_send_json_error( __( 'This request did not identify which version of the page it was converting. Scan again, then convert.', 'block-converter-for-divi' ) );
         }
 
-        if ( ! self::acquire_lock( $post_id ) ) {
+        $lock = self::acquire_lock( $post_id );
+        if ( ! $lock ) {
             wp_send_json_error( __( 'A conversion of this post is already running.', 'block-converter-for-divi' ) );
+        }
+
+        // Re-read under the lock. Everything checked above was read before the
+        // lock existed, so a concurrent save could have landed in between.
+        $post = get_post( $post_id );
+        if ( ! $post || ! hash_equals( md5( $post->post_content ), $expected_hash ) ) {
+            self::release_lock( $post_id, $lock );
+            wp_send_json_error( __( 'This post changed since it was scanned. Scan again and re-check the preview before converting.', 'block-converter-for-divi' ) );
         }
 
         // wp_send_json_*() ends the request, so the lock has to be dropped
         // before each one rather than in a finally block — otherwise a failed
-        // conversion would keep the post locked until the transient expired.
+        // conversion would keep the post locked until the lock aged out.
         if ( $backup ) {
             self::write_backup( $post );
         }
@@ -498,7 +620,7 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         $converted = $converter->convert( $post->post_content );
 
         if ( '' === trim( $converted ) ) {
-            self::release_lock( $post_id );
+            self::release_lock( $post_id, $lock );
             wp_send_json_error( __( 'Conversion produced no content. Nothing was saved.', 'block-converter-for-divi' ) );
         }
 
@@ -511,7 +633,7 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         ] ), true );
 
         if ( is_wp_error( $update ) ) {
-            self::release_lock( $post_id );
+            self::release_lock( $post_id, $lock );
             wp_send_json_error( $update->get_error_message() );
         }
 
@@ -521,7 +643,7 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         delete_post_meta( $post_id, '_et_pb_use_builder' );
         delete_post_meta( $post_id, '_et_pb_old_content' );
 
-        self::release_lock( $post_id );
+        self::release_lock( $post_id, $lock );
 
         wp_send_json_success( [
             'post_id'     => $post_id,
@@ -560,16 +682,76 @@ Backups are the only way to restore a converted page. Once the plugin is removed
 
         // The builder meta is re-captured each time, because it is deleted on
         // every conversion and re-added on every restore.
+        //
+        // Recorded as an explicit {exists, values} pair per key rather than as
+        // "the non-empty ones". get_post_meta( …, true ) returns '' both for a
+        // key that is absent and for a key present with an empty value, so the
+        // previous shape could not tell those apart — and it dropped repeated
+        // meta rows entirely. Storing every row, and storing the absence of any
+        // row as a fact in its own right, is what makes "restored as found"
+        // literally true rather than approximately true.
+        //
+        // The snapshot is written even when both keys are absent, because that
+        // absence is exactly what restore has to reproduce.
         $builder_meta = [];
-        foreach ( [ '_et_pb_use_builder', '_et_pb_old_content' ] as $key ) {
-            $value = get_post_meta( $post->ID, $key, true );
-            if ( '' !== $value && null !== $value && false !== $value ) {
-                $builder_meta[ $key ] = $value;
-            }
+        foreach ( self::builder_meta_keys() as $key ) {
+            $values                 = get_post_meta( $post->ID, $key );
+            $builder_meta[ $key ]   = [
+                'exists' => is_array( $values ) && count( $values ) > 0,
+                'values' => is_array( $values ) ? array_values( $values ) : [],
+            ];
         }
 
-        if ( $builder_meta ) {
-            update_post_meta( $post->ID, '_d2g_builder_meta', wp_slash( $builder_meta ) );
+        update_post_meta( $post->ID, '_d2g_builder_meta', wp_slash( $builder_meta ) );
+    }
+
+    /**
+     * The Divi builder meta keys this plugin removes and puts back.
+     */
+    private static function builder_meta_keys() {
+        return [ '_et_pb_use_builder', '_et_pb_old_content' ];
+    }
+
+    /**
+     * Put the captured builder meta back exactly as write_backup() found it.
+     *
+     * Both managed keys are cleared first. Without that, restore could only
+     * ever add or overwrite: a key that did *not* exist before conversion but
+     * exists now would survive a "restore", and repeated meta rows would
+     * accumulate across repeated restores.
+     */
+    private static function restore_builder_meta( $post_id ) {
+        $snapshot = get_post_meta( $post_id, '_d2g_builder_meta', true );
+
+        if ( ! is_array( $snapshot ) || ! $snapshot ) {
+            // No snapshot: a backup taken by 1.x, before builder meta was
+            // captured at all. Switching the builder on is the best available
+            // guess and matches what those versions did.
+            update_post_meta( $post_id, '_et_pb_use_builder', 'on' );
+            return;
+        }
+
+        foreach ( self::builder_meta_keys() as $key ) {
+            delete_post_meta( $post_id, $key );
+        }
+
+        foreach ( self::builder_meta_keys() as $key ) {
+            if ( ! isset( $snapshot[ $key ] ) ) {
+                continue; // Recorded as absent, or never recorded. Leave it absent.
+            }
+
+            $record = $snapshot[ $key ];
+
+            // 2.2.0 shape: { exists: bool, values: [ … ] }.
+            if ( is_array( $record ) && array_key_exists( 'values', $record ) ) {
+                foreach ( (array) $record['values'] as $value ) {
+                    add_post_meta( $post_id, $key, wp_slash( $value ) );
+                }
+                continue;
+            }
+
+            // 2.1.0 shape: one scalar per key, non-empty values only.
+            add_post_meta( $post_id, $key, wp_slash( $record ) );
         }
     }
 
@@ -621,7 +803,8 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             wp_send_json_error( __( 'No backup found for this page.', 'block-converter-for-divi' ) );
         }
 
-        if ( ! self::acquire_lock( $post_id ) ) {
+        $lock = self::acquire_lock( $post_id );
+        if ( ! $lock ) {
             wp_send_json_error( __( 'Another operation on this post is already running.', 'block-converter-for-divi' ) );
         }
 
@@ -634,24 +817,17 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         ] ), true );
 
         if ( is_wp_error( $update ) ) {
-            self::release_lock( $post_id );
+            self::release_lock( $post_id, $lock );
             wp_send_json_error( $update->get_error_message() );
         }
 
-        // Put back the builder meta exactly as it was found, falling back to
-        // just switching the builder on when the post predates the snapshot.
-        $builder_meta = get_post_meta( $post_id, '_d2g_builder_meta', true );
-        if ( is_array( $builder_meta ) && $builder_meta ) {
-            foreach ( $builder_meta as $key => $value ) {
-                if ( in_array( $key, [ '_et_pb_use_builder', '_et_pb_old_content' ], true ) ) {
-                    update_post_meta( $post_id, $key, wp_slash( $value ) );
-                }
-            }
-        } else {
-            update_post_meta( $post_id, '_et_pb_use_builder', 'on' );
-        }
+        // Restore does not take a source token. Conversion needs one because it
+        // rewrites content the user has only seen a summary of; restore is the
+        // user explicitly discarding whatever is there now in favour of a
+        // snapshot they asked for by name. The lock still applies.
+        self::restore_builder_meta( $post_id );
 
-        self::release_lock( $post_id );
+        self::release_lock( $post_id, $lock );
 
         wp_send_json_success( [
             'post_id' => $post_id,
@@ -660,6 +836,10 @@ Backups are the only way to restore a converted page. Once the plugin is removed
                 __( 'Page "%s" restored to its original Divi content.', 'block-converter-for-divi' ),
                 $post->post_title
             ),
+            // The row is convertible again, so hand back a token for what it
+            // now holds — otherwise converting straight after a restore would
+            // be refused for having no token.
+            'source_hash' => md5( $backup ),
         ] );
     }
 }

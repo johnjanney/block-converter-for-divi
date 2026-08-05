@@ -1,0 +1,12 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":4} -->
+<h4>Plain</h4>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>Body</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->

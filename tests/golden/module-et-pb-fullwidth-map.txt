@@ -1,0 +1,11 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:html -->
+<p><strong>Map:</strong> 51.5, -0.12</p>
+<!-- /wp:html -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_fullwidth_map] A map module became text. Core has no map block — the address and any pin labels were preserved so the map can be rebuilt with a maps plugin or an embed.

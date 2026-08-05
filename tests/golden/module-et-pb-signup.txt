@@ -1,0 +1,19 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":3} -->
+<h3>Newsletter</h3>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>Monthly.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:paragraph -->
+<p><em>[Email signup form — configure with your email marketing plugin.]</em></p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_signup] An email opt-in module became a text placeholder. Rebuild it with your email marketing plugin.

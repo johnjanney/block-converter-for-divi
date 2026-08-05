@@ -1,0 +1,12 @@
+<!-- wp:cover {"url":"https://example.com/bg.jpg","customOverlayColor":"#102030"} -->
+<div class="wp-block-cover"><img class="wp-block-cover__image-background" alt="" src="https://example.com/bg.jpg" data-object-fit="cover"/><span aria-hidden="true" class="wp-block-cover__background has-background-dim-100 has-background-dim" style="background-color:#102030"></span><div class="wp-block-cover__inner-container">
+<!-- wp:heading {"level":1,"textAlign":"center"} -->
+<h1 class="has-text-align-center">Hero</h1>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"align":"center"} -->
+<p class="has-text-align-center">Body</p>
+<!-- /wp:paragraph -->
+
+</div></div>
+<!-- /wp:cover -->

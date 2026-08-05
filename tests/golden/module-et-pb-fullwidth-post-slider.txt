@@ -1,0 +1,20 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"level":2} -->
+<h2>Wide post</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph -->
+<p>C</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_fullwidth_post_slider] A slider became a stack of sections, one per slide. Core has no slider block, so every slide is now shown at once and the auto-advance, arrows and dots are gone.

@@ -1,0 +1,3 @@
+<!-- wp:html -->
+<div data-x="1">raw</div>
+<!-- /wp:html -->

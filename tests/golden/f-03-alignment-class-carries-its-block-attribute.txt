@@ -1,0 +1,7 @@
+<!-- wp:heading {"level":2,"textAlign":"center"} -->
+<h2 class="has-text-align-center">Hello</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"align":"center"} -->
+<p class="has-text-align-center">Body</p>
+<!-- /wp:paragraph -->

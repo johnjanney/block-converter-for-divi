@@ -98,6 +98,186 @@ _Nothing yet._
 
 ---
 
+## [2.2.0] — 2026-08-05
+
+Security and content-integrity release, following a second external review
+(`CODEX-REVIEW.md`, answered in `CODEX-REVIEW-RESPONSE.md`). That review found
+one high-severity injection path and several content-loss paths that 2.1.0's own
+test suite could not see.
+
+**It has still not been run against a live WordPress install.** `Tested up to:`
+remains a placeholder and no converted page has been opened in a real block
+editor. Convert on staging first. See `OPENQUESTIONS.md` Q18 and Q23;
+WordPress.org submission stays blocked.
+
+### Security
+
+- **Shortcode attribute values could inject HTML attributes.** The parser
+  accepts single-quoted attribute values, so a value could contain a double
+  quote. `align` on an Image and `button_alignment` on a Button were
+  concatenated straight into a quoted `class` attribute, and a crafted value
+  closed that attribute and opened an event handler:
+  `<figure class="… aligncenter" onmouseover="alert(1)">`. Layout values are now
+  reduced to allowlisted tokens, and the class attribute is escaped as well.
+- **Colour values could inject CSS declarations.** `esc_attr()` makes a value
+  safe as markup but says nothing about CSS, so `red;background-image:url(x)`
+  passed through it intact. Colours are now validated against the CSS colour
+  grammars — hex, `rgb()`/`rgba()`/`hsl()`/`hsla()`, or a bare keyword — and
+  anything else is dropped.
+
+### Fixed
+
+- **Fullwidth Header wrapped its whole body in one paragraph block**, producing
+  `<p class="…"><p>One</p><p>Two</p></p>`. Nested `<p>` elements are invalid and
+  do not match what `core/paragraph` regenerates. It now goes through the same
+  HTML splitter as every other rich-text renderer.
+- **Modules nested inside another module were dropped.** A Button placed inside
+  a Text module vanished from the converted page while the text either side of
+  it survived, with no warning. Text, Blurb, CTA, Toggle, Tab, Slide,
+  Testimonial, Team Member, Fullwidth Header, and Pricing Table now render their
+  loose content and their child modules together, in source order.
+- **`<caption>` and `<colgroup>` were deleted** when a table became
+  `core/table`, which copies only `thead`, `tbody`, `tfoot`, and loose `tr`
+  children. Such tables are preserved whole as `core/html` with a warning.
+- **HTML comments were dropped** by the DOM walk. They are preserved as
+  `core/html`. A comment shaped like a block delimiter is removed and reported,
+  because re-emitting it would corrupt the document.
+- **A bar counter's HTML body was escaped and published as visible markup** — a
+  body of `<p>Sales</p>` appeared on the page as `&lt;p&gt;Sales&lt;/p&gt;`. The
+  label is reduced to its text first.
+- **`]` inside a quoted shortcode attribute truncated the tag**, leaving the
+  remainder as visible text. The tokenizer is now quote-aware: it scans from `[`
+  to the closing `]` treating quoted values as opaque. One scanner now backs the
+  detector, the tree parser, the closing-tag matcher, and the stripper, so all
+  four agree on what a tag is.
+- **Curly-quote entities in body text were rewritten to straight quotes.**
+  `&#8220;quoted&#8221;` came out as `"quoted"` — a silent change to the
+  author's words. Normalization no longer touches the document; Divi's habit of
+  encoding an attribute's delimiting quotes is repaired inside the attribute
+  parser instead.
+- **The write lock was check-then-set.** Two requests could both read "no lock"
+  before either wrote one. Acquisition is now a single atomic `INSERT` against
+  the unique index on `wp_options.option_name`, carries an owner token so a
+  request can only release its own lock, and ages out after two minutes.
+- **Conversion wrote without a source token in the two commonest paths.** The
+  stale-content check ran only when the client chose to send a hash, and both
+  single conversion without Preview and every batch conversion sent an empty
+  one. The scan now issues a token per row, the token is mandatory, and the post
+  is re-read and re-checked *after* the lock is taken.
+- **Builder-meta snapshots could not tell an absent key from an empty one**, and
+  restore never cleared the managed keys first. Each key is now recorded as an
+  explicit `{exists, values}` pair covering repeated meta rows, and restore
+  deletes both keys before writing back only what existed. 2.1.0 snapshots are
+  still read.
+- **Text taken from a Divi attribute was encoded twice.** Divi stores attribute
+  values HTML-encoded, so a button reading "Fish & Chips" is stored as
+  `button_text="Fish &amp; Chips"`; escaping that again published the literal
+  characters `Fish &amp; Chips`. Affected every title, heading, subhead, author,
+  name, label, button text, address and image `alt` drawn from an attribute.
+  Found while verifying this release end to end, not reported by the review.
+- `$price` in `convert_pricing_table()`, which 2.1.0's changelog claimed to have
+  removed and had not.
+
+### Fixed — found by the new block validator
+
+Three defects that four rounds of static checks had missed, found within
+minutes of running WordPress's own validator against the fixtures. All three
+were invalid block markup, which is the one thing the project exists to avoid.
+
+- **Every converted Cover block was invalid.** `core/cover` saves its
+  background `<img>` before the dim `<span>`; the converter emitted them the
+  other way round, omitted `aria-hidden` and `has-background-dim-100`, and
+  dropped the overlay colour entirely. Affected every Fullwidth Header and
+  Slide with a background image.
+- **Coloured Dividers were invalid.** A `core/separator` carrying a colour also
+  needs `has-text-color` and a `color` declaration, not just the background
+  ones.
+- **Comments blocks were invalid.** Emitted as a self-closing delimiter when
+  `core/comments` holds inner blocks and saves a wrapper `<div>`.
+
+### Added
+
+- **Real WordPress block validation in the test suite.** `tests/js/validate.mjs`
+  registers the 113 core blocks from `@wordpress/block-library` and runs core's
+  own `parse()` — which re-runs each block's `save()` over the parsed attributes
+  and compares — over every fixture. This is what decides whether the editor
+  says "this block contains unexpected or invalid content", and until now the
+  project had no way to ask. Resolves the long-standing Q23.
+- **Golden snapshots.** Every fixture's exact output and its full set of
+  warnings are committed under `tests/golden/`. Any difference fails the run and
+  prints a diff. This is what makes restructuring the converter safe: it catches
+  the changes nobody thought to assert on.
+- **Complete module coverage, enforced.** 33 of the 58 supported Divi modules
+  had no fixture at all. All 58 now do, and `tests/lib/coverage.php` reads the
+  tag list from the parser, so adding a module and forgetting to test it fails
+  the suite.
+- **Determinism and idempotence checks** on every fixture: converting twice
+  gives identical output, and converting already-converted output is a no-op.
+- **`tests/js/canonical.mjs`**, which asks WordPress what markup it would have
+  saved for a given block. Hand-written block markup no longer has to be
+  guesswork.
+- **`tests/coverage.php`**, a line-coverage report. It is what turned the
+  remaining untested branches into fixtures; the converter is now at 96.7% and
+  the parser at 98.8%.
+- **Style and behaviour loss reporting.** Every module's attributes are matched
+  against a registry of unmapped-setting patterns — spacing, sizing, borders,
+  shadows, typography, background treatment, parallax, animation, custom CSS,
+  IDs and classes, positioning, per-device visibility, hover styling, and
+  `_tablet`/`_phone` overrides — and one warning per module tag names what was
+  lost. Tabs, sliders, video sliders, accordions, and counters additionally
+  report the interactive behaviour that did not survive. This is what the
+  documents had been claiming since 2.1.0 without any code behind it.
+- Twenty new regression fixtures, one per defect above. Each was confirmed to
+  fail against 2.1.0 before the fix landed.
+- A GitHub Actions workflow: the full suite including block validation, a PHP
+  matrix over 7.4 through 8.4, a guard that golden snapshots are committed and
+  current, and lint and syntax checks. The suite was additionally run locally
+  under Docker on PHP 7.4, 8.1, 8.2, 8.3, 8.4 and 8.5 — identical results and
+  byte-identical snapshots on all six.
+
+### Changed
+
+- **The converter is no longer one class.** `D2G_Converter` was 2,638 lines
+  holding every module renderer, a 170-line dispatch switch, the HTML-to-blocks
+  engine and the markup primitives. It is now 430 lines of orchestration, with
+  the work split into `D2G_HTML_Converter`, `D2G_Block_Builder`, and seven
+  `D2G_Renderer_*` classes grouped by what a module *is* — layout, text, media,
+  content, interactive, pricing, dynamic.
+
+  Renderers declare the tags they handle, and the converter builds its dispatch
+  table by asking them. A tag cannot be routed to a method that does not exist,
+  and two renderers cannot silently claim the same tag; the whole table is
+  snapshotted so a change in ownership is a reviewable diff.
+
+  **No output changed.** All 139 golden snapshots are byte-identical before and
+  after, on PHP 7.4, 8.1, 8.2, 8.3, 8.4 and 8.5, and the dispatch table was
+  verified to handle exactly the same 55 tags as the switch it replaced. The
+  split was made only once the suite could prove that — doing it earlier would
+  have been a rewrite with no way to check it.
+- `includes/load.php` is now the single dependency-ordered require list, used by
+  both the plugin and the test suite. They were two lists in two files, which is
+  a standing invitation for the tests to exercise different code than ships.
+- **Block validation gates the release.** `bin/build-zip.sh` now passes
+  `--require-validator`, so a ZIP cannot be built from a run that could not
+  check block validity. Without that flag a missing harness prints a loud
+  "NOT RUN — block validity is therefore UNPROVEN" and continues; it never
+  silently reports a pass it did not make.
+- **Block assertions are recursive.** They inspected only top-level blocks,
+  which is why the Fullwidth Header defect above went undetected — the offending
+  paragraph sat one level down inside a Group. `tests/run.php` now also
+  documents, at the top of the file, exactly what it does *not* cover.
+- The parser, converter, style mapper, and admin class are loaded only for admin
+  and AJAX requests. The plugin has no front-end runtime feature, so roughly
+  2,700 lines were being parsed on every visitor request for nothing.
+- Gallery conversion primes the attachment cache once for all image IDs instead
+  of issuing three uncached lookups per image.
+- Converted-content strings that were still hard-coded English — `Click Here`,
+  `Tab`, `Subscribe`, `Map:`, and the sidebar, email-signup, gallery, and
+  WooCommerce placeholders — go through the translation pipeline.
+- Uninstall clears any stray conversion-lock rows.
+
+---
+
 ## [2.1.0] — 2026-08-05
 
 Correctness and data-safety release, following an external review of 2.0.0
@@ -181,8 +361,12 @@ blocked on them.
 
 ### Added
 
-- **Conversion warnings.** Every lossy or unmapped module is collected and shown
-  in the preview, and returned with the conversion response.
+- **Conversion warnings.** Modules that could not be carried over faithfully are
+  collected and shown in the preview, and returned with the conversion response.
+  (Coverage in 2.1.0 was much narrower than this entry originally claimed: it
+  covered unmapped module *tags* and a handful of specific modules, not
+  unsupported style settings or lost interactive behaviour. Style and behaviour
+  loss reporting arrived in 2.2.0.)
 - **A fixture test suite** — `php tests/run.php`. Runs on plain PHP with no
   WordPress install, and gates `bin/build-zip.sh`.
 - Filters: `d2g_scan_hard_cap`, `d2g_supported_post_types`,
@@ -194,9 +378,11 @@ blocked on them.
 - The `mbstring` dependency and the PHP 8.2 `HTML-ENTITIES` deprecation. The DOM
   loader now uses an XML encoding prologue, which also stops multibyte
   characters being rewritten as numeric entities.
-- Dead code: an unused regex in the parser, an unused variable and a no-op block
-  name map in the converter, and a duplicated pagination section plus selectors
-  for controls that do not exist in the stylesheet.
+- Dead code: an unused regex in the parser, a no-op block name map in the
+  converter, and a duplicated pagination section plus selectors for controls
+  that do not exist in the stylesheet. (This entry also claimed an unused
+  converter variable was removed. It was not — `$price` in
+  `convert_pricing_table()` survived until 2.2.0.)
 
 ### Security
 

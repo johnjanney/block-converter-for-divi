@@ -1,0 +1,8 @@
+<!-- wp:details {"showContent":true} -->
+<details class="wp-block-details" open><summary>Terms</summary>
+<!-- wp:paragraph -->
+<p>Body</p>
+<!-- /wp:paragraph -->
+
+</details>
+<!-- /wp:details -->

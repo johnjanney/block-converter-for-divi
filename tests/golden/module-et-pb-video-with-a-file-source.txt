@@ -1,0 +1,3 @@
+<!-- wp:video {"src":"https://example.com/clip.mp4"} -->
+<figure class="wp-block-video"><video controls src="https://example.com/clip.mp4"></video></figure>
+<!-- /wp:video -->

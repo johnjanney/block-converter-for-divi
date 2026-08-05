@@ -1,0 +1,6 @@
+<!-- wp:social-links -->
+<ul class="wp-block-social-links">
+<!-- wp:social-link {"url":"https://github.com/x","service":"github"} /-->
+
+</ul>
+<!-- /wp:social-links -->

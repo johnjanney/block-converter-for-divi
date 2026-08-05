@@ -1,0 +1,8 @@
+<!-- wp:social-links -->
+<ul class="wp-block-social-links">
+<!-- wp:social-link {"url":"https://facebook.com/x","service":"facebook"} /-->
+
+<!-- wp:social-link {"url":"https://x.com/y","service":"x"} /-->
+
+</ul>
+<!-- /wp:social-links -->

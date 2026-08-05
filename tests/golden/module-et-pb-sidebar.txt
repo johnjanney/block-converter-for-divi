@@ -1,0 +1,6 @@
+<!-- wp:paragraph -->
+<p><em>[Sidebar: sidebar-1 — use a Widgets block or shortcode to display this sidebar.]</em></p>
+<!-- /wp:paragraph -->
+
+===== WARNINGS =====
+[et_pb_sidebar] A sidebar module became a text placeholder. Core has no drop-in equivalent — rebuild it with the widget blocks you need.

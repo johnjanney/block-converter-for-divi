@@ -1,0 +1,3 @@
+<!-- wp:html -->
+<p>He said &#8220;hi&#8221; and it&#8217;s fine</p>
+<!-- /wp:html -->

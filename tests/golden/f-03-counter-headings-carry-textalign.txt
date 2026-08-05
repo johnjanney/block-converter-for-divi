@@ -1,0 +1,15 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:heading {"textAlign":"center","level":2} -->
+<h2 class="has-text-align-center">42%</h2>
+<!-- /wp:heading -->
+
+<!-- wp:paragraph {"align":"center"} -->
+<p class="has-text-align-center">Users</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_number_counter] A counter became a static heading showing its final value. Core has no counter block, so the count-up animation was not carried over.

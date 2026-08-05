@@ -1,0 +1,8 @@
+<!-- wp:buttons {"layout":{"type":"flex","justifyContent":"right"}} -->
+<div class="wp-block-buttons is-content-justification-right">
+<!-- wp:button -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="/x">Go</a></div>
+<!-- /wp:button -->
+
+</div>
+<!-- /wp:buttons -->

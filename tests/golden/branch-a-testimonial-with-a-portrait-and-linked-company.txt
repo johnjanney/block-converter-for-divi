@@ -1,0 +1,17 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:image {"sizeSlug":"large","linkDestination":"none","className":"is-style-rounded"} -->
+<figure class="wp-block-image size-large is-style-rounded"><img src="https://example.com/p.jpg" alt="Ada"/></figure>
+<!-- /wp:image -->
+
+<!-- wp:quote -->
+<blockquote class="wp-block-quote">
+<!-- wp:paragraph -->
+<p>Good.</p>
+<!-- /wp:paragraph -->
+
+<cite><strong>Ada</strong>, <a href="https://example.com/c">Analytical</a></cite></blockquote>
+<!-- /wp:quote -->
+
+</div>
+<!-- /wp:group -->

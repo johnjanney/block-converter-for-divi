@@ -2,3 +2,10 @@
 # permanently as GitHub release assets on their tag.
 /dist/
 /build/
+
+# The block validator's dependencies — 564MB of @wordpress packages. The
+# lockfile IS committed, so `npm --prefix tests/js ci` reproduces the exact
+# block library the golden snapshots were generated against. Without the
+# lockfile a newer block-library could change what "valid" means underneath
+# the suite.
+/tests/js/node_modules/

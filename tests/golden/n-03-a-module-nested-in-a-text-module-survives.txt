@@ -1,0 +1,16 @@
+<!-- wp:paragraph -->
+<p>Before</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:buttons -->
+<div class="wp-block-buttons">
+<!-- wp:button -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="https://example.com">Nested</a></div>
+<!-- /wp:button -->
+
+</div>
+<!-- /wp:buttons -->
+
+<!-- wp:paragraph -->
+<p>After</p>
+<!-- /wp:paragraph -->

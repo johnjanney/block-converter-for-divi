@@ -1,0 +1,3 @@
+<!-- wp:image {"sizeSlug":"large","linkDestination":"none","url":"https://example.com/a.jpg","alt":"Alt text"} -->
+<figure class="wp-block-image size-large"><img src="https://example.com/a.jpg" alt="Alt text"/></figure>
+<!-- /wp:image -->

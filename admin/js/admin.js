@@ -168,9 +168,19 @@
 
     // ---------- Row rendering ----------
 
+    // post ID -> md5 of the post_content this browser last saw.
+    var sourceHash = {};
+
     function renderRow(page) {
         var convertible = page.has_divi;
         var restorable  = page.has_backup;
+
+        // The server refuses a conversion that cannot say which version of the
+        // page it is converting, so every row carries the token the scan issued
+        // for it. Previously only Preview produced one, which left the two most
+        // common paths — convert without previewing, and batch convert —
+        // sending nothing and overwriting whatever the post happened to hold.
+        sourceHash[page.id] = page.source_hash || '';
 
         var $row = $('<tr/>', { 'data-id': page.id });
         if (!convertible) {
@@ -372,8 +382,6 @@
 
     // ---------- Preview ----------
 
-    var lastPreviewHash = {};
-
     $tbody.on('click', '.d2g-preview-btn', function () {
         var $btn = $(this);
         var postId = $btn.data('id');
@@ -398,7 +406,7 @@
                 return;
             }
 
-            lastPreviewHash[postId] = res.data.source_hash || '';
+            sourceHash[postId] = res.data.source_hash || '';
 
             $('#d2g-preview-original').text(res.data.original);
             $('#d2g-preview-converted').text(res.data.converted);
@@ -514,7 +522,7 @@
             nonce: d2g.nonce,
             post_id: postId,
             backup: backup,
-            source_hash: lastPreviewHash[postId] || ''
+            source_hash: sourceHash[postId] || ''
         }).then(function (res) {
             setRowBusy(postId, false);
 
@@ -604,7 +612,7 @@
             $row.find('.d2g-select').prop('disabled', false).data('d2gWasDisabled', false);
             $row.find('.d2g-preview-btn').prop('disabled', false).data('d2gWasDisabled', false);
             $row.find('.d2g-convert-btn').text(t('convert')).prop('disabled', false).data('d2gWasDisabled', false);
-            delete lastPreviewHash[postId];
+            sourceHash[postId] = res.data.source_hash || '';
 
             showStatus(res.data.message || t('restored'), 'success');
         }).fail(function () {
