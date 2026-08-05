@@ -30,6 +30,22 @@
 // `global $d2g_pass` in the helper below bound to a different, always-zero
 // variable, and the run reported "0 passed, 0 failed" while every check passed.
 // A test runner that cannot count is a test runner that cannot fail.
+// On a WordPress below the declared minimum, WordPress itself refuses to
+// activate the plugin — which is the protection `Requires at least` exists to
+// provide. Say so, rather than letting the first call to a plugin class die
+// with "Class Block_Converter_For_Divi does not exist" and leaving whoever
+// reads the log to work out that this is the correct outcome.
+if ( ! class_exists( 'D2G_Converter' ) || ! class_exists( 'Block_Converter_For_Divi' ) ) {
+    printf(
+        "SKIP  the plugin is not active on WordPress %s\n"
+        . "      WordPress declines to activate it below the version declared in\n"
+        . "      'Requires at least', so there is nothing here to test. That is the\n"
+        . "      expected result for an unsupported version, not a defect.\n",
+        get_bloginfo( 'version' )
+    );
+    exit( 1 );
+}
+
 $GLOBALS['d2g_pass'] = 0;
 $GLOBALS['d2g_fail'] = 0;
 
