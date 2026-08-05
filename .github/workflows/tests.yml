@@ -23,10 +23,12 @@ jobs:
           extensions: dom, libxml
           coverage: none
 
+      # 22 is the floor jsdom sets (see tests/js/package.json engines). Node 20
+      # installed cleanly and then threw from undici inside the validator.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: tests/js/package-lock.json
 
@@ -93,7 +95,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Check the admin script parses
         run: node --check admin/js/admin.js
