@@ -338,6 +338,11 @@ Stated here so a green run is not read as more than it is:
   select-all checkbox, and multi-page batches are not covered.
 - **Uninstall.**
 - **A corpus of real Divi pages.** Every fixture here was written by someone who
-  already knew what the converter does.
+  already knew what the converter does, which means the suite can only fail in
+  ways somebody anticipated. About 15 pages from a live Divi site were converted
+  successfully before 2.3.0 shipped, but none of them are *in* this corpus, and
+  they were sections, rows, text and images — the simplest module set. Nothing
+  real has been through the renderers where the last review found silent content
+  loss.
 - **Whether a converted page *looks* like the Divi original.** Valid is not
   faithful, and nothing here measures fidelity.
