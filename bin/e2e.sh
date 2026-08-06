@@ -24,6 +24,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# shellcheck source=bin/_wp-env.sh
+. "${ROOT}/bin/_wp-env.sh"
+
 PLUGIN_PATH="wp-content/plugins/block-converter-for-divi"
 
 if ! docker info >/dev/null 2>&1; then
@@ -38,6 +41,11 @@ fi
 
 echo "Starting WordPress..."
 npx wp-env start >/dev/null
+
+# bin/wp-matrix.sh leaves the shared environment on whichever WordPress it last
+# installed, and a version change makes WordPress redirect every admin page to
+# the database-upgrade screen until someone clears it. See bin/_wp-env.sh.
+d2g_wp_env_update_db
 
 # The seeder deletes anything a previous run left, so a re-run starts from the
 # same state rather than accumulating pages.
@@ -57,7 +65,11 @@ echo "== Browser tests (Playwright ${PW_VERSION}) =="
 
 # --ipc=host: Chromium's default shared-memory allocation inside a container is
 # too small and shows up as tabs crashing mid-test.
-docker run --rm \
+# `set -e` would exit here on a browser failure, before the debug log below is
+# read — and a failing run is exactly when its contents are worth having. The
+# `if` makes the command a tested condition, which suspends errexit for it.
+STATUS=0
+if ! docker run --rm \
     --network host \
     --ipc=host \
     -v "${ROOT}:/work" \
@@ -65,16 +77,17 @@ docker run --rm \
     -e CI="${CI:-}" \
     -e WP_BASE_URL="http://localhost:8888" \
     "$IMAGE" \
-    npx playwright test "$@"
-
-STATUS=$?
+    npx playwright test "$@"; then
+    STATUS=1
+fi
 
 echo
 echo "== WordPress debug log =="
 if npx wp-env run cli test -s wp-content/debug.log 2>/dev/null; then
     npx wp-env run cli cat wp-content/debug.log 2>/dev/null | tail -20
     echo
-    echo "warning: WordPress logged the above while the browser drove it." >&2
+    echo "error: WordPress logged the above while the browser drove it." >&2
+    STATUS=1
 else
     echo "empty — the screen produced no PHP notices."
 fi

@@ -38,13 +38,27 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
 
     protected function image( array $node ): string {
         $attrs = $node['attrs'];
-        $src   = $attrs['src'] ?? '';
+
+        // Cleaned once, then used for both halves of the block. When the two
+        // disagreed — esc_url() in the markup, the raw value in the attribute —
+        // `javascript:` was stripped from the <img> and kept in the JSON the
+        // editor rebuilds the <img> from.
+        $src = D2G_Block_Builder::url( $attrs['src'] ?? '' );
         if ( '' === $src ) {
+            // A source that existed and did not survive sanitising is not the
+            // same as no source at all, and the difference is worth saying out
+            // loud rather than leaving a module to vanish from the page.
+            if ( '' !== trim( (string) ( $attrs['src'] ?? '' ) ) ) {
+                $this->warn(
+                    $node['tag'],
+                    __( 'An image was dropped because its source was not a URL WordPress will store — a "javascript:" or "data:" address, for example. Re-add the image from the media library.', 'block-converter-for-divi' )
+                );
+            }
             return '';
         }
 
         $alt   = $attrs['alt'] ?? '';
-        $url   = $attrs['url'] ?? '';
+        $url   = D2G_Block_Builder::url( $attrs['url'] ?? '' );
 
         // core/image regenerates its `align<value>` class from this attribute,
         // so it can only be one of the alignments the block models.
@@ -105,11 +119,11 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
 
     protected function video( array $node ): string {
         $attrs = $node['attrs'];
-        $src   = $attrs['src'] ?? '';
+        $src   = D2G_Block_Builder::url( $attrs['src'] ?? '' );
 
         // Fallback to alternative source attributes.
         if ( '' === $src ) {
-            $src = $attrs['src_webm'] ?? '';
+            $src = D2G_Block_Builder::url( $attrs['src_webm'] ?? '' );
         }
 
         // Check if the inner content contains an iframe embed (common in Divi).
@@ -122,7 +136,7 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
             // Last resort: check if content itself is a URL.
             $content = trim( $content );
             if ( preg_match( '#^https?://#', $content ) ) {
-                $src = $content;
+                $src = D2G_Block_Builder::url( $content );
             }
         }
 
@@ -156,17 +170,28 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
             __( 'A video slider became a stack of video blocks. Core has no video slider, so every video is now shown at once and the thumbnail navigation is gone.', 'block-converter-for-divi' )
         );
 
-        $inner = '';
-        foreach ( $node['children'] as $child ) {
-            if ( $child['tag'] === 'et_pb_video_slider_item' ) {
-                $src = $child['attrs']['src'] ?? '';
-                if ( $src ) {
-                    $inner .= $this->video( $child );
+        // A slider item was skipped unless it carried a `src` attribute, even
+        // though video() also reads an iframe or a bare URL out of a module's
+        // body — which is how Divi stores a YouTube slide. Those slides were
+        // dropped. Ask video() and let it decide; when even it finds nothing,
+        // fall back to the item's own content rather than discarding it.
+        $inner = $this->context->render_structural_children(
+            $node,
+            [ 'et_pb_video_slider_item' ],
+            function ( array $items ) {
+                $out = '';
+                foreach ( $items as $item ) {
+                    $video = $this->video( $item );
+                    $out  .= '' !== $video
+                        ? $video
+                        : $this->context->render_inner_blocks( $item, $item['attrs'] );
                 }
-            }
-        }
+                return $out;
+            },
+            $node['attrs']
+        );
 
-        if ( '' === $inner ) {
+        if ( '' === trim( $inner ) ) {
             return '';
         }
 
@@ -176,10 +201,10 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
 
     protected function audio( array $node ): string {
         $attrs   = $node['attrs'];
-        $src     = $attrs['audio'] ?? '';
+        $src     = D2G_Block_Builder::url( $attrs['audio'] ?? '' );
         $title   = $attrs['title'] ?? '';
         $artist  = $attrs['artist_name'] ?? '';
-        $image   = $attrs['image_url'] ?? '';
+        $image   = D2G_Block_Builder::url( $attrs['image_url'] ?? '' );
 
         if ( '' === $src ) {
             return '';
@@ -259,7 +284,7 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
         // Build individual wp:image inner blocks for each gallery image.
         $images_markup = '';
         foreach ( $ids as $id ) {
-            $url     = $this->resolve_attachment_url( $id );
+            $url     = D2G_Block_Builder::url( $this->resolve_attachment_url( $id ) );
             $alt     = function_exists( 'get_post_meta' ) ? (string) get_post_meta( $id, '_wp_attachment_image_alt', true ) : '';
             $caption = ( $show_cap && function_exists( 'wp_get_attachment_caption' ) ) ? wp_get_attachment_caption( $id ) : '';
 

@@ -394,7 +394,7 @@ return [
             . '[et_pb_social_media_follow_network social_network="facebook" url="https://facebook.com/x"][/et_pb_social_media_follow_network]'
             . '[et_pb_social_media_follow_network social_network="x" url="https://x.com/y"][/et_pb_social_media_follow_network]'
             . '[/et_pb_social_media_follow]',
-        'expect' => [ '<!-- wp:social-links', '<!-- wp:social-link', 'facebook.com/x' ],
+        'expect' => [ '<!-- wp:social-links', '<!-- wp:social-link', '"url":"https://facebook.com/x"' ],
     ],
 
     'module et_pb_map with a pin' => [
@@ -868,6 +868,95 @@ line two</pre>[/et_pb_text]',
             . '[et_pb_button button_text="Act" button_url="/go" /]'
             . '[/et_pb_column][/et_pb_row][/et_pb_section]',
         'expect' => [ '<h2>Title</h2>', '<p>Body</p>', 'https://example.com/i.jpg', 'Act' ],
+    ],
+
+    // ---------------------------------------------------------------- C-01 --
+    //
+    // Six structural parents iterated only the child tag they expected and let
+    // everything else fall off the end of the loop. One fixture per parent,
+    // each one built from the shape the review probed with.
+
+    'C-01 a tabs module keeps loose text and unexpected modules' => [
+        'divi'   => '[et_pb_tabs]Before[et_pb_button button_text="Keep" /]After[/et_pb_tabs]',
+        'expect' => [ '<p>Before</p>', '<p>After</p>', '>Keep</a>' ],
+        'warns'  => [ 'et_pb_tabs' ],
+    ],
+
+    'C-01 a counters module keeps loose text and unexpected modules' => [
+        'divi'   => '[et_pb_counters]Loose[et_pb_button button_text="Keep" /][et_pb_counter percent="50"]Label[/et_pb_counter][/et_pb_counters]',
+        'expect' => [ '<p>Loose</p>', '>Keep</a>', '<strong>Label</strong>: 50%' ],
+        'warns'  => [ 'et_pb_counters' ],
+    ],
+
+    'C-01 a pricing tables wrapper keeps unexpected children' => [
+        'divi'   => '[et_pb_pricing_tables]Intro[et_pb_pricing_table title="Plan" /][/et_pb_pricing_tables]',
+        'expect' => [ '<p>Intro</p>', 'Plan' ],
+        'warns'  => [ 'et_pb_pricing_tables' ],
+    ],
+
+    'C-01 a pricing table keeps text and modules around its items' => [
+        'divi'   => "[et_pb_pricing_table title=\"Plan\"]Before\n"
+            . '[et_pb_pricing_item]Feature[/et_pb_pricing_item]' . "\n"
+            . 'After[et_pb_button button_text="Keep too" /][/et_pb_pricing_table]',
+        'expect' => [ '<p>Before</p>', '<li>Feature</li>', '<p>After</p>', '>Keep too</a>' ],
+        'warns'  => [ 'et_pb_pricing_table' ],
+    ],
+
+    'C-01 social follow keeps content that is not a network' => [
+        'divi'   => '[et_pb_social_media_follow]Loose text[et_pb_button button_text="Keep" /]'
+            . '[et_pb_social_media_follow_network social_network="facebook" url="https://facebook.com/x"][/et_pb_social_media_follow_network]'
+            . '[/et_pb_social_media_follow]',
+        'expect' => [ '<p>Loose text</p>', '>Keep</a>', '<!-- wp:social-links' ],
+        'warns'  => [ 'et_pb_social_media_follow' ],
+    ],
+
+    'C-01 a video slider item without a src attribute is still converted' => [
+        'divi'   => '[et_pb_video_slider][et_pb_video_slider_item]https://youtu.be/abc[/et_pb_video_slider_item][/et_pb_video_slider]',
+        'expect' => [ '<!-- wp:embed', 'youtu.be/abc' ],
+        'reject' => [ '<!-- wp:group -->' . "\n" . '<div class="wp-block-group">' . "\n\n" ],
+    ],
+
+    // ---------------------------------------------------------------- C-03 --
+
+    'C-03 a comment terminator in an attribute cannot end the block comment' => [
+        'divi'   => '[et_pb_search placeholder="find--><img src=x onerror=alert(1)>" /]',
+        'expect' => [ '\\u002d\\u002d', '\\u003c', '\\u003e' ],
+        // The literal sequence would close the HTML comment early and leave the
+        // <img> as live markup for anything reading post_content as HTML.
+        'reject' => [ 'find--><img', '-->' . "\n" ],
+    ],
+
+    'C-03 an ampersand in a block attribute is escaped' => [
+        'divi'   => '[et_pb_search placeholder="Tom &amp; Jerry" /]',
+        'expect' => [ '\\u0026' ],
+        'reject' => [ '"Tom & Jerry"' ],
+    ],
+
+    'C-03 a javascript URL survives in neither half of a block' => [
+        'divi'   => '[et_pb_image src="javascript:alert(1)" /]',
+        'reject' => [ 'javascript:' ],
+        'warns'  => [ 'et_pb_image' ],
+    ],
+
+    'C-03 an unsafe link URL is dropped while the image is kept' => [
+        'divi'   => '[et_pb_image src="https://example.com/a.jpg" url="javascript:alert(1)" /]',
+        'expect' => [ '"linkDestination":"none"', 'example.com/a.jpg' ],
+        'reject' => [ 'javascript:', '"href"' ],
+    ],
+
+    'C-03 an unsafe social link is dropped rather than stored' => [
+        'divi'   => '[et_pb_social_media_follow_network social_network="facebook" url="javascript:alert(1)"][/et_pb_social_media_follow_network]',
+        'reject' => [ 'javascript:', '<!-- wp:social-link' ],
+    ],
+
+    'C-03 dynamic modules are serialized by the block builder' => [
+        'divi'   => '[et_pb_blog posts_number="3" /][et_pb_menu menu_id="4" /][et_pb_login /][et_pb_post_title /]',
+        'expect' => [
+            '<!-- wp:latest-posts {"postsToShow":3} /-->',
+            '<!-- wp:navigation /-->',
+            '<!-- wp:loginout /-->',
+            '<!-- wp:post-title /-->',
+        ],
     ],
 
     'deeply nested source does not blow up' => [

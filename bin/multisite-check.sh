@@ -68,7 +68,8 @@ echo "== WordPress debug log =="
 if npx wp-env run cli test -s wp-content/debug.log 2>/dev/null; then
     npx wp-env run cli cat wp-content/debug.log 2>/dev/null | tail -20
     echo
-    echo "warning: WordPress logged the above during the run." >&2
+    echo "error: WordPress logged the above during the run." >&2
+    STATUS=1
 else
     echo "empty — no notices, warnings or deprecations."
 fi

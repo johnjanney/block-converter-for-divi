@@ -52,9 +52,7 @@ class D2G_Renderer_Dynamic extends D2G_Module_Renderer {
             }, explode( ',', $categories ) );
         }
 
-        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
-        $json = $encode( $block_attrs, JSON_UNESCAPED_SLASHES );
-        return "<!-- wp:latest-posts $json /-->\n\n";
+        return D2G_Block_Builder::block( 'latest-posts', $block_attrs );
     }
 
     protected function portfolio( array $node ): string {
@@ -99,14 +97,13 @@ class D2G_Renderer_Dynamic extends D2G_Module_Renderer {
         $query_attrs = [ 'query' => $query ];
 
         // Build wp:post-template inner blocks.
-        $template_inner = '';
-        $template_inner .= "<!-- wp:post-featured-image /-->\n\n";
-        $template_inner .= "<!-- wp:post-title /-->\n\n";
+        $template_inner  = D2G_Block_Builder::block( 'post-featured-image' );
+        $template_inner .= D2G_Block_Builder::block( 'post-title' );
         if ( ! $fullwidth ) {
-            $template_inner .= "<!-- wp:post-excerpt /-->\n\n";
+            $template_inner .= D2G_Block_Builder::block( 'post-excerpt' );
         }
 
-        $post_template = "<!-- wp:post-template -->\n" . $template_inner . "<!-- /wp:post-template -->\n\n";
+        $post_template = D2G_Block_Builder::block( 'post-template', [], $template_inner, true );
         $html = '<div class="wp-block-query">' . "\n" . $post_template . '</div>';
         return D2G_Block_Builder::block( 'query', $query_attrs, $html, true );
     }
@@ -153,7 +150,7 @@ class D2G_Renderer_Dynamic extends D2G_Module_Renderer {
             );
         }
 
-        return "<!-- wp:navigation /-->\n\n";
+        return D2G_Block_Builder::block( 'navigation' );
     }
 
     protected function search( array $node ): string {
@@ -163,16 +160,11 @@ class D2G_Renderer_Dynamic extends D2G_Module_Renderer {
         if ( $placeholder ) {
             $block_attrs['placeholder'] = $placeholder;
         }
-        if ( empty( $block_attrs ) ) {
-            return "<!-- wp:search /-->\n\n";
-        }
-        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
-        $json = $encode( $block_attrs, JSON_UNESCAPED_SLASHES );
-        return "<!-- wp:search $json /-->\n\n";
+        return D2G_Block_Builder::block( 'search', $block_attrs );
     }
 
     protected function post_title( array $node ): string {
-        return "<!-- wp:post-title /-->\n\n";
+        return D2G_Block_Builder::block( 'post-title' );
     }
 
     protected function comments( array $node ): string {
@@ -183,7 +175,7 @@ class D2G_Renderer_Dynamic extends D2G_Module_Renderer {
     }
 
     protected function login( array $node ): string {
-        return "<!-- wp:loginout /-->\n\n";
+        return D2G_Block_Builder::block( 'loginout' );
     }
 
     protected function sidebar( array $node ): string {

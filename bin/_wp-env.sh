@@ -31,10 +31,26 @@ d2g_wp_env_reset() {
 # Start an environment, resetting first if a stale checkout blocks it.
 d2g_wp_env_start() {
     if npx wp-env start >/dev/null 2>&1; then
+        d2g_wp_env_update_db
         return 0
     fi
 
     echo "  (start failed; clearing leftover checkouts and retrying)"
     d2g_wp_env_reset
     npx wp-env start >/dev/null 2>&1
+    d2g_wp_env_update_db
+}
+
+# Clear a pending database upgrade.
+#
+# WordPress compares db_version against the core it is running and, when they
+# differ, redirects *every* admin page to wp-admin/upgrade.php until someone
+# runs the upgrade. bin/wp-matrix.sh moves the environment between WordPress
+# versions, so it routinely leaves the shared environment in that state — and
+# the next browser run then failed nine tests with "element not found", because
+# what the browser was actually looking at was the update screen.
+#
+# A no-op when nothing is pending.
+d2g_wp_env_update_db() {
+    npx wp-env run cli wp core update-db >/dev/null 2>&1 || true
 }

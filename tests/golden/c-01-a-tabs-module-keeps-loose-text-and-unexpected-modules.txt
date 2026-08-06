@@ -1,0 +1,25 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:paragraph -->
+<p>Before</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:buttons -->
+<div class="wp-block-buttons">
+<!-- wp:button -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="#">Keep</a></div>
+<!-- /wp:button -->
+
+</div>
+<!-- /wp:buttons -->
+
+<!-- wp:paragraph -->
+<p>After</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_tabs] A tabs module became a stack of headed sections, one per tab. Core has no tabs block, so all panels are now visible at once instead of one at a time.
+[et_pb_tabs] The module "et_pb_tabs" held content this converter does not model as part of that module — loose text, or another module nested inside it. The content was kept in place, but check where it landed and how it is styled.

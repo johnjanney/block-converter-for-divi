@@ -1,0 +1,20 @@
+<!-- wp:columns -->
+<div class="wp-block-columns">
+<!-- wp:paragraph -->
+<p>Intro</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:column -->
+<div class="wp-block-column">
+<!-- wp:heading {"textAlign":"center","level":3} -->
+<h3 class="has-text-align-center">Plan</h3>
+<!-- /wp:heading -->
+
+</div>
+<!-- /wp:column -->
+
+</div>
+<!-- /wp:columns -->
+
+===== WARNINGS =====
+[et_pb_pricing_tables] The module "et_pb_pricing_tables" held content this converter does not model as part of that module — loose text, or another module nested inside it. The content was kept in place, but check where it landed and how it is styled.

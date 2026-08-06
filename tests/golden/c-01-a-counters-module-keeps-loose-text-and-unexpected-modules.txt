@@ -1,0 +1,25 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:paragraph -->
+<p>Loose</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:buttons -->
+<div class="wp-block-buttons">
+<!-- wp:button -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="#">Keep</a></div>
+<!-- /wp:button -->
+
+</div>
+<!-- /wp:buttons -->
+
+<!-- wp:paragraph -->
+<p><strong>Label</strong>: 50%</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_counter] Bar counters became a line of text showing their label and percentage. Core has no animated bar-counter block, so the bar and its animation were not carried over.
+[et_pb_counters] The module "et_pb_counters" held content this converter does not model as part of that module — loose text, or another module nested inside it. The content was kept in place, but check where it landed and how it is styled.

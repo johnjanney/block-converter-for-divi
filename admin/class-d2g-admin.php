@@ -33,10 +33,10 @@ class D2G_Admin {
                 <button type="button" id="d2g-scan" class="button button-primary">
                     <?php esc_html_e( 'Scan for Divi Pages', 'block-converter-for-divi' ); ?>
                 </button>
-                <label class="d2g-backup-label">
-                    <input type="checkbox" id="d2g-backup" checked />
-                    <?php esc_html_e( 'Create backup before converting', 'block-converter-for-divi' ); ?>
-                </label>
+                <?php // Not a checkbox any more: a conversion that cannot be undone is not one this screen offers. ?>
+                <span class="d2g-backup-label">
+                    <?php esc_html_e( 'Every conversion is backed up first, and can be restored.', 'block-converter-for-divi' ); ?>
+                </span>
             </div>
 
             <?php // aria-live so a screen reader hears scan and conversion results, which are otherwise silent. ?>

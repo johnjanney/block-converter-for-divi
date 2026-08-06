@@ -11,6 +11,15 @@ on:
         type: boolean
         default: false
 
+# Third-party actions are pinned to commit SHAs, not to tags. A tag is a
+# mutable pointer: whoever controls the action repository can move v4 to a new
+# commit, and every workflow that trusts the tag runs that commit with this
+# repository checked out and the job's token available. The trailing comment
+# records which release each SHA was, so an upgrade is still a readable diff.
+#
+# Refresh one with:
+#   git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>
+
 jobs:
   # The full suite, including the real WordPress block validator. Runs on the
   # PHP version most hosts are on; the matrix job below covers the rest.
@@ -19,10 +28,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
         with:
           php-version: '8.3'
           extensions: dom, libxml
@@ -31,7 +40,7 @@ jobs:
       # 22 is the floor jsdom sets (see tests/js/package.json engines). Node 20
       # installed cleanly and then threw from undici inside the validator.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -75,10 +84,10 @@ jobs:
         php: [ '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' ]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
         with:
           php-version: ${{ matrix.php }}
           extensions: dom, libxml
@@ -103,10 +112,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -135,10 +144,10 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -155,7 +164,7 @@ jobs:
 
       - name: Keep the traces from a failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-traces
           path: |
@@ -173,10 +182,10 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
@@ -193,10 +202,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 
@@ -214,6 +223,47 @@ jobs:
       - name: Reject whitespace errors
         run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD
 
+  # Every WordPress release the plugin claims, validated against the block
+  # library that release actually ships.
+  #
+  # The full suite above validates with one library — the newest one npm has —
+  # which no released WordPress uses. That is how converted Cover blocks were
+  # invalid on 6.1 through 6.7, and converted Toggles invalid on 6.3, while
+  # every check in the project stayed green. See bin/block-library-matrix.sh.
+  block-library-matrix:
+    name: Block validity per WordPress release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: '8.3'
+          extensions: dom, libxml
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      # jsdom comes from tests/js; the block libraries under test are installed
+      # into a cache directory by the script itself.
+      - name: Install the validator harness
+        run: npm --prefix tests/js ci
+
+      - name: Cache the per-version block libraries
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/d2g-block-library-matrix
+          key: block-library-${{ hashFiles('tests/js/versions.json') }}
+
+      - name: Matrix
+        run: D2G_BL_CACHE="$HOME/.cache/d2g-block-library-matrix" bash bin/block-library-matrix.sh
+
   # Opt-in from the Actions tab. This is what measures `Requires at least` and
   # `Tested up to`; it should be re-run before a release and whenever the set of
   # blocks the converter emits changes.
@@ -224,10 +274,10 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm

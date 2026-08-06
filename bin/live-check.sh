@@ -25,6 +25,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# shellcheck source=bin/_wp-env.sh
+. "${ROOT}/bin/_wp-env.sh"
+
 STOP_AFTER=0
 for arg in "$@"; do
     case "$arg" in
@@ -55,6 +58,11 @@ fi
 
 echo "Starting WordPress (first run pulls images and takes a few minutes)..."
 npx wp-env start >/dev/null
+
+# bin/wp-matrix.sh leaves the shared environment on whichever WordPress it last
+# installed, and a version change makes WordPress redirect every admin page to
+# the database-upgrade screen until someone clears it. See bin/_wp-env.sh.
+d2g_wp_env_update_db
 
 WP_VERSION="$(npx wp-env run cli wp core version 2>/dev/null | head -1 | tr -d '\r')"
 echo "WordPress ${WP_VERSION} is up."
@@ -99,14 +107,17 @@ fi
 # ---- Anything WordPress complained about ----------------------------------
 #
 # WP_DEBUG_LOG is on in .wp-env.json. A notice or deprecation raised during the
-# run is a real finding even when every assertion passed.
+# run is a real finding even when every assertion passed, and this job's own
+# documentation said so long before it acted on it: for four releases the log
+# was printed with the word "warning" and the script then exited 0. A gate that
+# reports and does not fail is a gate that is open.
 
 echo
 echo "== WordPress debug log =="
+DIRTY_LOG=0
 if npx wp-env run cli test -s wp-content/debug.log 2>/dev/null; then
     npx wp-env run cli cat wp-content/debug.log 2>/dev/null | tail -30
-    echo
-    echo "warning: WordPress logged the above during the run." >&2
+    DIRTY_LOG=1
 else
     echo "empty — no notices, warnings or deprecations."
 fi
@@ -115,6 +126,13 @@ if [[ "$STOP_AFTER" -eq 1 ]]; then
     echo
     echo "Stopping the environment..."
     npx wp-env stop >/dev/null
+fi
+
+if [[ "$DIRTY_LOG" -eq 1 ]]; then
+    echo
+    echo "error: WordPress logged the above during the run. The suite passed, but" >&2
+    echo "a notice, warning or deprecation is a defect in its own right." >&2
+    exit 1
 fi
 
 echo

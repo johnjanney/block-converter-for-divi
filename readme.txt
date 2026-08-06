@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.2.0
+Stable tag: 2.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,10 +92,11 @@ close each other, and counters become static text.
 
 = Before you convert =
 
-**Back up your database.** Conversion overwrites post content. It can be undone
-with the Restore button, but only if the backup checkbox was ticked at
-conversion time. Test on a staging copy of your site first, and convert one page
-and check the result before running a batch.
+**Back up your database.** Conversion overwrites post content. Every conversion
+snapshots the original Divi content first and can be undone with the Restore
+button, but a plugin-level backup is not a substitute for a database backup.
+Test on a staging copy of your site first, and convert one page and check the
+result before running a batch.
 
 == Installation ==
 
@@ -124,11 +125,11 @@ raw shortcode text without it.
 
 = Can I undo a conversion? =
 
-Yes, if you left the backup checkbox ticked. Converted pages keep a copy of
-their original Divi content and show a **Restore** button in the scan results,
-which puts the original content back and re-enables the Divi Builder for that
-page. Without a backup you would need a WordPress revision or a database
-restore.
+Yes. Every conversion keeps a copy of the page's original Divi content, and the
+scan results show a **Restore** button for it, which puts the original content
+back and re-enables the Divi Builder for that page. The copy is written before
+anything is overwritten and is never replaced by a later conversion, so the
+original is always what comes back.
 
 = Will my pages look identical afterwards? =
 
@@ -164,6 +165,37 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.3.0 =
+* Fixed "Plugin could not be activated because it triggered a fatal error" when
+  upgrading from the older "Divi to Gutenberg Converter". The two plugins used
+  the same internal constant names, so this one read the *other* plugin's
+  directory and tried to load its files from there. The constants are renamed,
+  and installing the two side by side is now refused with an explanation
+  instead of a fatal error.
+* Fixed content being silently discarded by Tabs, Counters, Pricing Tables,
+  Social Follow and Video Slider modules. Each of them kept only the child type
+  it expected and dropped everything else — loose text, and any other module
+  nested inside. A tabs module holding a button lost the button and the text
+  around it, with no warning. All five now keep everything, in source order,
+  and report that they found something they do not model.
+* Fixed block attributes being written into block comments without WordPress's
+  own encoding. A module setting containing "-->" ended the HTML comment early
+  and left the rest as live markup for anything reading post content as HTML.
+  All block markup now goes through serialize_block_attributes().
+* Fixed converted Cover blocks being invalid on WordPress 6.1 through 6.7, and
+  converted Toggles being invalid on 6.3. Every fixture is now validated
+  against the block library each supported WordPress release actually ships.
+* Fixed unsafe URLs surviving in block attributes. A "javascript:" image source
+  was removed from the img tag and kept in the JSON the editor rebuilds that
+  tag from.
+* A save made in the block editor while a conversion is running is no longer
+  overwritten. The conversion is refused instead, and says so.
+* The backup is no longer optional. Clearing the checkbox still overwrote the
+  page and still removed Divi's builder settings, leaving a conversion nothing
+  could undo.
+* Scanning no longer re-counts the whole posts table for every page of results.
+* Removed the unused style-mapping code, which built CSS from raw Divi values.
 
 = 2.2.0 =
 * Tested against WordPress 6.1, 6.2, 6.3, 6.8 and 7.0.2. Previous releases
@@ -291,6 +323,14 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.3.0 =
+Fixes activation failing with a fatal error when the older "Divi to Gutenberg
+Converter" is still installed. If you hit that, deactivate and delete the old
+plugin first; your backups are stored on your posts and survive. Also fixes
+content being silently dropped by Tabs, Counters, Pricing Tables, Social Follow
+and Video Slider, and Cover and Toggle blocks being invalid on WordPress 6.1-6.7
+and 6.3 respectively.
 
 = 2.2.0 =
 Security and content-integrity release. Upgrade before converting anything.

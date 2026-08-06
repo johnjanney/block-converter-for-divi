@@ -1,0 +1,13 @@
+<!-- wp:group -->
+<div class="wp-block-group">
+<!-- wp:embed {"url":"https://youtu.be/abc","type":"video","providerNameSlug":"youtube"} -->
+<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube"><div class="wp-block-embed__wrapper">
+https://youtu.be/abc
+</div></figure>
+<!-- /wp:embed -->
+
+</div>
+<!-- /wp:group -->
+
+===== WARNINGS =====
+[et_pb_video_slider] A video slider became a stack of video blocks. Core has no video slider, so every video is now shown at once and the thumbnail navigation is gone.

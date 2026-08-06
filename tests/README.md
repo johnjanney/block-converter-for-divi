@@ -244,8 +244,17 @@ therefore cannot be checked offline:
 - **Restore byte-identity**, on every fixture.
 - **Real block validation of stored content** — what comes back *out of the
   database* is fed to `js/validate.mjs`, not what the converter emitted.
+- **The write guard** — a save made from inside `pre_post_update`, which is the
+  last moment before core's own UPDATE, must not be overwritten by the
+  conversion. This is the one race the plugin's lock cannot cover, because an
+  ordinary editor does not take that lock.
+- **The offline attribute encoder** — `D2G_Block_Builder`'s standalone copy of
+  `serialize_block_attributes()` is held against core's own and must agree byte
+  for byte. It disagreed in three ways when it was written, and the offline
+  suite could not have noticed.
 - **WordPress's own debug log**, which must be empty. A notice or deprecation
-  is a finding even when every assertion passes.
+  is a finding even when every assertion passes, and now fails the run rather
+  than printing a warning beside a zero exit code.
 
 The log is truncated at the start of each run, so what it holds afterwards
 belongs to that run.
@@ -280,18 +289,50 @@ The block count rises from 32 to 33 at 6.3: that is `core/details` becoming
 available and the feature detection stopping. Offline, that path can only be
 tested by stubbing the registry.
 
+## Block validity per WordPress release
+
+`bin/wp-matrix.sh` proves every emitted block is *registered* on each version.
+That is PHP, and PHP cannot run a block's `save()`. Validity was therefore only
+ever proven against one block library — the one pinned in
+`js/package-lock.json` — and that library is newer than any released
+WordPress. 7.0.2 ships `@wordpress/block-library` 9.40.2; the pin is 10.3.0.
+
+```bash
+bash bin/block-library-matrix.sh                 # every mapped release
+bash bin/block-library-matrix.sh 6.1 7.0.2       # only these
+bash bin/block-library-matrix.sh --show-mapping  # which library each ships
+bash bin/block-library-matrix.sh --clean         # drop the install cache
+```
+
+`tests/js/versions.json` maps each WordPress release to the `@wordpress`
+package versions it actually shipped, and records how each row was derived so
+it can be checked. Every fixture is converted **as that version** — the plugin
+adapts its output to the WordPress it runs on — and validated against that
+release's own block library.
+
+It found two real defects on its first run:
+
+- Converted **Cover** blocks were invalid on 6.1 through 6.7. `core/cover`
+  saves an `<img>` and a dimming `<span>`, and swapped their order in 6.8. The
+  converter emitted the 6.8 order everywhere.
+- Converted **Toggles** were invalid on 6.3. `core/details` arrived in 6.3 with
+  the summary as a *block attribute*, so 6.3 regenerated the markup with the
+  literal word "Details" wherever a title had been written only into the
+  element.
+
+Both are fixed, by `D2G_Block_Builder::wp_at_least()`.
+
+Two fixtures are still invalid on 6.1 and are recorded as known failures, with
+reasons, in `versions.json`: `core/html` on 6.1 re-serializes its content
+through a DOM, so raw markup that is not already DOM-normalized (a `<table>`
+with no explicit `<tbody>`, an empty `<p>`) is reported as unexpected content.
+The content is intact and the block renders; normalizing it first would fix the
+notice and defeat the verbatim preservation Custom HTML exists for. A known
+failure that starts *passing* fails the run, so the list cannot quietly rot.
+
 ## What this still does not cover
 
 Stated here so a green run is not read as more than it is:
-
-- **Block *validity* on older WordPress.** `bin/wp-matrix.sh` runs the live
-  suite across versions and asserts every emitted block is *registered* there —
-  which is how the 6.0 floor was found to be wrong. But that check is PHP, and
-  PHP cannot run a block's `save()`. Validity is still only proven against the
-  single block library pinned in `js/package-lock.json`, and core block markup
-  does change between versions (the Cover fix in 2.2.0 is exactly such a
-  change). Older `@wordpress/block-library` majors are published, so per-version
-  JS validation is feasible; it is not built. **Q18**.
 
 - **The admin screen beyond the paths above** — pagination, per-page sizes, the
   select-all checkbox, and multi-page batches are not covered.

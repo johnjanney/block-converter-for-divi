@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.2.0
+ * Version:     2.3.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -14,23 +14,6 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
-
-/*
- * The plugin was renamed from "Divi to Gutenberg Converter" (divi2gutenberg) to
- * satisfy the WordPress.org rule against leading a plugin name or slug with
- * someone else's trademark.
- *
- * The D2G_ / d2g_ prefixes below were deliberately NOT renamed along with it.
- * They are internal and already unique, but more importantly the storage keys
- * built from them — the _d2g_divi_backup and _d2g_backup_date post meta, and the
- * d2g_delete_data_on_uninstall option — hold real data on every site that ran
- * 1.0.0 through 1.2.0. Those backups are the only way to restore a converted
- * page. Renaming the keys would orphan every one of them, so they stay as they
- * are and existing backups keep working after the upgrade.
- */
-define( 'D2G_VERSION', '2.2.0' );
-define( 'D2G_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'D2G_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 /*
  * Nothing in this plugin runs on the front end. There is no shortcode, no
@@ -54,8 +37,124 @@ if ( ! is_admin() && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
     return;
 }
 
-require_once D2G_PLUGIN_DIR . 'includes/load.php';
-require_once D2G_PLUGIN_DIR . 'admin/class-d2g-admin.php';
+/**
+ * Is the plugin this one was renamed from also on this site and running?
+ *
+ * Two copies of this code cannot coexist. They declare the same classes —
+ * D2G_Converter, D2G_Parser, D2G_Style_Mapper, D2G_Admin — and PHP ends the
+ * request on the second declaration. Whichever of the two loads first wins and
+ * the other one fatals, so "it worked for me" depends only on directory order.
+ *
+ * Both states have to be detected, because the two orders look different:
+ *
+ *  - **Already loaded.** This is what an activation sees. WordPress includes
+ *    the plugin being activated into a request where the active plugins are
+ *    already in memory, so the old plugin's classes and constants are there.
+ *  - **Not loaded yet.** Plugins load in path order and `block-converter-for-divi/`
+ *    sorts before `divi2gutenberg/`, so on an ordinary admin request this file
+ *    runs *first* and would be the one to declare the classes the other then
+ *    dies on. The option is read directly rather than through
+ *    is_plugin_active(), which lives in an admin file WordPress has not loaded
+ *    at this point. `active_plugins` is autoloaded, so this costs no query.
+ *
+ * Deliberately conservative about what counts as the old plugin: the constant
+ * and the class, not the directory name alone, so a renamed or vendored copy is
+ * still caught.
+ */
+function bcfd_legacy_plugin_present() {
+    if ( defined( 'D2G_VERSION' ) || class_exists( 'D2G_Converter', false ) || class_exists( 'Divi2Gutenberg', false ) ) {
+        return true;
+    }
+
+    $active = (array) get_option( 'active_plugins', [] );
+
+    if ( is_multisite() ) {
+        $active = array_merge( $active, array_keys( (array) get_site_option( 'active_sitewide_plugins', [] ) ) );
+    }
+
+    foreach ( $active as $plugin ) {
+        if ( 0 === strpos( (string) $plugin, 'divi2gutenberg/' ) ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * What to tell someone who has both installed.
+ */
+function bcfd_legacy_conflict_message() {
+    return __( 'Block Converter for Divi cannot run while "Divi to Gutenberg Converter" is active. It is the same plugin under its old name, and the two share internal class names, so WordPress cannot load both. Deactivate and delete "Divi to Gutenberg Converter", then activate this one. Your existing backups are stored on your posts, not in the plugin, so they survive and stay restorable.', 'block-converter-for-divi' );
+}
+
+if ( bcfd_legacy_plugin_present() ) {
+    /*
+     * Refuse, rather than half-load. Returning here means this file declares
+     * nothing, so the old plugin keeps working and the site stays up — which is
+     * the better of the two outcomes for someone who has just upgraded and does
+     * not yet know why.
+     */
+    register_activation_hook( __FILE__, function () {
+        deactivate_plugins( plugin_basename( __FILE__ ) );
+        wp_die(
+            esc_html( bcfd_legacy_conflict_message() ),
+            esc_html__( 'Cannot activate', 'block-converter-for-divi' ),
+            [ 'back_link' => true ]
+        );
+    } );
+
+    $bcfd_notice = function () {
+        printf(
+            '<div class="notice notice-error"><p>%s</p></div>',
+            esc_html( bcfd_legacy_conflict_message() )
+        );
+    };
+
+    add_action( 'admin_notices', $bcfd_notice );
+    add_action( 'network_admin_notices', $bcfd_notice );
+
+    return;
+}
+
+/*
+ * The plugin was renamed from "Divi to Gutenberg Converter" (divi2gutenberg) to
+ * satisfy the WordPress.org rule against leading a plugin name or slug with
+ * someone else's trademark.
+ *
+ * The d2g_ / _d2g_ *storage* keys were deliberately not renamed along with it —
+ * the _d2g_divi_backup and _d2g_backup_date post meta and the
+ * d2g_delete_data_on_uninstall option hold real data on every site that ran
+ * 1.0.0 through 1.2.0, those backups are the only way to restore a converted
+ * page, and renaming the keys would orphan every one of them.
+ *
+ * The three *runtime constants* below were renamed, and had to be. They used to
+ * be D2G_VERSION, D2G_PLUGIN_DIR and D2G_PLUGIN_URL, which are exactly what the
+ * pre-rename plugin defines. define() does not overwrite an existing constant —
+ * it warns and keeps the old value — so on a site that still had the old plugin
+ * active, this file read D2G_PLUGIN_DIR and got the *other* plugin's directory:
+ *
+ *     require_once …/plugins/divi2gutenberg/includes/load.php
+ *     Fatal error: Failed opening required '…/divi2gutenberg/includes/load.php'
+ *
+ * which is the "Plugin could not be activated because it triggered a fatal
+ * error" that upgrading from 1.x produced. Nothing outside this file reads
+ * these, and no stored data is keyed on them, so the prefix is free to change.
+ */
+define( 'BCFD_VERSION', '2.3.0' );
+define( 'BCFD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'BCFD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+require_once BCFD_PLUGIN_DIR . 'includes/load.php';
+require_once BCFD_PLUGIN_DIR . 'admin/class-d2g-admin.php';
+
+/**
+ * Thrown to stop a conversion write that would land on content it did not read.
+ *
+ * See Block_Converter_For_Divi::guarded_update(), which is the only place this
+ * is raised and the only place it is caught.
+ */
+class D2G_Source_Changed extends RuntimeException {}
 
 /**
  * Main plugin class.
@@ -97,15 +196,15 @@ final class Block_Converter_For_Divi {
         }
         wp_enqueue_style(
             'd2g-admin',
-            D2G_PLUGIN_URL . 'admin/css/admin.css',
+            BCFD_PLUGIN_URL . 'admin/css/admin.css',
             [],
-            D2G_VERSION
+            BCFD_VERSION
         );
         wp_enqueue_script(
             'd2g-admin',
-            D2G_PLUGIN_URL . 'admin/js/admin.js',
+            BCFD_PLUGIN_URL . 'admin/js/admin.js',
             [ 'jquery' ],
-            D2G_VERSION,
+            BCFD_VERSION,
             true
         );
         // Every user-visible string the script can produce is passed in from
@@ -133,9 +232,9 @@ final class Block_Converter_For_Divi {
                 'convert'           => __( 'Convert', 'block-converter-for-divi' ),
                 'converting'        => __( 'Converting…', 'block-converter-for-divi' ),
                 'converted'         => __( 'Converted', 'block-converter-for-divi' ),
-                'confirmConvert'    => __( 'Convert this page to Gutenberg blocks? This will modify the page content.', 'block-converter-for-divi' ),
+                'confirmConvert'    => __( 'Convert this page to Gutenberg blocks? The Divi content is backed up first, so the page can be restored.', 'block-converter-for-divi' ),
                 /* translators: %s: number of selected pages. */
-                'confirmBatch'      => __( 'Convert %s page(s) to Gutenberg blocks?', 'block-converter-for-divi' ),
+                'confirmBatch'      => __( 'Convert %s page(s) to Gutenberg blocks? Each one is backed up first.', 'block-converter-for-divi' ),
                 'noSelection'       => __( 'No pages selected.', 'block-converter-for-divi' ),
                 /* translators: 1: post ID, 2: error message. */
                 'convertError'      => __( 'Error converting page %1$s: %2$s', 'block-converter-for-divi' ),
@@ -275,13 +374,36 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             $where_args[] = $post_type;
         }
 
-        $total_items = (int) $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p {$join} {$where}",
-                $where_args
-            )
-        );
+        // The count and the data query both search post_content with a leading
+        // wildcard, which no B-tree index can serve — every row's content has
+        // to be examined. The data query is bounded by LIMIT; the count is not,
+        // and paging through results re-ran it in full for every page.
+        //
+        // So the count is cached for the life of a scanning session, keyed by
+        // the filter it belongs to. Page 1 is a fresh scan and always recounts,
+        // so the number the user is shown is never stale; pages 2..n reuse it.
+        // Sorting is not part of the key, because it cannot change how many
+        // rows match.
+        //
+        // This is a real reduction and it is not a fix. A first scan of a large
+        // wp_posts still costs a full content scan, and the honest answer is
+        // the resumable inventory described in the project documents — a bigger
+        // change than this one should carry. The limit is written down in
+        // readme.txt rather than left for a user to discover.
+        $count_key   = 'd2g_scan_count_' . md5( wp_json_encode( [ $post_type ] ) );
+        $total_items = $paged > 1 ? get_transient( $count_key ) : false;
 
+        if ( false === $total_items ) {
+            $total_items = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p {$join} {$where}",
+                    $where_args
+                )
+            );
+            set_transient( $count_key, $total_items, self::SCAN_COUNT_TTL );
+        }
+
+        $total_items = (int) $total_items;
         $total_pages = $per_page ? (int) ceil( $total_items / $per_page ) : 1;
 
         // Never select p.post_content or bk.meta_value — either can be
@@ -355,6 +477,14 @@ Backups are the only way to restore a converted page. Once the plugin is removed
     private static function scan_hard_cap() {
         return (int) apply_filters( 'd2g_scan_hard_cap', 500 );
     }
+
+    /**
+     * How long a scan's row count stays good enough to page through.
+     *
+     * Long enough to cover working through the pager, short enough that a count
+     * never survives into a later session.
+     */
+    const SCAN_COUNT_TTL = 300;
 
     /**
      * Post types this plugin is allowed to touch.
@@ -660,7 +790,6 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         }
 
         $post_id = $post->ID;
-        $backup  = isset( $_POST['backup'] ) && 'yes' === $_POST['backup'];
 
         // The single most destructive thing this plugin can do is overwrite a
         // good backup with content it has already converted. That happens when
@@ -703,9 +832,16 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         // wp_send_json_*() ends the request, so the lock has to be dropped
         // before each one rather than in a finally block — otherwise a failed
         // conversion would keep the post locked until the lock aged out.
-        if ( $backup ) {
-            self::write_backup( $post );
-        }
+        //
+        // The backup is not optional. It used to be a checkbox, and clearing it
+        // still overwrote post_content and still deleted the Divi builder meta —
+        // leaving a conversion that nothing could undo. "There are revisions"
+        // is not an answer: revisions can be turned off with a constant, pruned
+        // by a plugin, or simply not go back far enough, and the builder meta
+        // is not in a revision at all. write_backup() keeps the first snapshot
+        // and never overwrites it, so calling it unconditionally cannot damage
+        // an existing backup.
+        self::write_backup( $post );
 
         $converter = new D2G_Converter();
         $converted = $converter->convert( $post->post_content );
@@ -724,13 +860,7 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             wp_send_json_error( self::kses_refusal( $losses ) );
         }
 
-        // wp_update_post() unslashes what it is given, so content that is not
-        // slashed on the way in loses a level of backslashes — every "\n" in a
-        // code sample, every escape in a regex or JSON string.
-        $update = wp_update_post( wp_slash( [
-            'ID'           => $post_id,
-            'post_content' => $converted,
-        ] ), true );
+        $update = self::guarded_update( $post_id, $converted, $expected_hash );
 
         if ( is_wp_error( $update ) ) {
             self::release_lock( $post_id, $lock );
@@ -752,10 +882,84 @@ Backups are the only way to restore a converted page. Once the plugin is removed
                 __( 'Page "%s" converted successfully.', 'block-converter-for-divi' ),
                 $post->post_title
             ),
-            'has_backup'  => (bool) $backup,
-            'backup_date' => $backup ? get_post_meta( $post_id, '_d2g_backup_date', true ) : '',
+            'has_backup'  => true,
+            'backup_date' => get_post_meta( $post_id, '_d2g_backup_date', true ),
             'warnings'    => $converter->get_warnings(),
         ] );
+    }
+
+    /**
+     * Write the converted content, but only while the stored source is still
+     * the source that was converted.
+     *
+     * The plugin's own lock stops two *conversions* overlapping. It cannot stop
+     * an ordinary editor, because an ordinary editor does not take it. So there
+     * was a window — backup, parse, convert, KSES check, which on a large page
+     * is not instantaneous — in which somebody could press Update in the block
+     * editor and have their save silently overwritten by a conversion of the
+     * content they had just replaced.
+     *
+     * Re-reading and comparing before calling wp_update_post() would only make
+     * the window smaller. This makes the comparison part of the write itself:
+     * `pre_post_update` is the last hook core fires before the UPDATE statement,
+     * so a read of the live row from inside it sees exactly what that statement
+     * is about to overwrite. If it is not what was converted, the write is
+     * abandoned there — before the row is touched, before the revision is
+     * saved, before any of the after-update hooks run.
+     *
+     * The abandonment is an exception rather than a return value because core
+     * gives an action no way to say no. It is caught immediately below, so it
+     * never escapes this method.
+     *
+     * Deliberately not implemented as a conditional `$wpdb->update()`: that
+     * would be a genuine compare-and-swap, and it would also skip revisions,
+     * KSES, and every hook another plugin has registered on a post save. The
+     * point of this plugin is not to lose content, and bypassing core's write
+     * path is a good way to start.
+     *
+     * @param int    $post_id       Post being converted.
+     * @param string $converted     The converted block markup.
+     * @param string $expected_hash MD5 of the Divi source it was converted from.
+     * @return int|WP_Error
+     */
+    private static function guarded_update( $post_id, $converted, $expected_hash ) {
+        global $wpdb;
+
+        $guard = static function ( $updating_id ) use ( $post_id, $expected_hash, $wpdb ) {
+            if ( (int) $updating_id !== (int) $post_id ) {
+                return;
+            }
+
+            // Straight to the database: the object cache still holds the copy
+            // this request read, and that copy is the thing in question.
+            $current = $wpdb->get_var(
+                $wpdb->prepare( "SELECT post_content FROM {$wpdb->posts} WHERE ID = %d", $post_id )
+            );
+
+            if ( null === $current || ! hash_equals( md5( $current ), $expected_hash ) ) {
+                throw new D2G_Source_Changed();
+            }
+        };
+
+        // Last, so the check sits as close to the UPDATE as a hook can get.
+        add_action( 'pre_post_update', $guard, PHP_INT_MAX );
+
+        try {
+            // wp_update_post() unslashes what it is given, so content that is
+            // not slashed on the way in loses a level of backslashes — every
+            // "\n" in a code sample, every escape in a regex or JSON string.
+            return wp_update_post( wp_slash( [
+                'ID'           => $post_id,
+                'post_content' => $converted,
+            ] ), true );
+        } catch ( D2G_Source_Changed $e ) {
+            return new WP_Error(
+                'd2g_source_changed',
+                __( 'This post was saved by someone else while it was being converted. Nothing was changed. Scan again, re-check the preview, and convert.', 'block-converter-for-divi' )
+            );
+        } finally {
+            remove_action( 'pre_post_update', $guard, PHP_INT_MAX );
+        }
     }
 
     /**

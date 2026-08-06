@@ -29,12 +29,18 @@ class D2G_Renderer_Pricing extends D2G_Module_Renderer {
     }
 
     protected function pricing_tables( array $node ): string {
-        $inner = '';
-        foreach ( $node['children'] as $child ) {
-            if ( 'et_pb_pricing_table' === $child['tag'] ) {
-                $inner .= $this->context->render_node( $child );
-            }
-        }
+        $inner = $this->context->render_structural_children(
+            $node,
+            [ 'et_pb_pricing_table' ],
+            function ( array $tables ) {
+                $out = '';
+                foreach ( $tables as $table ) {
+                    $out .= $this->context->render_node( $table );
+                }
+                return $out;
+            },
+            $node['attrs']
+        );
 
         $html = '<div class="wp-block-columns">' . "\n" . $inner . "\n" . '</div>';
         return D2G_Block_Builder::block( 'columns', [], $html, true );
@@ -81,17 +87,21 @@ class D2G_Renderer_Pricing extends D2G_Module_Renderer {
         // the table fell back to the node's raw inner content, so the shortcodes
         // themselves were written into a paragraph — leaving literal
         // "[et_pb_pricing_item]" text on the page once Divi was gone.
-        $items = [];
-        foreach ( $node['children'] as $child ) {
-            if ( 'et_pb_pricing_item' === $child['tag'] ) {
-                $items[] = $child;
-            }
-        }
-
-        if ( $items ) {
-            $inner .= $this->pricing_items( $items );
-        } else {
+        //
+        // The traversal is shared with every other structural parent, so a
+        // table that also holds loose text or another module keeps both. It
+        // used to keep the items and drop everything else, silently.
+        if ( empty( $node['children'] ) ) {
             $inner .= $this->context->render_inner_blocks( $node, $attrs );
+        } else {
+            $inner .= $this->context->render_structural_children(
+                $node,
+                [ 'et_pb_pricing_item' ],
+                function ( array $items ) {
+                    return $this->pricing_items( $items );
+                },
+                $attrs
+            );
         }
 
         if ( $btn_text ) {
