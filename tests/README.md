@@ -204,6 +204,19 @@ multisite is one-way and the other suites expect single-site.
 | CI | every push | every push | every push | every push | manual |
 | Release gate | `bin/build-zip.sh` | — | — | — | before a release |
 
+`main` is protected: the eleven jobs above are **required status checks**, so a
+pull request cannot be merged until they pass. That is enforced by GitHub rather
+than by whoever is doing the merging.
+
+It was not always. For four pull requests it was not, and `gh pr merge --auto`
+merged them the moment they were mergeable — because without protection there is
+nothing for "auto" to wait on. The checks happened to pass every time, but the
+gate being described did not exist. If you are reading this because a merge is
+blocked: that is the feature.
+
+Administrators can still override in an emergency (`enforce_admins` is off), but
+they have to do it deliberately.
+
 Without `--require-validator`, a missing Node harness prints a loud
 `NOT RUN — block validity is therefore UNPROVEN` and continues. It never
 silently reports a pass it did not make.
