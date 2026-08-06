@@ -105,7 +105,50 @@ $admins = get_users( [ 'role' => 'administrator', 'number' => 1 ] );
 $admin  = $admins[0];
 wp_set_current_user( $admin->ID );
 
-printf( "WordPress %s, plugin %s, PHP %s\n\n", get_bloginfo( 'version' ), D2G_VERSION, PHP_VERSION );
+printf( "WordPress %s, plugin %s, PHP %s\n\n", get_bloginfo( 'version' ), BCFD_VERSION, PHP_VERSION );
+
+// ------------------------------------------ the pre-rename plugin conflicts --
+//
+// Installing 2.x beside the 1.x plugin it was renamed from produced "Plugin
+// could not be activated because it triggered a fatal error", and the cause was
+// not the shared class names people would guess at. It was the constants: the
+// old plugin defines D2G_PLUGIN_DIR first, define() keeps an existing value
+// rather than overwriting it, and this plugin then required its bootstrap from
+// *the other plugin's directory*.
+//
+// Both halves are checked here, because a regression in either brings the fatal
+// back.
+
+d2g_ok(
+    'the runtime constants cannot collide with the pre-rename plugin',
+    defined( 'BCFD_PLUGIN_DIR' ) && ! defined( 'D2G_PLUGIN_DIR' ) && ! defined( 'D2G_VERSION' ),
+    sprintf(
+        'BCFD_PLUGIN_DIR=%s D2G_PLUGIN_DIR=%s',
+        defined( 'BCFD_PLUGIN_DIR' ) ? BCFD_PLUGIN_DIR : '(undefined)',
+        defined( 'D2G_PLUGIN_DIR' ) ? D2G_PLUGIN_DIR : '(undefined)'
+    )
+);
+
+d2g_ok(
+    'the bootstrap loads from this plugin\'s own directory',
+    defined( 'BCFD_PLUGIN_DIR' ) && is_readable( BCFD_PLUGIN_DIR . 'includes/load.php' )
+);
+
+// The "not loaded yet" branch of the detector: on an ordinary admin request
+// this plugin loads first, so the only evidence available is the option.
+$conflict_seen = ( function () {
+    $original = get_option( 'active_plugins', [] );
+    update_option( 'active_plugins', array_merge( (array) $original, [ 'divi2gutenberg/divi2gutenberg.php' ] ) );
+    $seen = function_exists( 'bcfd_legacy_plugin_present' ) ? bcfd_legacy_plugin_present() : null;
+    update_option( 'active_plugins', $original );
+    return $seen;
+} )();
+
+d2g_ok(
+    'an active pre-rename plugin is detected before anything is declared',
+    true === $conflict_seen,
+    'detector returned: ' . var_export( $conflict_seen, true )
+);
 
 // ------------------------------------------------------- endpoint contract --
 
@@ -118,18 +161,18 @@ d2g_ok( 'preview returns converted markup and a source token',
 $bad_nonce = d2g_call( 'd2g_preview_conversion', [ 'post_id' => $post_id ], false );
 d2g_ok( 'a bad nonce is rejected', null === $bad_nonce || empty( $bad_nonce['success'] ) );
 
-$no_token = d2g_call( 'd2g_convert_page', [ 'post_id' => $post_id, 'backup' => 'yes' ] );
+$no_token = d2g_call( 'd2g_convert_page', [ 'post_id' => $post_id ] );
 d2g_ok( 'conversion without a source token is refused',
     isset( $no_token['success'] ) && false === $no_token['success'] );
 
 $stale = d2g_call( 'd2g_convert_page', [
-    'post_id' => $post_id, 'backup' => 'yes', 'source_hash' => md5( 'stale' ),
+    'post_id' => $post_id, 'source_hash' => md5( 'stale' ),
 ] );
 d2g_ok( 'conversion with a stale source token is refused',
     isset( $stale['success'] ) && false === $stale['success'] );
 
 $missing = d2g_call( 'd2g_convert_page', [
-    'post_id' => 999999, 'backup' => 'yes', 'source_hash' => md5( '' ),
+    'post_id' => 999999, 'source_hash' => md5( '' ),
 ] );
 d2g_ok( 'conversion of a non-existent post is refused',
     isset( $missing['success'] ) && false === $missing['success'] );
@@ -142,7 +185,7 @@ $editor_id = wp_insert_user( [
 ] );
 wp_set_current_user( $editor_id );
 $as_editor = d2g_call( 'd2g_convert_page', [
-    'post_id' => $post_id, 'backup' => 'yes', 'source_hash' => $preview['data']['source_hash'],
+    'post_id' => $post_id, 'source_hash' => $preview['data']['source_hash'],
 ] );
 d2g_ok( 'an editor cannot convert (manage_options is required)',
     isset( $as_editor['success'] ) && false === $as_editor['success'] );
@@ -164,6 +207,123 @@ d2g_ok( 'the write lock is exclusive', $locked[0] && ! $locked[1],
     sprintf( 'first=%s second=%s', var_export( $locked[0], true ), var_export( $locked[1], true ) ) );
 
 wp_delete_post( $post_id, true );
+
+// ------------------------------------------- an edit that lands mid-conversion --
+//
+// The lock stops two *conversions* overlapping. It cannot stop an ordinary
+// editor, because an editor does not take it. Between the endpoint comparing
+// the source hash and wp_update_post() writing, somebody pressing Update in the
+// block editor used to have their save silently overwritten.
+//
+// Simulated at the only moment that matters: `pre_post_update` fires
+// immediately before core's UPDATE, so a save made from inside it is exactly a
+// save that lands inside the window. The plugin's own guard runs at
+// PHP_INT_MAX, after this one, and must refuse.
+
+$race_id  = d2g_make_post( '[et_pb_text]<p>Original</p>[/et_pb_text]', 'race' );
+$race_src = get_post( $race_id )->post_content;
+
+$intruder = static function ( $id ) use ( $race_id ) {
+    static $done = false;
+    if ( $done || (int) $id !== (int) $race_id ) {
+        return;
+    }
+    $done = true; // Only the conversion's own write, not the intruding one.
+
+    global $wpdb;
+    // Straight to the database, so this is a genuine external change rather
+    // than a re-entrant wp_update_post() the plugin might notice another way.
+    $wpdb->update(
+        $wpdb->posts,
+        [ 'post_content' => '[et_pb_text]<p>Edited by somebody else</p>[/et_pb_text]' ],
+        [ 'ID' => $race_id ]
+    );
+    clean_post_cache( $race_id );
+};
+
+add_action( 'pre_post_update', $intruder, 1 );
+$raced = d2g_call( 'd2g_convert_page', [
+    'post_id' => $race_id, 'source_hash' => md5( $race_src ),
+] );
+remove_action( 'pre_post_update', $intruder, 1 );
+
+d2g_ok(
+    'a save that lands mid-conversion is not overwritten',
+    isset( $raced['success'] ) && false === $raced['success'],
+    'endpoint reported: ' . wp_json_encode( $raced['data'] ?? null )
+);
+
+d2g_ok(
+    'the intruding edit survives intact',
+    'Edited by somebody else' === wp_strip_all_tags( get_post( $race_id )->post_content ) ||
+        false !== strpos( get_post( $race_id )->post_content, 'Edited by somebody else' ),
+    'post_content is now: ' . substr( get_post( $race_id )->post_content, 0, 120 )
+);
+
+wp_delete_post( $race_id, true );
+
+// ----------------------------------- the standalone attribute encoder is right --
+//
+// D2G_Block_Builder falls back to its own copy of serialize_block_attributes()
+// when WordPress is not loaded, which is how the offline fixture suite runs. A
+// fallback nobody compares is a fallback nobody knows is still correct, so it
+// is held against core's here, where both exist.
+
+$encoder_cases = [
+    [ 'placeholder' => 'find--><img src=x onerror=alert(1)>' ],
+    [ 'text' => 'Tom & Jerry', 'url' => 'https://example.test/a?b=1&c=2' ],
+    [ 'quoted' => 'she said "hello"', 'slash' => 'a\\b' ],
+    [ 'nested' => [ 'colour' => [ 'background' => '#102030' ] ], 'n' => 3, 'on' => true ],
+];
+
+$encoder_diffs = [];
+foreach ( $encoder_cases as $index => $case ) {
+    $core     = serialize_block_attributes( $case );
+    $fallback = D2G_Block_Builder::serialize_attributes_fallback( $case );
+
+    // WordPress 7.0 rewrote serialize_block_attributes() as one strtr() and
+    // added a sixth rule: a literal backslash becomes \. 6.1 through 6.8
+    // ran five sequential preg_replace() calls and left it as JSON's own \\.
+    //
+    // The fallback tracks current core, so on an older WordPress that one
+    // difference is expected — and it is only a difference in how the same
+    // character is spelled, which the block grammar reads identically. Normalise
+    // it away rather than exempting the case, so everything else about these
+    // inputs is still compared byte for byte on every version.
+    if ( ! D2G_Block_Builder::wp_at_least( '7.0' ) ) {
+        $core = str_replace( '\\\\', '\\u005c', $core );
+    }
+
+    if ( $core !== $fallback ) {
+        $encoder_diffs[] = sprintf( "case %d\n            core:     %s\n            fallback: %s", $index, $core, $fallback );
+    }
+}
+
+d2g_ok(
+    'the offline attribute encoder matches serialize_block_attributes()',
+    empty( $encoder_diffs ),
+    implode( "\n          ", $encoder_diffs )
+);
+
+// -------------------------------------- the version check reads a real version --
+//
+// D2G_Block_Builder::wp_at_least() decides which core/cover and core/details
+// markup to emit. Outside WordPress it answers "yes" to everything, which is
+// also what it would answer here if it failed to find the running version — so
+// a passing conversion proves nothing on its own. Ask it something that must be
+// false on any WordPress this plugin runs on.
+
+d2g_ok(
+    'the block builder reads the running WordPress version',
+    D2G_Block_Builder::wp_at_least( get_bloginfo( 'version' ) )
+        && ! D2G_Block_Builder::wp_at_least( '999.0' ),
+    sprintf(
+        'running %s; at_least(self)=%s at_least(999.0)=%s',
+        get_bloginfo( 'version' ),
+        var_export( D2G_Block_Builder::wp_at_least( get_bloginfo( 'version' ) ), true ),
+        var_export( D2G_Block_Builder::wp_at_least( '999.0' ), true )
+    )
+);
 
 // ------------------------------------------------------- KSES / multisite --
 //
@@ -197,7 +357,7 @@ $id        = d2g_make_post( $dangerous, 'kses: code module' );
 $before    = get_post( $id )->post_content;
 
 $refused = d2g_call( 'd2g_convert_page', [
-    'post_id' => $id, 'backup' => 'yes', 'source_hash' => md5( $before ),
+    'post_id' => $id, 'source_hash' => md5( $before ),
 ] );
 
 d2g_ok( 'a conversion that KSES would strip is refused',
@@ -215,7 +375,7 @@ d2g_ok( 'the page is left exactly as it was', get_post( $id )->post_content === 
 $safe_id   = d2g_make_post( '[et_pb_text]<p>Ordinary</p>[/et_pb_text]', 'kses: ordinary' );
 $safe_hash = md5( get_post( $safe_id )->post_content );
 $allowed   = d2g_call( 'd2g_convert_page', [
-    'post_id' => $safe_id, 'backup' => 'yes', 'source_hash' => $safe_hash,
+    'post_id' => $safe_id, 'source_hash' => $safe_hash,
 ] );
 
 d2g_ok( 'an ordinary page still converts without unfiltered_html',
@@ -256,7 +416,7 @@ foreach ( $fixtures as $name => $fixture ) {
     $id      = d2g_make_post( $fixture['divi'], $name );
     $hash    = md5( get_post( $id )->post_content );
     $result  = d2g_call( 'd2g_convert_page', [
-        'post_id' => $id, 'backup' => 'yes', 'source_hash' => $hash,
+        'post_id' => $id, 'source_hash' => $hash,
     ] );
 
     if ( empty( $result['success'] ) ) {
@@ -350,7 +510,7 @@ foreach ( $fixtures as $name => $fixture ) {
     }
     $id = d2g_make_post( $fixture['divi'], $name );
     $result = d2g_call( 'd2g_convert_page', [
-        'post_id' => $id, 'backup' => 'no', 'source_hash' => md5( get_post( $id )->post_content ),
+        'post_id' => $id, 'source_hash' => md5( get_post( $id )->post_content ),
     ] );
     if ( ! empty( $result['success'] ) ) {
         $sample[ $name ] = get_post( $id )->post_content;

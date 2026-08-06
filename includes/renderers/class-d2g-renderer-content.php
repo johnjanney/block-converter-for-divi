@@ -318,26 +318,32 @@ class D2G_Renderer_Content extends D2G_Module_Renderer {
     }
 
     protected function social_follow( array $node ): string {
-        $links = [];
-        foreach ( $node['children'] as $child ) {
-            if ( $child['tag'] === 'et_pb_social_media_follow_network' ) {
-                $network = $child['attrs']['social_network'] ?? '';
-                $url     = $child['attrs']['url'] ?? '#';
-                if ( $network ) {
-                    $links[ $network ] = $url;
+        // Networks are batched into one core/social-links block, so a run of
+        // them renders together; anything else in the module renders where it
+        // stands instead of being dropped on the floor.
+        return $this->context->render_structural_children(
+            $node,
+            [ 'et_pb_social_media_follow_network' ],
+            function ( array $networks ) {
+                $links = [];
+                foreach ( $networks as $child ) {
+                    $network = $child['attrs']['social_network'] ?? '';
+                    if ( $network ) {
+                        $links[ $network ] = $child['attrs']['url'] ?? '#';
+                    }
                 }
-            }
-        }
-
-        return D2G_Block_Builder::social_links( $links );
+                return D2G_Block_Builder::social_links( $links );
+            },
+            $node['attrs']
+        );
     }
 
     protected function social_network( array $node ): string {
         $attrs   = $node['attrs'];
         $network = $attrs['social_network'] ?? '';
-        $url     = $attrs['url'] ?? '#';
+        $url     = D2G_Block_Builder::url( $attrs['url'] ?? '#' );
 
-        if ( ! $network ) {
+        if ( ! $network || '' === $url ) {
             return '';
         }
 

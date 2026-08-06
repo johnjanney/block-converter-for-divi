@@ -1,10 +1,13 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.2.0` — validated and released. Runs against real WordPress
+**Status:** `2.3.0` — built, not yet published. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
-checked by WordPress's own block validator and the admin screen driven in a
-browser. `Requires at least` and `Tested up to` are both measurements now, not
-estimates. **Remaining caveat:** no page from a real Divi site has ever been
+checked by WordPress's own block validator against the block library **each**
+supported release actually ships (`bin/block-library-matrix.sh`) and the admin
+screen driven in a browser. `Requires at least` and `Tested up to` are both
+measurements now, not estimates. 2.3.0 also fixes the upgrade from the
+pre-rename plugin, which had failed with a fatal error since 2.0.0.
+**Remaining caveat:** no page from a real Divi site has ever been
 converted — every fixture was written by someone who already knew what the
 converter does — so it is best described as an assisted migration tool that
 produces a first block draft for review. WordPress.org submission is a separate
@@ -271,24 +274,32 @@ one-line change.
 
 ## 7. Known gaps / risk register
 
-1. **The admin screen has never been opened in a browser.** Everything else on
-   this list has been measured. Conversion, the AJAX endpoints, the database
-   round trip, restore byte-identity and block registration all run against real
-   WordPress across 6.1–7.0.2 (`bin/wp-matrix.sh`), and every fixture is
-   validated by core's own block validator. What no test touches is the Tools
-   screen itself: the scan table, the preview modal, the batch runner, the
-   progress and error reporting. Those are jQuery against a real DOM, and
-   nothing here exercises them. See `OPENQUESTIONS.md` Q30.
+1. ~~**The admin screen has never been opened in a browser.**~~ Closed in
+   2.2.0. `bash bin/e2e.sh` drives the Tools screen in Chromium: scan, preview,
+   single convert, restore, batch, settings, filters, sorting, dialog keyboard
+   behaviour, and console errors on load. Nine tests, and they found two real
+   defects nothing else could see. See `OPENQUESTIONS.md` Q30. Still not
+   covered: pagination, per-page sizes, select-all, and batches larger than
+   three.
 
-   A second, narrower gap: block *validity* is proven against one block library
-   (the version pinned in `tests/js/package-lock.json`, WordPress 7.0-era). The
-   matrix proves each emitted block *exists* on 6.1+, but PHP cannot run a
-   block's `save()`, so markup valid on 7.0 is not automatically valid on 6.1.
-   Older `@wordpress/block-library` majors are published, so this is buildable.
-2. **Restore depends on the backup being taken.** Conversion still overwrites
-   `post_content` outright. If the backup checkbox was unticked there is no
-   `_d2g_divi_backup`, no Restore button, and recovery falls back to WordPress
-   revisions or a database backup.
+   The narrower gap this entry used to describe alongside it — block *validity*
+   proven against only one block library — is also closed.
+   `bash bin/block-library-matrix.sh` validates every fixture against the
+   `@wordpress/block-library` that each of WordPress 6.1, 6.2, 6.3, 6.4, 6.5,
+   6.6, 6.7, 6.8 and 7.0.2 actually ships. It found two real defects on its
+   first run: converted Cover blocks were invalid on 6.1–6.7 (core swapped the
+   order of the two background elements in 6.8) and converted Toggles were
+   invalid on 6.3 (the summary was a block attribute there). Both fixed. Two
+   fixtures remain known-invalid on 6.1 alone and are recorded, with reasons,
+   in `tests/js/versions.json`. See Q31.
+
+2. ~~**Restore depends on the backup being taken.**~~ The backup is no longer
+   optional. It was a checkbox, and clearing it still overwrote `post_content`
+   and still deleted the Divi builder meta, leaving a conversion nothing could
+   undo. The server now snapshots unconditionally; `write_backup()` keeps the
+   first snapshot and never overwrites it, so this cannot damage an existing
+   backup. See Q32.
+
 3. ~~**kses filtering on multisite.**~~ Measured and handled in 2.2.0. On a
    network, a site administrator's writes go through KSES, and a Divi Code
    module loses its scripts and iframes to it. Conversion and restore now detect

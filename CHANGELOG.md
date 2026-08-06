@@ -98,6 +98,131 @@ _Nothing yet._
 
 ---
 
+## [2.3.0] — 2026-08-06
+
+Answers the third external review (`CODEX-REVIEW.md`, dated 2026-08-05;
+response in `CODEX-REVIEW-RESPONSE.md`). Every finding in it was reproduced
+before it was fixed.
+
+It also fixes an install-time defect the review did not cover and none of the
+suites could see: activating this plugin beside the pre-rename "Divi to
+Gutenberg Converter" failed with a fatal error. That has been broken since
+2.0.0, the release that performed the rename.
+
+### Fixed — upgrading from "Divi to Gutenberg Converter"
+
+- Activating this plugin while the pre-rename plugin was still installed failed
+  with "Plugin could not be activated because it triggered a fatal error".
+
+  The cause was not the shared class names, which is what it looks like. Both
+  plugins defined `D2G_VERSION`, `D2G_PLUGIN_DIR` and `D2G_PLUGIN_URL`, and
+  `define()` keeps an existing constant rather than overwriting it — so this
+  plugin read `D2G_PLUGIN_DIR`, got `…/plugins/divi2gutenberg/`, and tried to
+  require its own bootstrap from the other plugin's directory. That file does
+  not exist in 1.x, so the include was fatal. It has been broken on this upgrade
+  path since 2.0.0, which is the release that did the rename.
+
+  The three runtime constants are now `BCFD_*`. The `d2g_` storage keys are
+  untouched, so existing backups stay exactly where they are and stay
+  restorable.
+
+- Having both plugins on a site is now detected and refused with an explanation,
+  rather than crashing. Two copies of this code cannot coexist — they declare
+  the same classes — and which one dies depended only on directory order. The
+  plugin now declares nothing when it finds the old one active, so the site
+  keeps working, and activation stops with a message naming what to do.
+
+### Fixed — content loss
+
+- Six structural renderers discarded content. Tabs, Counters, Pricing Tables,
+  a Pricing Table with at least one item, Social Follow and Video Slider each
+  iterated only the child tag they expected and let everything else fall off
+  the end of the loop — loose text, and any module nested inside. The probe
+  `[et_pb_tabs]Before[et_pb_button button_text="Keep" /]After[/et_pb_tabs]`
+  converted to an empty Group: all four pieces of content gone, no warning.
+  They now share one traversal, `D2G_Converter::render_structural_children()`,
+  which keeps everything in source order and reports an unexpected structure.
+  A Video Slider item is also no longer skipped for lacking a `src` attribute,
+  since the shared Video renderer reads an iframe or URL from the body.
+- A URL that did not survive sanitising now raises a warning instead of the
+  module quietly disappearing.
+
+### Fixed — security
+
+- Block attributes were written into block comments as plain JSON.
+  `[et_pb_search placeholder="find--><img src=x onerror=alert(1)>" /]` produced
+  a comment that terminated at the author's own `-->`, leaving an `<img>` as
+  live markup for anything that reads `post_content` as HTML. All block markup
+  now goes through `serialize_block_attributes()`, with a byte-identical
+  fallback for the offline suite that the live suite holds against core's own.
+- Blog, Search, Menu, Login, Post Title and Portfolio built block comments by
+  hand and bypassed the builder entirely. They no longer can.
+- Stored URL attributes are sanitised with `sanitize_url()` and the same
+  cleaned value is used for the markup. `javascript:` was previously stripped
+  from an `<img>` and kept in the block attribute the editor rebuilds the
+  `<img>` from.
+- Deleted `D2G_Style_Mapper`'s unused functions. They were unreachable, and
+  they built CSS by concatenating raw Divi values and appending
+  `custom_css_main_element` verbatim — the injection class that had to be
+  fixed in the live renderers.
+- Third-party GitHub Actions are pinned to commit SHAs rather than mutable
+  tags.
+
+### Fixed — compatibility
+
+- Converted Cover blocks were invalid on WordPress 6.1 through 6.7.
+  `core/cover` swapped the order of its `<img>` and dimming `<span>` in 6.8,
+  and the converter emitted the 6.8 order everywhere.
+- Converted Toggles were invalid on WordPress 6.3. `core/details` arrived there
+  with the summary as a block attribute, so 6.3 regenerated every converted
+  toggle with the literal word "Details".
+- Both are decided by `D2G_Block_Builder::wp_at_least()`, and both were found
+  by the new per-version validator rather than reasoned about.
+
+### Fixed — data integrity
+
+- A save made in the block editor while a conversion was running was silently
+  overwritten. The plugin's lock cannot cover it, because an editor does not
+  take that lock. The write is now guarded at `pre_post_update` — the last
+  moment before core's own `UPDATE` — and refused if the stored content is no
+  longer what was converted. Revisions, hooks and KSES are untouched.
+- The backup is no longer optional. Clearing the checkbox still overwrote
+  `post_content` and still deleted `_et_pb_use_builder` and
+  `_et_pb_old_content`, leaving a conversion nothing could undo.
+
+### Fixed — tests and CI
+
+- A non-empty WordPress debug log now fails `bin/live-check.sh`,
+  `bin/e2e.sh`, `bin/multisite-check.sh` and `bin/wp-matrix.sh`. All four
+  printed the log with the word "warning" and then exited 0, which is what the
+  workflow and the test guide had claimed was a failure for four releases.
+- `bin/e2e.sh` runs the browser command as a tested condition, so `set -e` can
+  no longer exit before the debug-log diagnostics on a browser failure.
+- Added `bin/block-library-matrix.sh` and `tests/js/versions.json`: every
+  fixture validated against the `@wordpress/block-library` that each of
+  WordPress 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8 and 7.0.2 actually ships.
+  The suite previously validated against 10.3.0, which no released WordPress
+  uses — 7.0.2 ships 9.40.2.
+- Added a live test for the mid-conversion save, and one holding the offline
+  attribute encoder against `serialize_block_attributes()`. The second caught
+  three real differences in the encoder the first time it ran.
+- `bin/live-check.sh` and `bin/e2e.sh` clear a pending database upgrade on
+  start. `bin/wp-matrix.sh` moves the shared environment between WordPress
+  versions, which makes WordPress redirect every admin page to the upgrade
+  screen — nine browser tests failed with "element not found" because that was
+  what the browser was actually looking at.
+- 12 new fixtures, one per defect.
+
+### Changed
+
+- Scanning no longer re-counts the whole posts table for every page of results.
+  The count is taken on page 1 and cached for the pager. The underlying leading
+  wildcard scan is unchanged and still bounded only by the size of `wp_posts`.
+- The backup checkbox is gone from the Tools screen, replaced by a statement
+  that every conversion is backed up.
+
+---
+
 ## [2.2.0] — 2026-08-05
 
 Security and content-integrity release, following a second external review
@@ -684,7 +809,10 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v1.0.0...v1.1.0

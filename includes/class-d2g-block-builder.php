@@ -26,6 +26,21 @@ class D2G_Block_Builder {
 
     /**
      * Format a Gutenberg block comment.
+     *
+     * Every block comment this plugin writes goes through here. That is not
+     * tidiness: a block comment is an *HTML comment*, and the attribute JSON
+     * inside it has to be encoded so that nothing in it can end the comment
+     * early. Two renderers built their own comments by hand and skipped the
+     * encoding, which is how
+     *
+     *     [et_pb_search placeholder="find--><img src=x onerror=alert(1)>" /]
+     *
+     * became
+     *
+     *     <!-- wp:search {"placeholder":"find--><img src=x onerror=alert(1)>"} /-->
+     *
+     * — a comment that terminates at the author's own `-->`, leaving an <img>
+     * tag as live markup for any consumer that reads post_content as HTML.
      */
     public static function block( string $name, array $attrs = [], string $html = '', bool $has_inner = false ): string {
         // Core blocks are written without their namespace in block comments,
@@ -34,8 +49,7 @@ class D2G_Block_Builder {
 
         $attrs_json = '';
         if ( ! empty( $attrs ) ) {
-            $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
-            $attrs_json = ' ' . $encode( $attrs, JSON_UNESCAPED_SLASHES );
+            $attrs_json = ' ' . self::serialize_attributes( $attrs );
         }
 
         if ( $has_inner ) {
@@ -51,6 +65,119 @@ class D2G_Block_Builder {
         $open  = "<!-- wp:{$block_name}{$attrs_json} -->";
         $close = "<!-- /wp:{$block_name} -->";
         return $open . "\n" . $html . "\n" . $close . "\n\n";
+    }
+
+    /**
+     * Encode block attributes for the inside of a block's HTML comment.
+     *
+     * WordPress has a function for exactly this — serialize_block_attributes()
+     * — and it is used whenever it is available, so this plugin's output tracks
+     * core rather than a copy of core. The fallback below is byte-identical to
+     * that function and exists only for the standalone fixture suite, which
+     * runs with no WordPress loaded. tests/fixtures.php asserts the two agree
+     * on the characters that matter.
+     *
+     * The encoding is not cosmetic. `--`, `<`, `>` and `&` are escaped as JSON
+     * unicode sequences because each of them can interfere with an HTML
+     * comment; `\"` is escaped because the block grammar reads the JSON with a
+     * regular expression that a raw escaped quote can walk out of.
+     *
+     * @see https://developer.wordpress.org/reference/functions/serialize_block_attributes/
+     */
+    public static function serialize_attributes( array $attrs ): string {
+        if ( function_exists( 'serialize_block_attributes' ) ) {
+            return serialize_block_attributes( $attrs );
+        }
+
+        return self::serialize_attributes_fallback( $attrs );
+    }
+
+    /**
+     * The no-WordPress copy of serialize_block_attributes().
+     *
+     * Public only so the live suite can hold it against core's and fail if the
+     * two ever disagree — a fallback nobody compares is a fallback nobody knows
+     * is still correct. See tests/live/run.php.
+     */
+    public static function serialize_attributes_fallback( array $attrs ): string {
+        $encode = function_exists( 'wp_json_encode' ) ? 'wp_json_encode' : 'json_encode';
+        $json   = (string) $encode( $attrs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+
+        // The same six substitutions core makes, in core's order. Using PHP's
+        // JSON_HEX_TAG/JSON_HEX_AMP instead looks equivalent and is not: PHP
+        // writes `<` in upper case and core writes `<`, and a block
+        // comment is compared as bytes. The live suite holds this function
+        // against core's own and fails on any difference — which is how these
+        // three were found after the first attempt got all of them wrong.
+        return str_replace(
+            [ '--', '<', '>', '&', '\\"', '\\\\' ],
+            [ '\\u002d\\u002d', '\\u003c', '\\u003e', '\\u0026', '\\u0022', '\\u005c' ],
+            $json
+        );
+    }
+
+    /**
+     * Is the WordPress running this at least the given version?
+     *
+     * A block's save() is JavaScript that changes between releases, and a saved
+     * block only validates against the save() of the WordPress that opens it.
+     * The converter therefore cannot emit one canonical markup for a plugin
+     * that declares 6.1 through 7.0 — core/cover swapped the order of its two
+     * background elements in 6.8, so markup that is correct for 7.0 is reported
+     * as "unexpected or invalid content" on every release below it.
+     *
+     * D2G_Converter::block_supported() answers the related but different
+     * question of whether a block exists at all. This one is about the shape of
+     * a block that does.
+     *
+     * Outside WordPress — the fixture suite — the answer is "yes", so fixtures
+     * describe current markup by default. bin/block-library-matrix.sh overrides
+     * it per version through $GLOBALS['d2g_test_wp_version'], which is how the
+     * two defects above were found and how they stay fixed.
+     */
+    public static function wp_at_least( string $version ): bool {
+        if ( isset( $GLOBALS['d2g_test_wp_version'] ) && '' !== $GLOBALS['d2g_test_wp_version'] ) {
+            return version_compare( (string) $GLOBALS['d2g_test_wp_version'], $version, '>=' );
+        }
+
+        if ( isset( $GLOBALS['wp_version'] ) && '' !== $GLOBALS['wp_version'] ) {
+            return version_compare( (string) $GLOBALS['wp_version'], $version, '>=' );
+        }
+
+        return true;
+    }
+
+    /**
+     * Clean a Divi-supplied URL for storage in a block attribute.
+     *
+     * A block attribute is *data*, not markup, so it is sanitised rather than
+     * escaped — sanitize_url() is what WordPress documents for a URL on its way
+     * into the database. Doing it here also closes a mismatch that ran through
+     * every media renderer: the HTML half of a block was built with esc_url(),
+     * which drops `javascript:`, while the attribute half kept the raw value.
+     * The block attribute is what the editor regenerates markup from, so the
+     * dangerous value was the one that survived.
+     *
+     * Returns '' for a URL that cannot be made safe, which every caller treats
+     * as "there is no URL here" rather than emitting an empty one.
+     *
+     * @see https://developer.wordpress.org/reference/functions/esc_url/
+     */
+    public static function url( $value ): string {
+        $value = html_entity_decode( (string) $value, ENT_QUOTES, 'UTF-8' );
+
+        if ( '' === trim( $value ) ) {
+            return '';
+        }
+
+        if ( function_exists( 'sanitize_url' ) ) {
+            return sanitize_url( $value );
+        }
+        if ( function_exists( 'esc_url_raw' ) ) {
+            return esc_url_raw( $value );
+        }
+
+        return esc_url( $value );
     }
 
     /**
@@ -96,6 +223,7 @@ class D2G_Block_Builder {
      * @param string $inner   Serialized inner blocks.
      */
     public static function cover( string $url, string $overlay, string $inner ): string {
+        $url   = self::url( $url );
         $attrs = [ 'url' => $url ];
 
         $span_class = 'wp-block-cover__background has-background-dim-100 has-background-dim';
@@ -106,9 +234,20 @@ class D2G_Block_Builder {
             $span_style                  = ' style="background-color:' . esc_attr( $overlay ) . '"';
         }
 
+        $img  = '<img class="wp-block-cover__image-background" alt="" src="' . esc_url( $url ) . '" data-object-fit="cover"/>';
+        $span = '<span aria-hidden="true" class="' . $span_class . '"' . $span_style . '></span>';
+
+        // core/cover swapped these two around in WordPress 6.8. Emitting the
+        // 6.8 order on 6.1-6.7 made every converted Cover invalid there — the
+        // validator stops at the first token that disagrees and reports
+        // "Expected tag name `span`, instead saw `img`". Four releases of block
+        // validation never saw it, because the validator only ever ran against
+        // the newest block library published to npm. See
+        // bin/block-library-matrix.sh.
+        $background = self::wp_at_least( '6.8' ) ? $img . $span : $span . $img;
+
         $html = '<div class="wp-block-cover">'
-            . '<img class="wp-block-cover__image-background" alt="" src="' . esc_url( $url ) . '" data-object-fit="cover"/>'
-            . '<span aria-hidden="true" class="' . $span_class . '"' . $span_style . '></span>'
+            . $background
             . '<div class="wp-block-cover__inner-container">' . "\n" . $inner . "\n" . '</div>'
             . '</div>';
 
@@ -232,7 +371,15 @@ class D2G_Block_Builder {
 
         $inner = '';
         foreach ( $links as $network => $url ) {
+            $url = self::url( $url );
+            if ( '' === $url ) {
+                continue;
+            }
             $inner .= D2G_Block_Builder::block( 'social-link', [ 'url' => $url, 'service' => $network ] );
+        }
+
+        if ( '' === $inner ) {
+            return '';
         }
 
         $html = '<ul class="wp-block-social-links">' . "\n" . $inner . '</ul>';

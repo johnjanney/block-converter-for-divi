@@ -16,6 +16,6 @@
 </div>
 <!-- /wp:buttons -->
 
-<!-- wp:image {"sizeSlug":"large","linkDestination":"none","url":"https://example.com/a.jpg","alt":"A &amp; B"} -->
+<!-- wp:image {"sizeSlug":"large","linkDestination":"none","url":"https://example.com/a.jpg","alt":"A \u0026amp; B"} -->
 <figure class="wp-block-image size-large"><img src="https://example.com/a.jpg" alt="A &amp; B"/></figure>
 <!-- /wp:image -->

@@ -1,0 +1,4 @@
+
+
+===== WARNINGS =====
+[et_pb_image] An image was dropped because its source was not a URL WordPress will store — a "javascript:" or "data:" address, for example. Re-add the image from the media library.

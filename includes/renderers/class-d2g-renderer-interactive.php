@@ -83,6 +83,22 @@ class D2G_Renderer_Interactive extends D2G_Module_Renderer {
         $block_attrs = $is_open ? [ 'showContent' => true ] : [];
         $open_attr   = $is_open ? ' open' : '';
 
+        // In 6.3 — the release core/details arrived in — the summary was a
+        // block *attribute*, and save() wrote it out itself, defaulting to the
+        // literal word "Details". Writing the title only into the <summary>
+        // element therefore produced markup the 6.3 editor regenerated as
+        // "Details", and every converted Toggle was invalid on that release.
+        // 6.4 moved the summary into rich text inside the element, where this
+        // converter already put it, so the attribute is emitted for 6.3 alone.
+        //
+        // Stored already-escaped, because 6.3's save() writes the attribute out
+        // through RichText.Content, which emits it as markup rather than as
+        // text. The decoded title would have put a live <script> back on the
+        // page there — the exact defect N-12 fixed everywhere else.
+        if ( ! D2G_Block_Builder::wp_at_least( '6.4' ) ) {
+            $block_attrs['summary'] = D2G_Block_Builder::text( $title );
+        }
+
         $html = '<details class="wp-block-details"' . $open_attr . '><summary>' . D2G_Block_Builder::text( $title ) . '</summary>';
         if ( '' !== trim( $body ) ) {
             $html .= "\n" . $body;
@@ -102,12 +118,18 @@ class D2G_Renderer_Interactive extends D2G_Module_Renderer {
         // directly, so each child also passes the unmapped-style check. Calling
         // the renderer straight meant a tab with its own padding was converted
         // but never reported.
-        $inner = '';
-        foreach ( $node['children'] as $child ) {
-            if ( 'et_pb_tab' === $child['tag'] ) {
-                $inner .= $this->context->render_node( $child );
-            }
-        }
+        $inner = $this->context->render_structural_children(
+            $node,
+            [ 'et_pb_tab' ],
+            function ( array $tabs ) {
+                $out = '';
+                foreach ( $tabs as $tab ) {
+                    $out .= $this->context->render_node( $tab );
+                }
+                return $out;
+            },
+            $node['attrs']
+        );
 
         $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
         return D2G_Block_Builder::block( 'group', [], $html, true );
@@ -166,12 +188,19 @@ class D2G_Renderer_Interactive extends D2G_Module_Renderer {
     }
 
     protected function counters( array $node ): string {
-        $inner = '';
-        foreach ( $node['children'] as $child ) {
-            if ( 'et_pb_counter' === $child['tag'] ) {
-                $inner .= $this->context->render_node( $child );
-            }
-        }
+        $inner = $this->context->render_structural_children(
+            $node,
+            [ 'et_pb_counter' ],
+            function ( array $counters ) {
+                $out = '';
+                foreach ( $counters as $counter ) {
+                    $out .= $this->context->render_node( $counter );
+                }
+                return $out;
+            },
+            $node['attrs']
+        );
+
         $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
         return D2G_Block_Builder::block( 'group', [], $html, true );
     }

@@ -39,6 +39,23 @@ function esc_url( $url ) {
     return str_replace( [ '"', "'", '<', '>' ], '', $url );
 }
 
+/**
+ * Stand-in for sanitize_url(): the same acceptance rules as the esc_url() shim
+ * above, without the display-side entity encoding.
+ *
+ * Deliberately NOT a stub for serialize_block_attributes(). Leaving that
+ * undefined is what makes this suite exercise the builder's own fallback
+ * encoder, so the two implementations cannot drift unnoticed — the WordPress
+ * one is exercised by tests/live/run.php instead.
+ */
+function sanitize_url( $url ) {
+    $url = trim( (string) $url );
+    if ( preg_match( '#^\s*(javascript|data|vbscript):#i', $url ) ) {
+        return '';
+    }
+    return str_replace( [ '"', "'", '<', '>', ' ' ], [ '', '', '', '', '%20' ], $url );
+}
+
 function __( $text, $domain = 'default' ) {
     return $text;
 }

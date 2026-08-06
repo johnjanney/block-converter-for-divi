@@ -20,7 +20,7 @@ MAIN="${SLUG}.php"
 # ---- Resolve and cross-check the version -----------------------------------
 
 HEADER_VERSION="$(grep -m1 -E '^\s*\*\s*Version:' "$MAIN" | sed -E 's/.*Version:[[:space:]]*//' | tr -d '[:space:]')"
-CONST_VERSION="$(grep -m1 -E "define\(\s*'D2G_VERSION'" "$MAIN" | sed -E "s/.*'D2G_VERSION'\s*,\s*'([^']+)'.*/\1/")"
+CONST_VERSION="$(grep -m1 -E "define\(\s*'BCFD_VERSION'" "$MAIN" | sed -E "s/.*'BCFD_VERSION'\s*,\s*'([^']+)'.*/\1/")"
 
 if [[ -z "$HEADER_VERSION" ]]; then
     echo "error: could not read the Version header from ${MAIN}" >&2
@@ -28,8 +28,8 @@ if [[ -z "$HEADER_VERSION" ]]; then
 fi
 
 if [[ "$HEADER_VERSION" != "$CONST_VERSION" ]]; then
-    echo "error: version mismatch — header is '${HEADER_VERSION}', D2G_VERSION is '${CONST_VERSION}'." >&2
-    echo "       Both must match; D2G_VERSION is used for asset cache-busting." >&2
+    echo "error: version mismatch — header is '${HEADER_VERSION}', BCFD_VERSION is '${CONST_VERSION}'." >&2
+    echo "       Both must match; BCFD_VERSION is used for asset cache-busting." >&2
     exit 1
 fi
 

@@ -62,7 +62,7 @@ $ok( 'the site administrator does NOT hold unfiltered_html — the whole problem
     ! current_user_can( 'unfiltered_html' ) );
 
 // The destructive case.
-$res = ms_call( 'd2g_convert_page', [ 'post_id' => $id, 'backup' => 'yes', 'source_hash' => md5( $before ) ] );
+$res = ms_call( 'd2g_convert_page', [ 'post_id' => $id, 'source_hash' => md5( $before ) ] );
 $ok( 'a conversion that would be stripped is refused', isset( $res['success'] ) && false === $res['success'] );
 $ok( 'the refusal explains what would be removed',
     isset( $res['data'] ) && false !== strpos( (string) $res['data'], 'script' ),
@@ -70,7 +70,7 @@ $ok( 'the refusal explains what would be removed',
 $ok( 'the page is untouched', get_post( $id )->post_content === $before );
 
 // The ordinary case must still work, or the plugin is useless on a network.
-$res2 = ms_call( 'd2g_convert_page', [ 'post_id' => $safe, 'backup' => 'yes', 'source_hash' => md5( get_post( $safe )->post_content ) ] );
+$res2 = ms_call( 'd2g_convert_page', [ 'post_id' => $safe, 'source_hash' => md5( get_post( $safe )->post_content ) ] );
 $ok( 'an ordinary page still converts for a site administrator', ! empty( $res2['success'] ),
     wp_json_encode( $res2 ) );
 
@@ -81,7 +81,7 @@ $ok( 'and what was stored is what the converter produced',
 // A super admin is unaffected and can convert the dangerous page.
 wp_set_current_user( 1 );
 $ok( 'a super admin does hold unfiltered_html', current_user_can( 'unfiltered_html' ) );
-$res3 = ms_call( 'd2g_convert_page', [ 'post_id' => $id, 'backup' => 'yes', 'source_hash' => md5( get_post( $id )->post_content ) ] );
+$res3 = ms_call( 'd2g_convert_page', [ 'post_id' => $id, 'source_hash' => md5( get_post( $id )->post_content ) ] );
 $ok( 'a super admin can convert the same page', ! empty( $res3['success'] ), wp_json_encode( $res3 ) );
 $ok( 'and the script survives for them', false !== strpos( get_post( $id )->post_content, '<script>' ) );
 

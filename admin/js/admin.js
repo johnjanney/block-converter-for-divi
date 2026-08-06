@@ -560,7 +560,6 @@
     });
 
     function convertPage(postId, $btn) {
-        var backup = $('#d2g-backup').is(':checked') ? 'yes' : 'no';
         var $row = rowFor(postId);
 
         setRowBusy(postId, true);
@@ -572,7 +571,6 @@
             action: 'd2g_convert_page',
             nonce: d2g.nonce,
             post_id: postId,
-            backup: backup,
             source_hash: sourceHash[postId] || ''
         }).then(function (res) {
             setRowBusy(postId, false);

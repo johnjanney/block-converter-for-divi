@@ -381,6 +381,83 @@ class D2G_Converter {
     }
 
     /**
+     * Render a structural parent's children in source order, handing the child
+     * tags it understands to a callback and keeping everything else.
+     *
+     * Six renderers each wrote their own version of this loop, and every one of
+     * them was written the same wrong way: `foreach ( children as child ) { if
+     * ( child.tag === the_one_i_want ) … }`. Anything else in the parent — loose
+     * text, a Button somebody dropped into a Tabs module, a third-party module,
+     * a shape Divi emits that this converter has not seen — fell off the end of
+     * the `if` and was gone. No block, no warning, nothing in the preview.
+     *
+     *     [et_pb_tabs]Before[et_pb_button button_text="Keep" /]After[/et_pb_tabs]
+     *
+     * converted to an empty Group. All four pieces of content were discarded.
+     *
+     * This is the one traversal they now share. Expected children arrive at the
+     * callback in *runs* of consecutive siblings, because some parents batch
+     * them — a pricing table turns a run of items into one list — and a run
+     * boundary is exactly where unexpected content belongs. Everything that is
+     * not expected is rendered where it stands, and the parent says that it
+     * found something it did not model.
+     *
+     * @param array    $node      The structural parent.
+     * @param string[] $expected  Child tags the parent handles itself.
+     * @param callable $on_run    fn( array $children ): string — one run of expected children.
+     * @param array    $attrs     Styling attributes applied to loose HTML runs.
+     */
+    public function render_structural_children( array $node, array $expected, callable $on_run, array $attrs = [] ): string {
+        $output     = '';
+        $run        = [];
+        $unexpected = false;
+
+        $flush = function () use ( &$run, $on_run, &$output ) {
+            if ( $run ) {
+                $output .= (string) $on_run( $run );
+                $run     = [];
+            }
+        };
+
+        foreach ( $node['children'] ?? [] as $child ) {
+            if ( in_array( $child['tag'], $expected, true ) ) {
+                $run[] = $child;
+                continue;
+            }
+
+            $rendered = '__text__' === $child['tag']
+                ? $this->render_inner_html( $child['content'], $attrs )
+                : $this->render_node( $child );
+
+            // Whitespace between shortcodes is how Divi formats its own output;
+            // it is not content, and reporting it would make the warning
+            // meaningless on every ordinary page.
+            if ( '' === trim( $rendered ) ) {
+                continue;
+            }
+
+            $flush();
+            $output    .= $rendered;
+            $unexpected = true;
+        }
+
+        $flush();
+
+        if ( $unexpected ) {
+            $this->add_warning(
+                $node['tag'],
+                sprintf(
+                    /* translators: %s: Divi shortcode tag. */
+                    __( 'The module "%s" held content this converter does not model as part of that module — loose text, or another module nested inside it. The content was kept in place, but check where it landed and how it is styled.', 'block-converter-for-divi' ),
+                    $node['tag']
+                )
+            );
+        }
+
+        return $output;
+    }
+
+    /**
      * Convert one run of loose HTML, routing embedded media around the DOM step.
      */
     public function render_inner_html( string $html, array $attrs ): string {

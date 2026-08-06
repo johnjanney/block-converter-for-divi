@@ -26,14 +26,30 @@
  *     tolerates, and it runs with no node_modules.
  *
  * Usage:
- *   node validate.mjs <cases.json> [--json]
+ *   node validate.mjs <cases.json> [--json] [--modules <dir>] [--modules <dir>]
  *
  * Input is { fixtureName: blockMarkup }. Exit code 0 when everything validates.
+ *
+ * --modules points the @wordpress/* imports at another node_modules tree, so
+ * the same fixtures can be validated against the block library a *specific*
+ * WordPress release shipped rather than only the newest one. See
+ * bin/block-library-matrix.sh and tests/js/versions.json. jsdom is always
+ * resolved from this directory; only the block library moves.
  */
 
 import fs from 'node:fs';
+import nodePath from 'node:path';
 import { createRequire } from 'node:module';
 import { JSDOM, VirtualConsole } from 'jsdom';
+
+const argv = process.argv.slice( 2 );
+
+function optionValue( name ) {
+    const index = argv.indexOf( name );
+    return index !== -1 && argv[ index + 1 ] ? argv[ index + 1 ] : '';
+}
+
+const modulesDir = optionValue( '--modules' );
 
 // ---------------------------------------------------------------- DOM setup --
 // The block library is editor code: save functions build elements, and some
@@ -74,15 +90,34 @@ for ( const key of [
 
 globalThis.requestAnimationFrame = ( cb ) => setTimeout( cb, 0 );
 globalThis.cancelAnimationFrame = ( id ) => clearTimeout( id );
-globalThis.matchMedia = () => ( {
+
+// jsdom does not implement matchMedia. It has to exist on the jsdom *window*
+// as well as on globalThis: @wordpress/viewport reads `window.matchMedia` at
+// import time, and older block libraries pull viewport in, so a stub only on
+// globalThis makes the whole library fail to load with a TypeError that says
+// nothing about why.
+const matchMediaStub = () => ( {
     matches: false,
+    media: '',
+    onchange: null,
     addListener() {}, removeListener() {},
     addEventListener() {}, removeEventListener() {},
+    dispatchEvent: () => false,
 } );
+globalThis.matchMedia = matchMediaStub;
+dom.window.matchMedia = matchMediaStub;
 
 // The ESM builds import .json with no import attribute, which Node refuses. The
 // CommonJS builds are the same code and load cleanly.
-const require = createRequire( import.meta.url );
+//
+// When --modules is given, resolution is rooted in that tree instead. The path
+// handed to createRequire() is a file *inside* the directory, which is how Node
+// decides where the node_modules lookup starts.
+const require = createRequire(
+    modulesDir
+        ? nodePath.join( nodePath.resolve( modulesDir ), 'validate-entry.cjs' )
+        : import.meta.url
+);
 
 const { parse, getBlockTypes } = require( '@wordpress/blocks' );
 const { registerCoreBlocks } = require( '@wordpress/block-library' );
@@ -215,9 +250,16 @@ function validate( name, markup ) {
 
 // ---------------------------------------------------------------------- main --
 
-const args = process.argv.slice( 2 );
-const asJson = args.includes( '--json' );
-const inputPath = args.find( ( arg ) => ! arg.startsWith( '--' ) );
+const asJson = argv.includes( '--json' );
+
+// Skip the value that belongs to --modules; it is a path, not the input file.
+// -1 + 1 is 0, which would silently exclude the input file itself whenever
+// --modules is absent — which is every ordinary run.
+const modulesFlagIndex = argv.indexOf( '--modules' );
+const modulesValueIndex = modulesFlagIndex === -1 ? -1 : modulesFlagIndex + 1;
+const inputPath = argv.find(
+    ( arg, index ) => ! arg.startsWith( '--' ) && index !== modulesValueIndex
+);
 
 if ( ! inputPath ) {
     process.stderr.write( 'usage: node validate.mjs <cases.json> [--json]\n' );

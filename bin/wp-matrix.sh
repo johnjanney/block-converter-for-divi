@@ -30,6 +30,9 @@ PLUGIN_PATH="wp-content/plugins/block-converter-for-divi"
 OVERRIDE="${ROOT}/.wp-env.override.json"
 RESULTS="$(mktemp)"
 
+# Versions whose run left something in wp-content/debug.log.
+DIRTY_LOGS=()
+
 # WordPress version paired with a PHP version that release actually supported.
 # Running 6.0 on PHP 8.3 produces deprecation noise from core, not from us,
 # which would drown the signal this script exists to read.
@@ -132,10 +135,13 @@ EOF
     printf '%s\t%s\t%s\t%s\n' \
         "${ACTUAL_WP:-$VERSION} (PHP ${ACTUAL_PHP:-?})" "$VERDICT" "${SUMMARY:-refused}" "$MISSING" >> "$RESULTS"
 
+    # A version that passes its checks while WordPress logs a deprecation has
+    # not passed. Recorded per version so the table still prints in full.
     LOG="$(npx wp-env run cli cat wp-content/debug.log 2>/dev/null | grep -vE '^\s*$' | head -5)"
     if [[ -n "$LOG" ]]; then
         echo "  WordPress logged:"
         echo "$LOG" | sed 's/^/    /'
+        DIRTY_LOGS+=("${ACTUAL_WP:-$VERSION}")
     fi
 done
 
@@ -153,6 +159,11 @@ TOO_HIGH="$(grep -c 'FLOOR HIGH' "$RESULTS" || true)"
 rm -f "$RESULTS"
 
 echo
+if [[ "${#DIRTY_LOGS[@]}" -gt 0 ]]; then
+    echo "WordPress logged notices, warnings or deprecations on: ${DIRTY_LOGS[*]}" >&2
+    exit 1
+fi
+
 if [[ "$BROKEN" -gt 0 ]]; then
     echo "${BROKEN} version(s) at or above the declared floor of ${FLOOR} do not work." >&2
     echo "Either fix them, or raise 'Requires at least'." >&2

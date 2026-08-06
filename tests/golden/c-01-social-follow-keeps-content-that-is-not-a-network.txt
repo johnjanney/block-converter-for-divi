@@ -1,0 +1,22 @@
+<!-- wp:paragraph -->
+<p>Loose text</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:buttons -->
+<div class="wp-block-buttons">
+<!-- wp:button -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="#">Keep</a></div>
+<!-- /wp:button -->
+
+</div>
+<!-- /wp:buttons -->
+
+<!-- wp:social-links -->
+<ul class="wp-block-social-links">
+<!-- wp:social-link {"url":"https://facebook.com/x","service":"facebook"} /-->
+
+</ul>
+<!-- /wp:social-links -->
+
+===== WARNINGS =====
+[et_pb_social_media_follow] The module "et_pb_social_media_follow" held content this converter does not model as part of that module — loose text, or another module nested inside it. The content was kept in place, but check where it landed and how it is styled.
