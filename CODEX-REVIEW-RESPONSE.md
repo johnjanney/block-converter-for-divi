@@ -482,7 +482,17 @@ Every suite below was run on this machine against the current working tree.
 - Uninstall, on single site or multisite. Still untested, as the review says.
 - A production-scale database benchmark.
 - A real, anonymized Divi page corpus, and any visual comparison. This remains
-  the largest gap in the project and nothing in this response narrows it.
+  the largest gap in the project.
+
+  It is narrower than it was, but only slightly. After the work above was
+  complete, 2.3.0 was installed on a live WordPress site and used to convert
+  about 15 real Divi pages, successfully. That is the first time this plugin has
+  touched content it did not author. Two limits on what it establishes: the
+  pages were sections, rows, text and images — the module set the fixtures
+  already cover best, and not the renderers where C-01 found silent loss — and
+  none of those pages are in the corpus, so nothing about them is guarded
+  against regression. Whether the block editor reported any converted page as
+  invalid, and whether the published pages matched, were **not established**.
 
 ---
 
@@ -492,9 +502,10 @@ Unchanged from the review's, and the review's reasoning still holds. This is an
 assisted migration tool. It is not lossless, it has never been run against a
 page from a real Divi site, and no visual comparison exists.
 
-C-01 through C-04 are fixed and C-07 is fixed further than the review asked, but
-the corpus condition the review set for a WordPress.org submission is not met
-and is not addressed here. Users should preview every conversion, read every
+C-01 through C-04 are fixed and C-07 is fixed further than the review asked. The
+corpus condition the review set for a WordPress.org submission is still not met:
+converting 15 real pages by hand is encouraging, and it is not a corpus — it
+guards nothing, and it covered the easiest modules. Users should preview every conversion, read every
 warning, open the result in the block editor, and compare the published page
 before removing Divi.
 

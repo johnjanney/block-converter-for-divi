@@ -7,15 +7,20 @@ supported release actually ships (`bin/block-library-matrix.sh`) and the admin
 screen driven in a browser. `Requires at least` and `Tested up to` are both
 measurements now, not estimates. 2.3.0 also fixes the upgrade from the
 pre-rename plugin, which had failed with a fatal error since 2.0.0.
-**Remaining caveat:** no page from a real Divi site has ever been
-converted — every fixture was written by someone who already knew what the
-converter does — so it is best described as an assisted migration tool that
-produces a first block draft for review. WordPress.org submission is a separate
+**Remaining caveat:** the fixture corpus is still entirely synthetic — every
+fixture was written by someone who already knew what the converter does. 2.3.0
+is the first version run against real content: about 15 pages from a live Divi
+site, converted successfully. Those pages were sections, rows, text and images,
+which is the simplest module set and the one already best covered, so it
+confirms the common path and leaves the modules where loss actually happens
+(tabs, sliders, pricing tables, forms, galleries, code) unexercised on real
+content. It is still best described as an assisted migration tool that produces
+a first block draft for review. WordPress.org submission is a separate
 decision, not yet made.
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
-**Last brief update:** 2026-08-05
+**Last brief update:** 2026-08-06
 
 ---
 
@@ -83,7 +88,7 @@ bin/build-zip.sh              Versioned release packaging
 │   ├── class-d2g-converter.php     Orchestration: dispatch, warnings, recursion
 │   ├── class-d2g-html-converter.php  Free-form HTML → blocks
 │   ├── class-d2g-block-builder.php   Block markup primitives + sanitisers
-│   ├── class-d2g-style-mapper.php  Divi attrs → CSS / block attributes
+│   ├── class-d2g-style-mapper.php  The one Divi attr mapped to a block attr
 │   └── renderers/
 │       ├── class-d2g-module-renderer.php  Abstract base; declares tags()
 │       ├── class-d2g-renderer-layout.php       sections, rows, columns
@@ -125,9 +130,11 @@ Gutenberg block comment markup → `wp_update_post()`.
   self-closing tags, unmatched closers, smart-quote entity normalization, and
   wraps loose text in synthetic `__text__` nodes. Static helper
   `has_divi_content()` requires a syntactically complete tag, not a prefix.
-- **`D2G_Style_Mapper`** — translation of Divi style attributes. Only
-  `text_align_class()` is wired into conversion today; see §5.1 for what that
-  means in practice and why the rest is not connected.
+- **`D2G_Style_Mapper`** — `text_align_class()`, and nothing else. It used to
+  hold a whole unreached style layer; 2.3.0 deleted it, because dead is not the
+  same as harmless — it built CSS by concatenating raw Divi values and appended
+  `custom_css_main_element` verbatim, which is the injection class that had to
+  be fixed in the live renderers. See §5.1, and Q22.
 - **`D2G_Converter`** — the orchestrator. Walks the node tree, dispatches each
   node to whichever renderer claims its tag, collects the warnings shown in
   Preview, and provides the services renderers call back into (recursion, the
