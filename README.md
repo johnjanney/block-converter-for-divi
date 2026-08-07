@@ -5,13 +5,16 @@ Gutenberg blocks — with preview, batch conversion, and one-click restore.
 
 Requires WordPress 6.1+ and PHP 7.4+.
 
-- [Installation and usage](INSTRUCTIONS.md)
+- [Installation and usage](INSTRUCTIONS.md) — **upgrading from
+  `divi2gutenberg`? Delete it before activating this.** The two cannot run
+  together; your backups live on your posts and survive.
 - [Release history and versioning policy](CHANGELOG.md)
 - [Project brief](BRIEF.md)
 - [Open questions](OPENQUESTIONS.md)
 - [External review](CODEX-REVIEW.md) and [response](CODEX-REVIEW-RESPONSE.md)
 
-Previously released as *Divi to Gutenberg Converter* (`divi2gutenberg`).
+Previously released as *Divi to Gutenberg Converter* (`divi2gutenberg`). That
+plugin must be removed before this one is activated — see above.
 
 ## Tests
 

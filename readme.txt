@@ -100,6 +100,12 @@ result before running a batch.
 
 == Installation ==
 
+**Upgrading from "Divi to Gutenberg Converter"? Remove it first.** This plugin
+was renamed, and the two cannot run together — they are the same code under two
+names. Deactivate and delete the old plugin before activating this one. Your
+backups are stored on your posts, not in the plugin folder, so they survive and
+every converted page stays restorable.
+
 1. Upload the plugin ZIP through **Plugins → Add New → Upload Plugin**, or
    extract it to `wp-content/plugins/`.
 2. Activate the plugin through the **Plugins** screen.

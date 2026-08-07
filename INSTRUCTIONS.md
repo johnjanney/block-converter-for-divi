@@ -9,7 +9,7 @@ preserving content, images, and design intent.
 
 | | |
 | --- | --- |
-| WordPress | 6.0 or later. 6.3+ recommended — Divi toggles and accordions convert to `core/details`, which arrived in 6.3; on 6.0–6.2 they degrade to a heading plus text |
+| WordPress | 6.1 or later, measured rather than guessed — 6.0 has no List Item block, so every converted list broke there. 6.3+ recommended: Divi toggles and accordions convert to `core/details`, which arrived in 6.3; on 6.1–6.2 they degrade to a heading plus text |
 | PHP | 7.4 or later. The `dom` extension is recommended: without it, rich text is preserved in Custom HTML blocks instead of being split into individual blocks |
 | User role | Administrator (`manage_options`), and edit permission on each page you convert |
 | Divi | **Not required.** The plugin reads raw shortcodes, so it works after Divi is deactivated |
@@ -18,9 +18,13 @@ preserving content, images, and design intent.
 
 ## Before you start — read this
 
-**Conversion overwrites `post_content`.** It can be undone with the **Restore**
-button — but *only if the backup checkbox was ticked when you converted*.
-Without a backup, recovery means a WordPress revision or a database restore.
+**Conversion overwrites `post_content`.** Every conversion snapshots the
+original Divi content first and can be undone with the **Restore** button. That
+snapshot is written before anything is overwritten and is never replaced by a
+later conversion, so the original is always what comes back.
+
+It is still not a substitute for a database backup: it covers the pages this
+plugin converted, and nothing else.
 
 Do this first:
 
@@ -36,6 +40,24 @@ Do this first:
 ---
 
 ## Installation
+
+### Upgrading from *Divi to Gutenberg Converter*? Do this first
+
+This plugin was renamed. If the old **Divi to Gutenberg Converter**
+(`divi2gutenberg`) is still on the site, **deactivate and delete it before
+installing this one.**
+
+The two cannot run together — they are the same code under two names and
+declare the same internal classes. Versions 2.0.0 through 2.2.0 did not say so:
+installing beside the old plugin failed with *"Plugin could not be activated
+because it triggered a fatal error"*, because both defined the same constants
+and this plugin ended up loading the other one's directory. 2.3.0 detects the
+conflict and refuses with an explanation instead of crashing, but the fix is
+still to remove the old plugin.
+
+**Your backups survive.** They are stored on your posts
+(`_d2g_divi_backup` post meta), not inside the plugin folder, so deleting the
+old plugin does not touch them and every converted page stays restorable.
 
 ### Option A — Upload the ZIP (recommended)
 
@@ -64,8 +86,19 @@ of the last release — see [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Verify
 
-Log in as an administrator and open **Tools → Block Converter for Divi**. If the screen
-loads, the plugin is working.
+Log in as an administrator and open **Tools → Block Converter for Divi**. If the
+screen loads, the plugin is working.
+
+If instead you see *"Block Converter for Divi cannot run while Divi to Gutenberg
+Converter is active"*, the old plugin is still installed — see above.
+
+Release ZIPs are published with a SHA-256 digest on their
+[release page](https://github.com/johnjanney/block-converter-for-divi/releases).
+To check what you downloaded:
+
+```bash
+sha256sum block-converter-for-divi-X.Y.Z.zip
+```
 
 ---
 
@@ -114,13 +147,13 @@ non-destructive way to check the output.
 
 ### 3. Convert a single page
 
-1. Leave **Create backup before converting** ticked (strongly recommended).
-2. Click **Convert** on the row and confirm the prompt.
+1. Click **Convert** on the row and confirm the prompt. The backup is taken
+   automatically — it is not optional, and there is no longer a checkbox for it.
 
 The plugin will:
 
 - Copy the original content to the `_d2g_divi_backup` post meta key with a
-  `_d2g_backup_date` timestamp (if backup is ticked)
+  `_d2g_backup_date` timestamp, and snapshot Divi's builder meta alongside it
 - Replace `post_content` with the converted block markup
 - Delete the `_et_pb_use_builder` and `_et_pb_old_content` meta so WordPress
   opens the page in the block editor rather than the Divi Builder
@@ -231,6 +264,16 @@ exists.
 
 ## Troubleshooting
 
+**"Plugin could not be activated because it triggered a fatal error"**
+The old **Divi to Gutenberg Converter** is still installed. Deactivate and
+delete it, then activate this plugin. On 2.3.0 and later you get a readable
+message instead of a fatal error, and the site keeps working in the meantime.
+Your backups are on your posts and survive either way.
+
+**"Block Converter for Divi cannot run while Divi to Gutenberg Converter is
+active"**
+The same thing, said properly. Remove the old plugin.
+
 **"Tools → Block Converter for Divi" doesn't appear**
 You are not an administrator, or the plugin is not activated. The menu requires
 the `manage_options` capability.
@@ -256,9 +299,10 @@ bar shows the error. Re-scan; already-converted pages reappear with Convert
 disabled, so you can see what did and did not complete.
 
 **A page has no Restore button**
-No backup was taken for it — the backup checkbox was unticked at conversion
-time, or the page was never converted by this plugin. See *If there is no
-backup* above.
+The page was never converted by this plugin, or it was converted by a version
+before 2.3.0 with the backup checkbox unticked — that checkbox is gone and the
+backup is now mandatory, but pages converted without one cannot be given one
+retroactively. See *If there is no backup* above.
 
 **Restore says "No backup found for this page"**
 The `_d2g_divi_backup` meta is missing or empty. Check with
