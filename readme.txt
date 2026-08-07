@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.3.0
+Stable tag: 2.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -172,6 +172,13 @@ the most useful thing to hear about.
 
 == Changelog ==
 
+= 2.3.1 =
+* Documentation only; no code changes. The installation instructions shipped
+  inside the plugin did not mention that the older "Divi to Gutenberg Converter"
+  must be removed before this plugin is activated, still described a backup
+  checkbox that 2.3.0 removed, and still named WordPress 6.0 as the minimum
+  when it has been 6.1 since 2.2.0.
+
 = 2.3.0 =
 * Fixed "Plugin could not be activated because it triggered a fatal error" when
   upgrading from the older "Divi to Gutenberg Converter". The two plugins used
@@ -329,6 +336,12 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.3.1 =
+Documentation only. Worth taking if you install from the ZIP, because the
+instructions inside 2.3.0 did not tell you to remove the older "Divi to
+Gutenberg Converter" first, and wrongly implied a conversion might not be
+undoable.
 
 = 2.3.0 =
 Fixes activation failing with a fatal error when the older "Divi to Gutenberg
