@@ -282,9 +282,15 @@ class D2G_Parser {
      * detector, the tree parser, the closing-tag matcher and the stripper all
      * agree on exactly what counts as a tag.
      *
+     * Public so that tooling outside the converter — bin/anonymize-divi.php,
+     * which rewrites real Divi source in place — reads tags the same way. A
+     * second tokenizer written to "just find the tags" is how the truncation
+     * defect in Q24 happened, and a tool that disagrees with the parser about
+     * where a tag ends would scrub the wrong span of somebody's page.
+     *
      * @return array{tag: string, start: int, end: int, attrs_str: string, closing: bool, self_closing: bool}|false
      */
-    private static function next_tag_span( string $content, int $offset ) {
+    public static function next_tag_span( string $content, int $offset ) {
         $len = strlen( $content );
 
         while ( $offset < $len ) {
@@ -398,6 +404,10 @@ class D2G_Parser {
     /**
      * Parse a shortcode attributes string into key => value pairs.
      */
+    public static function parse_attrs_string( string $str ): array {
+        return ( new self() )->parse_attrs( $str );
+    }
+
     private function parse_attrs( string $str ): array {
         $attrs = [];
         if ( '' === $str ) {
