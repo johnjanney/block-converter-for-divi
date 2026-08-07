@@ -98,6 +98,34 @@ _Nothing yet._
 
 ---
 
+## [2.3.1] — 2026-08-07
+
+Documentation only. No code changed; `bin/build-zip.sh` produces a plugin whose
+PHP, JavaScript and CSS are byte-identical to 2.3.0.
+
+It is a release rather than a doc commit because `INSTRUCTIONS.md` **ships
+inside the plugin**, so a correction to it only reaches users through a package.
+
+### Fixed
+
+- `INSTRUCTIONS.md` said nothing about the pre-rename plugin. Installing beside
+  "Divi to Gutenberg Converter" failed with a fatal error in 2.0.0–2.2.0, and
+  2.3.0 turned that into a readable refusal — but the instruction either way is
+  to delete the old plugin first, and no install document said so. There is now
+  a step before the install options, and troubleshooting entries matching both
+  the old fatal error and the new message.
+- `INSTRUCTIONS.md` described the backup as conditional — "only if the backup
+  checkbox was ticked when you converted". 2.3.0 made the backup mandatory and
+  removed the checkbox. That sentence told users a conversion might not be
+  undoable when it always is, and it appeared in four places.
+- `INSTRUCTIONS.md` still declared WordPress 6.0 as the minimum. It has been 6.1
+  since 2.2.0, measured rather than derived.
+- The Verify section now points at the per-release SHA-256 digests, so a
+  downloaded ZIP can be checked.
+- `readme.txt` and `README.md` carry the same upgrade warning.
+
+---
+
 ## [2.3.0] — 2026-08-06
 
 Answers the third external review (`CODEX-REVIEW.md`, dated 2026-08-05;
@@ -809,7 +837,8 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.0.0...v2.1.0

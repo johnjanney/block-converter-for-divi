@@ -1,6 +1,6 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.3.0` — built, not yet published. Runs against real WordPress
+**Status:** `2.3.1` — released. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
 checked by WordPress's own block validator against the block library **each**
 supported release actually ships (`bin/block-library-matrix.sh`) and the admin
@@ -20,7 +20,7 @@ decision, not yet made.
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
-**Last brief update:** 2026-08-06
+**Last brief update:** 2026-08-07
 
 ---
 
