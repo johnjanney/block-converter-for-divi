@@ -19,6 +19,17 @@ on:
 #
 # Refresh one with:
 #   git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>
+#
+# Pin the *node24* release of each. Pinning has a maintenance tail the security
+# argument does not mention: a SHA is frozen, so it keeps whichever JavaScript
+# runtime that release shipped with, and CI reported all three of these as
+# "target Node.js 20 but are being forced to run on Node.js 24". Check the
+# runtime before pinning:
+#   curl -sf https://raw.githubusercontent.com/<owner>/<repo>/<tag>/action.yml | grep using:
+#
+# actions/upload-artifact is deliberately still v4: no tag of it ships a node24
+# runtime yet, so there is nothing to move to. It only runs on a browser
+# failure, so the exposure is a deprecation warning on an already-failing job.
 
 jobs:
   # The full suite, including the real WordPress block validator. Runs on the
@@ -28,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up PHP
         uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
@@ -40,7 +51,7 @@ jobs:
       # 22 is the floor jsdom sets (see tests/js/package.json engines). Node 20
       # installed cleanly and then threw from undici inside the validator.
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
           cache: npm
@@ -84,7 +95,7 @@ jobs:
         php: [ '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' ]
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up PHP
         uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
@@ -112,10 +123,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
           cache: npm
@@ -144,10 +155,10 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
           cache: npm
@@ -182,10 +193,10 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
           cache: npm
@@ -202,10 +213,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
 
@@ -236,7 +247,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up PHP
         uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
@@ -246,7 +257,7 @@ jobs:
           coverage: none
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
 
@@ -256,7 +267,7 @@ jobs:
         run: npm --prefix tests/js ci
 
       - name: Cache the per-version block libraries
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.cache/d2g-block-library-matrix
           key: block-library-${{ hashFiles('tests/js/versions.json') }}
@@ -274,10 +285,10 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
           cache: npm
