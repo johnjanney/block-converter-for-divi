@@ -220,6 +220,15 @@ jobs:
         with:
           node-version: '22'
 
+      # Explicit rather than relying on whatever PHP the runner image happens
+      # to carry — the anonymizer self-test below is PHP.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: '8.3'
+          extensions: dom, libxml
+          coverage: none
+
       - name: Check the admin script parses
         run: node --check admin/js/admin.js
 
@@ -230,6 +239,12 @@ jobs:
 
       - name: Check the build script parses
         run: bash -n bin/build-zip.sh
+
+      # The failure mode of a scrubber is silent: it publishes somebody's phone
+      # number and nothing goes red. This asserts both halves of its contract —
+      # the tag/attribute skeleton survives, and the identity does not.
+      - name: Anonymizer self-test
+        run: php bin/anonymize-divi.php --self-test
 
       - name: Reject whitespace errors
         run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD

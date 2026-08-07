@@ -330,6 +330,52 @@ The content is intact and the block renders; normalizing it first would fix the
 notice and defeat the verbatim preservation Custom HTML exists for. A known
 failure that starts *passing* fails the run, so the list cannot quietly rot.
 
+## Capturing a real Divi page
+
+Every fixture in this suite was written by someone who already knew what the
+converter does, so the suite can only fail in ways somebody anticipated. Real
+Divi output does not look like these inputs. A hand-written section is
+
+```
+[et_pb_section][et_pb_row][et_pb_column type="4_4"]
+```
+
+and a real one is closer to
+
+```
+[et_pb_section fb_built="1" _builder_version="4.27.4" _module_preset="default"
+ background_color="#f5f5f5" custom_padding="54px||54px||true|false"
+ global_colors_info="{}" theme_builder_area="post_content"]
+```
+
+Twenty attributes instead of none, braces inside an attribute value, pipe
+grammars. That is where the quote-aware scanner, the unmapped-style reporter and
+the attribute decoder meet reality rather than an assumption.
+
+`bin/anonymize-divi.php` turns a real page into something publishable:
+
+```bash
+wp post get 42 --field=content | php bin/anonymize-divi.php --report
+php bin/anonymize-divi.php page.txt --fixture "a real about page"
+```
+
+It replaces the words and keeps the structure to the byte — every tag, the
+nesting, every attribute *name*, every non-identifying value shape, and Divi's
+entity encoding. Copy, URLs, emails, phone numbers and database IDs go.
+
+Tags are located with `D2G_Parser::next_tag_span()`, the converter's own
+tokenizer, rather than a second regex — a tool that disagreed with the parser
+about where a tag ends would scrub the wrong span of somebody's page.
+
+**It is not a privacy guarantee.** `--report` lists every substitution and flags
+what still looks identifying, so review is tractable; it does not make review
+optional. This repository is public.
+
+`php bin/anonymize-divi.php --self-test` asserts both halves of the contract —
+the tag/attribute skeleton survives, the identity does not, the output is
+deterministic, and it still converts. CI runs it, because the failure mode of a
+scrubber is silent: it publishes a phone number and nothing goes red.
+
 ## What this still does not cover
 
 Stated here so a green run is not read as more than it is:
@@ -339,7 +385,8 @@ Stated here so a green run is not read as more than it is:
 - **Uninstall.**
 - **A corpus of real Divi pages.** Every fixture here was written by someone who
   already knew what the converter does, which means the suite can only fail in
-  ways somebody anticipated. About 15 pages from a live Divi site were converted
+  ways somebody anticipated. `bin/anonymize-divi.php` exists to close this; no
+  captured page is in the corpus yet. About 15 pages from a live Divi site were converted
   successfully before 2.3.0 shipped, but none of them are *in* this corpus, and
   they were sections, rows, text and images — the simplest module set. Nothing
   real has been through the renderers where the last review found silent content
