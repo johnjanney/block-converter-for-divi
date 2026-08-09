@@ -278,10 +278,100 @@ return [
     ],
 
     // ---------------------------------------------------------------- N-05 --
+    // Section padding used to be reported as lost. It is now mapped onto
+    // core's spacing support, so this guard moved to the per-device override,
+    // which is still genuinely lost — core block supports have no responsive
+    // dimension. See the C-08 fixtures for the mapping itself.
     'N-05 unmapped section spacing is reported' => [
-        'divi'   => '[et_pb_section custom_padding="50px|0px|50px|0px"][et_pb_row][et_pb_column type="4_4"]'
+        'divi'   => '[et_pb_section custom_padding_tablet="20px|0px|20px|0px"][et_pb_row][et_pb_column type="4_4"]'
             . '[et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]',
         'warns'  => [ 'et_pb_section' ],
+    ],
+
+    // ---------------------------------------------------------------- C-08 --
+    //
+    // Divi spacing and background colour mapped onto core's block supports.
+    // The markup is not a guess: it is what core's own serializer emits, and
+    // the declaration order it emits them in. Getting that order wrong is the
+    // Cover defect in a new place, so every one of these is validated by core.
+
+    'C-08 section padding becomes core spacing and is no longer reported lost' => [
+        'divi'   => '[et_pb_section custom_padding="54px||54px||true|false"][et_pb_row][et_pb_column type="4_4"]'
+            . '[et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]',
+        'expect' => [
+            '"padding":{"top":"54px","bottom":"54px"}',
+            'style="padding-top:54px;padding-bottom:54px"',
+        ],
+        // Empty components mean "not set"; writing 0px there would flatten
+        // spacing the theme supplies.
+        'reject' => [ 'padding-left', 'padding-right' ],
+        'rejectWarnings' => [ 'et_pb_section' ],
+    ],
+
+    'C-08 background comes before spacing, as core serializes it' => [
+        'divi'   => '[et_pb_section background_color="#f5f5f5" custom_padding="10px|20px|30px|40px"]'
+            . '[et_pb_row][et_pb_column type="4_4"][et_pb_text]<p>Hi</p>[/et_pb_text]'
+            . '[/et_pb_column][/et_pb_row][/et_pb_section]',
+        'expect' => [
+            'style="background-color:#f5f5f5;padding-top:10px;padding-right:20px;padding-bottom:30px;padding-left:40px"',
+            'class="wp-block-group has-background"',
+        ],
+    ],
+
+    'C-08 margin comes before padding, as core serializes it' => [
+        'divi'   => '[et_pb_section custom_margin="1px|||" custom_padding="2px|||"][et_pb_row][et_pb_column type="4_4"]'
+            . '[et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]',
+        'expect' => [ 'style="margin-top:1px;padding-top:2px"' ],
+    ],
+
+    'C-08 a row carries its own spacing and background' => [
+        'divi'   => '[et_pb_section][et_pb_row background_color="#dddddd" custom_padding="8px|9px|10px|11px"]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [
+            '<!-- wp:columns {"style":',
+            'class="wp-block-columns has-background"',
+            'background-color:#dddddd;padding-top:8px;padding-right:9px;padding-bottom:10px;padding-left:11px',
+        ],
+    ],
+
+    'C-08 a column keeps flex-basis last, after its spacing' => [
+        'divi'   => '[et_pb_section][et_pb_row][et_pb_column type="1_2" background_color="#eeeeee" custom_padding="20px||20px|"]'
+            . '[et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column]'
+            . '[et_pb_column type="1_2"][et_pb_text]<p>Ho</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [ 'style="background-color:#eeeeee;padding-top:20px;padding-bottom:20px;flex-basis:50%"' ],
+    ],
+
+    'C-08 a background colour switched off is not painted' => [
+        'divi'   => '[et_pb_section background_color="#f5f5f5" background_enable_color="off"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'reject' => [ 'has-background', 'background-color' ],
+    ],
+
+    'C-08 a spacing value that is not a length is dropped, not escaped' => [
+        'divi'   => '[et_pb_section custom_padding="20px;position:fixed|auto|5%|2em"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [ 'padding-bottom:5%', 'padding-left:2em' ],
+        // The injection and `auto` are both gone: one is unsafe, the other is
+        // not a length core's spacing support can regenerate.
+        'reject' => [ 'position:fixed', 'padding-top', 'auto' ],
+    ],
+
+    'C-08 a per-device override is still reported as lost' => [
+        'divi'   => '[et_pb_section custom_padding="10px|||" custom_padding_tablet="5px|||"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [ 'padding-top:10px' ],
+        'warns'  => [ 'et_pb_section' ],
+    ],
+
+    'C-08 a text module still reports the padding it loses' => [
+        'divi'   => '[et_pb_text custom_padding="10px|||"]<p>Hi</p>[/et_pb_text]',
+        'warns'  => [ 'et_pb_text' ],
+        'reject' => [ 'padding-top' ],
     ],
 
     'N-05 lost tab behaviour is reported' => [

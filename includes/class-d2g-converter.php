@@ -74,6 +74,16 @@ class D2G_Converter {
     private $dispatch = [];
 
     /**
+     * Divi tag => the design settings its renderer now maps.
+     *
+     * Assembled from the renderers, so report_unmapped_styles() cannot claim a
+     * setting was lost that a renderer carried over.
+     *
+     * @var array<string, string[]>
+     */
+    private $mapped_styles = [];
+
+    /**
      * Modules that could not be carried over faithfully in the last run.
      *
      * Collected rather than silently dropped so the preview can tell the user
@@ -123,6 +133,10 @@ class D2G_Converter {
                 }
 
                 $this->dispatch[ $tag ] = $renderer;
+            }
+
+            foreach ( $class::mapped_style_attrs() as $tag => $names ) {
+                $this->mapped_styles[ $tag ] = array_merge( $this->mapped_styles[ $tag ] ?? [], $names );
             }
         }
     }
@@ -225,10 +239,18 @@ class D2G_Converter {
      * sections produces one line, not forty.
      */
     private function report_unmapped_styles( string $module, array $attrs ) {
-        $found = [];
+        $found  = [];
+        $mapped = $this->mapped_styles[ $module ] ?? [];
 
         foreach ( $attrs as $name => $value ) {
             if ( '' === trim( (string) $value ) ) {
+                continue;
+            }
+
+            // Carried over by this module's renderer, so not a loss. Matched by
+            // exact name: custom_padding is mapped, custom_padding_tablet is
+            // not, and only one of them should go quiet.
+            if ( in_array( $name, $mapped, true ) ) {
                 continue;
             }
             foreach ( self::$unmapped_style_patterns as $pattern => $label ) {

@@ -28,6 +28,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 abstract class D2G_Module_Renderer {
 
     /**
+     * Divi settings this renderer turns into block attributes, per tag.
+     *
+     * The loss reporter reads this so it stops naming a setting that was
+     * actually carried over. Declared by the renderer that does the mapping,
+     * for the same reason tags() is: the converter should not hold a second
+     * copy of knowledge that lives in a renderer, because the two drift and the
+     * report is what users trust.
+     *
+     * Empty by default — a renderer that maps no design settings says so by
+     * saying nothing.
+     *
+     * @return array<string, string[]> Divi tag => attribute names.
+     */
+    public static function mapped_style_attrs(): array {
+        return [];
+    }
+
+    /**
      * The conversion this renderer belongs to.
      *
      * Not a service locator: it is the *document* being converted. Renderers

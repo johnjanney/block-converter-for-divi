@@ -1,0 +1,6 @@
+<!-- wp:paragraph -->
+<p>Hi</p>
+<!-- /wp:paragraph -->
+
+===== WARNINGS =====
+[et_pb_text] Design settings were not carried over and need rebuilding with block or theme styles: spacing (padding or margin).

@@ -227,21 +227,21 @@ in `core/html`, and records a conversion warning naming the tag.
 
 ### 5.1 Style coverage
 
-The style mapper is only partly wired into conversion. What conversion actually
-preserves:
+What conversion actually preserves:
 
 | Divi attribute | Where it lands |
 | --- | --- |
 | `text_orientation` | `has-text-align-*` class **and** the matching `textAlign` / `align` block attribute on headings and paragraphs |
-| `background_color` (section, CTA) | `core/group` `style.color.background` + `has-background` |
+| `background_color` (section, row, column, CTA) | `style.color.background` + `has-background` |
+| `custom_padding`, `custom_margin` (section, row, column) | `style.spacing.padding` / `.margin` on `core/group`, `core/columns`, `core/column` |
 | `button_bg_color`, `button_text_color` | `core/button` `style.color.*` |
 | `type` (column) | `core/column` `width` |
 | `color` (divider) | `core/separator` `style.color.background` |
 | `background_image` (header, slide) | `core/cover` `url` |
 | `header_level` (blurb) | heading `level` |
 
-What is **not** carried over: spacing (padding and margin), explicit sizing
-(`max_width`, `min_height`), borders and `border_radii`, box and text shadows,
+What is **not** carried over: spacing on any module *other than* section, row
+and column, explicit sizing (`max_width`, `min_height`), borders and `border_radii`, box and text shadows,
 fonts, font sizes, line heights, letter spacing, background gradients and
 parallax, `custom_css_main_element`, module IDs and classes, hover states,
 animations and filters, positioning and transforms, per-device visibility
@@ -259,15 +259,31 @@ Before 2.2.0 nothing detected any of it. The claim on this page that losses were
 above — a Section with `custom_padding` lost its padding and produced no
 warning at all.
 
-`D2G_Style_Mapper::build_inline_style()`, `wrapper_style()`, `get_color_attrs()`,
-and `parse_font()` are retained but **not called by the converter**. Wiring them
-in naively is what would break block validation: WordPress regenerates a static
-block's markup from its attributes and compares it byte for byte, and an inline
-`style` attribute the block's own save function would not have produced is
-exactly the mismatch that shows "unexpected or invalid content". Connecting them
-properly means emitting block-supported `style` attributes and reproducing the
-style engine's own serialization — a real piece of work, tracked as Q22, not a
-one-line change.
+Spacing was mapped in the release after 2.3.1, and how it was done matters more
+than that it was done. Naively wiring the old style mapper in is what would have
+broken block validation: WordPress regenerates a static block's markup from its
+attributes and compares, and an inline `style` the block's own save function
+would not have produced is exactly the mismatch that shows "unexpected or
+invalid content".
+
+So nothing is invented. Values go into **core's own block supports**
+(`style.spacing.padding`, `style.color.background`), and the inline declarations
+are written in the order core's serializer emits them — background, then margin,
+then padding, each top/right/bottom/left, with `flex-basis` last on a column.
+That order was measured with `tests/js/canonical.mjs`, which asks core what it
+would have saved, and the result is validated against the block library of all
+nine supported WordPress releases by `bin/block-library-matrix.sh`. Neither tool
+existed when this section was first written, which is why the answer then was
+"do not attempt it".
+
+Divi values are validated, not escaped: `D2G_Block_Builder::css_length()` accepts
+a number and a known unit and drops everything else, so
+`custom_padding="20px;position:fixed|||"` contributes nothing rather than
+becoming a declaration. `auto` is dropped too — legal CSS, but core's spacing
+support models a length it can regenerate.
+
+The old `D2G_Style_Mapper` style-building functions were deleted in 2.3.0 rather
+than connected; see `OPENQUESTIONS.md` Q22.
 
 ## 6. Requirements
 
