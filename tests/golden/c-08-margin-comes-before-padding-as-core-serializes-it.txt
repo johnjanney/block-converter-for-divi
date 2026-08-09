@@ -1,5 +1,5 @@
-<!-- wp:group {"style":{"color":{"background":"#eeeeee"}},"layout":{"type":"constrained"}} -->
-<div class="wp-block-group has-background" style="background-color:#eeeeee">
+<!-- wp:group {"style":{"spacing":{"margin":{"top":"1px"},"padding":{"top":"2px"}}},"layout":{"type":"constrained"}} -->
+<div class="wp-block-group" style="margin-top:1px;padding-top:2px">
 <!-- wp:columns -->
 <div class="wp-block-columns">
 <!-- wp:column {"width":"100%"} -->

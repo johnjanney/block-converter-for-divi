@@ -94,7 +94,37 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Divi spacing and background colour on sections, rows and columns are now
+  carried over instead of reported as lost. `custom_padding` and `custom_margin`
+  become core's `style.spacing` support; `background_color` becomes
+  `style.color.background`.
+
+  Naively emitting an inline `style` is what makes a static block report
+  "unexpected or invalid content", so nothing here is invented. The declaration
+  order — background, then margin, then padding, each top/right/bottom/left,
+  with `flex-basis` last on a column — was measured with `tests/js/canonical.mjs`
+  by asking core what it would have saved, and the output is validated against
+  the block library of all nine supported WordPress releases.
+
+  Divi values are validated rather than escaped. `css_length()` takes a number
+  and a known unit; `custom_padding="20px;position:fixed|||"` contributes
+  nothing. `auto` is dropped as well — legal CSS, but not a length core's
+  spacing support can regenerate. Empty components stay empty rather than
+  becoming `0px`, because writing zero where Divi wrote nothing flattens
+  spacing the theme was supplying.
+
+  A background colour with `background_enable_color="off"` is not painted.
+
+### Changed
+
+- The loss reporter no longer names spacing on the modules that now keep it.
+  Renderers declare what they map via `mapped_style_attrs()` and the converter
+  reads that, so the report and the mapping cannot drift. Matching is by exact
+  attribute name: `custom_padding` went quiet, `custom_padding_tablet` did not,
+  because core block supports have no responsive dimension. A report that fires
+  for settings the converter did carry over is how users learn to ignore it.
 
 ---
 

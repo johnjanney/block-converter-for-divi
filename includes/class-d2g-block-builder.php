@@ -306,6 +306,119 @@ class D2G_Block_Builder {
     }
 
     /**
+     * A length that is safe to write into a CSS declaration.
+     *
+     * The sibling of css_color(), and there for the same reason: esc_attr()
+     * makes a string safe as *markup* and does nothing about a value that is
+     * syntactically valid CSS. Only a number followed by a unit CSS actually
+     * defines is accepted, so `20px;position:fixed` is dropped rather than
+     * escaped into a declaration nobody asked for.
+     *
+     * `auto` is deliberately rejected. It is legal CSS for a margin, but core's
+     * spacing support models a length, and a value the block cannot regenerate
+     * from its own attributes is worse than one that was never mapped.
+     */
+    public static function css_length( $value ): string {
+        $value = strtolower( trim( (string) $value ) );
+
+        if ( '' === $value ) {
+            return '';
+        }
+        if ( '0' === $value ) {
+            return '0px';
+        }
+        if ( preg_match( '/^-?\d+(?:\.\d+)?(?:px|em|rem|%|vw|vh|pt|ch)$/', $value ) ) {
+            return $value;
+        }
+
+        return '';
+    }
+
+    /**
+     * Divi's pipe-delimited spacing value, as validated box sides.
+     *
+     * Divi writes `custom_padding` as `top|right|bottom|left` followed by two
+     * booleans that say whether the value overrides a theme default:
+     *
+     *     custom_padding="54px||54px||true|false"
+     *     custom_padding="12px|28px|12px|28px|true|true"
+     *
+     * Empty components mean "not set" and are left out rather than zeroed —
+     * core omits absent sides too, and writing 0px where Divi wrote nothing
+     * would flatten spacing the theme was supplying.
+     *
+     * @return array<string, string> Only the sides that carry a usable length.
+     */
+    public static function spacing_box( $value ): array {
+        $parts = explode( '|', (string) $value );
+        $sides = [ 'top', 'right', 'bottom', 'left' ];
+        $box   = [];
+
+        foreach ( $sides as $i => $side ) {
+            $length = self::css_length( $parts[ $i ] ?? '' );
+            if ( '' !== $length ) {
+                $box[ $side ] = $length;
+            }
+        }
+
+        return $box;
+    }
+
+    /**
+     * The block attributes, classes and CSS declarations for a styled wrapper.
+     *
+     * One function because the declaration *order* is load-bearing and every
+     * caller has to get it identical. WordPress regenerates a static block's
+     * markup from its attributes and compares; a block that lists its padding
+     * before its background is reported as containing unexpected content, in
+     * exactly the way the Cover block's element order was. Measured against
+     * core's own serializer: background first, then margin, then padding, each
+     * in top/right/bottom/left order.
+     *
+     * `flex-basis` is not handled here — it belongs to core/column alone and
+     * core emits it after everything else, so the column renderer appends it.
+     *
+     * @param string $bg_color Already through css_color(), or ''.
+     * @param array  $margin   Already through spacing_box().
+     * @param array  $padding  Already through spacing_box().
+     * @return array{attrs: array, classes: string[], css: string[]}
+     */
+    public static function wrapper_styles( string $bg_color, array $margin = [], array $padding = [] ): array {
+        $style   = [];
+        $classes = [];
+        $css     = [];
+
+        if ( '' !== $bg_color ) {
+            $style['color'] = [ 'background' => $bg_color ];
+            $classes[]      = 'has-background';
+            $css[]          = 'background-color:' . $bg_color;
+        }
+
+        $spacing = [];
+        foreach ( [ 'margin' => $margin, 'padding' => $padding ] as $property => $box ) {
+            if ( ! $box ) {
+                continue;
+            }
+            $spacing[ $property ] = $box;
+            foreach ( [ 'top', 'right', 'bottom', 'left' ] as $side ) {
+                if ( isset( $box[ $side ] ) ) {
+                    $css[] = $property . '-' . $side . ':' . $box[ $side ];
+                }
+            }
+        }
+
+        if ( $spacing ) {
+            $style['spacing'] = $spacing;
+        }
+
+        return [
+            'attrs'   => $style ? [ 'style' => $style ] : [],
+            'classes' => $classes,
+            'css'     => $css,
+        ];
+    }
+
+    /**
      * Escape a Divi-supplied string for use as HTML text.
      *
      * Divi stores shortcode attribute values HTML-encoded, so a button reading
