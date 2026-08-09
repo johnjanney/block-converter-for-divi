@@ -94,6 +94,15 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [2.5.0] — 2026-08-09
+
+The second release that repairs a design setting rather than reporting it, and
+the one that makes converted body text look like the original.
+
 ### Added
 
 - Divi typography and text colour are carried over where a module renders its
@@ -909,7 +918,8 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.2.0...v2.3.0
