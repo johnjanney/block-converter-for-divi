@@ -598,6 +598,31 @@ return [
         'reject'         => [ 'margin-top' ],
     ],
 
+    // ------------------------------------------------- found by the census --
+    //
+    // Divi offers a second video source so a browser can pick a format it
+    // supports, and core/video holds one. Usually that costs nothing. On a real
+    // page src_webm held a different film altogether, and it went without a
+    // word — the content census counted the links, found one fewer coming out
+    // than going in, and that is how this was noticed.
+    'a second video source is reported rather than dropped quietly' => [
+        'divi'   => '[et_pb_video src="https://vimeo.com/111" src_webm="https://vimeo.com/222" /]',
+        'expect' => [ 'vimeo.com/111' ],
+        'warns'  => [ 'et_pb_video' ],
+    ],
+
+    'the same video in two formats is not reported as a loss' => [
+        'divi'           => '[et_pb_video src="https://example.com/v.mp4" src_webm="https://example.com/v.mp4" /]',
+        'expect'         => [ 'example.com/v.mp4' ],
+        'rejectWarnings' => [ 'et_pb_video' ],
+    ],
+
+    'a webm source alone is still used' => [
+        'divi'           => '[et_pb_video src_webm="https://example.com/v.webm" /]',
+        'expect'         => [ 'example.com/v.webm' ],
+        'rejectWarnings' => [ 'et_pb_video' ],
+    ],
+
     'N-05 lost tab behaviour is reported' => [
         'divi'   => '[et_pb_tabs][et_pb_tab title="One"]<p>A</p>[/et_pb_tab][et_pb_tab title="Two"]<p>B</p>[/et_pb_tab][/et_pb_tabs]',
         'expect' => [ '<h3>One</h3>', '<h3>Two</h3>' ],

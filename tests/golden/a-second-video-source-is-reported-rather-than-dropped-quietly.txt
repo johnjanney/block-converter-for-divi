@@ -1,0 +1,8 @@
+<!-- wp:embed {"url":"https://vimeo.com/111","type":"video","providerNameSlug":"vimeo"} -->
+<figure class="wp-block-embed is-type-video is-provider-vimeo wp-block-embed-vimeo"><div class="wp-block-embed__wrapper">
+https://vimeo.com/111
+</div></figure>
+<!-- /wp:embed -->
+
+===== WARNINGS =====
+[et_pb_video] A video module listed a second, alternative source. The Video block holds one source, so only the first was carried over — check whether the second was a different video rather than the same one in another format.

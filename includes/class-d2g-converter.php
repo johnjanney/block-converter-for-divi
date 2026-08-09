@@ -93,6 +93,15 @@ class D2G_Converter {
      */
     private $warnings = [];
 
+    /**
+     * Losses a renderer dropped deliberately and has already reported.
+     *
+     * Subtracted from the census so it reports only what nothing accounted for.
+     *
+     * @var array<string, int>
+     */
+    private $acknowledged = [];
+
     public function __construct() {
         $this->parser = new D2G_Parser();
         $this->html   = new D2G_HTML_Converter( $this );
@@ -145,7 +154,8 @@ class D2G_Converter {
      * Convert Divi shortcode content to Gutenberg block markup.
      */
     public function convert( string $content ): string {
-        $this->warnings = [];
+        $this->warnings     = [];
+        $this->acknowledged = [];
 
         if ( ! D2G_Parser::has_divi_content( $content ) ) {
             return $content;
@@ -156,7 +166,45 @@ class D2G_Converter {
 
         // Clean up excessive whitespace.
         $output = preg_replace( "/\n{3,}/", "\n\n", $output );
-        return trim( $output );
+        $output = trim( $output );
+
+        $this->report_census( $content, $output );
+
+        return $output;
+    }
+
+    /**
+     * Count the page in and out, and report anything that fell out unexplained.
+     *
+     * Runs last, on the finished markup, and deliberately knows nothing about
+     * how that markup was produced — see D2G_Census. Every silent loss the
+     * corpus found in 2.7.0 and 2.8.0 would have raised a line here on the
+     * first page converted, without anyone having to think to look for it.
+     *
+     * It reports; it does not refuse. A count is evidence, not proof: a module
+     * that legitimately becomes a placeholder loses words, and refusing the
+     * conversion over an arithmetic difference would block work the user asked
+     * for. Naming it in the same list as every other loss is the right weight.
+     */
+    private function report_census( string $source, string $output ) {
+        $missing = D2G_Census::unexplained(
+            D2G_Census::of_divi( $source ),
+            D2G_Census::of_blocks( $output ),
+            $this->acknowledged
+        );
+
+        foreach ( $missing as $kind => $delta ) {
+            $this->add_warning(
+                'content-census',
+                sprintf(
+                    /* translators: 1: number missing. 2: number in the original. 3: what was counted, e.g. "links". */
+                    __( 'Fewer %3$s came out of this conversion than went in: %1$d of %2$d are missing. Nothing in the conversion accounted for them, so this is worth checking against the original before you rely on the page. Please report it — this is the kind of defect the converter should have caught itself.', 'block-converter-for-divi' ),
+                    $delta['lost'],
+                    $delta['before'],
+                    D2G_Census::label( $kind )
+                )
+            );
+        }
     }
 
     /**
@@ -166,6 +214,54 @@ class D2G_Converter {
      */
     public function get_warnings(): array {
         return $this->warnings;
+    }
+
+    /**
+     * Something this conversion dropped on purpose, and has already reported.
+     *
+     * The census counts what went in and what came out. Without this it would
+     * re-report every gallery image whose attachment no longer exists — losses
+     * the renderer named, in a message that explains why they cannot be
+     * recovered — and a second, vaguer line saying the same thing is how a
+     * report starts getting ignored.
+     *
+     * Subtracting them is also what makes the remainder mean something: what is
+     * left after the acknowledged losses is, by definition, loss nothing in the
+     * converter knew about. That is the class of defect the census exists for.
+     *
+     * @param string $kind One of the keys D2G_Census counts.
+     */
+    public function acknowledge_loss( string $kind, int $count ) {
+        if ( $count > 0 ) {
+            $this->acknowledged[ $kind ] = ( $this->acknowledged[ $kind ] ?? 0 ) + $count;
+        }
+    }
+
+    /**
+     * Losses accounted for during the last convert() call.
+     *
+     * @return array<string, int>
+     */
+    public function get_acknowledged_losses(): array {
+        return $this->acknowledged;
+    }
+
+    /**
+     * Account for a span of Divi source a renderer deliberately threw away.
+     *
+     * For the renderers that reduce a subtree to text — a counter's label, a
+     * map's address — where naming each kind by hand would mean the renderer
+     * re-deriving what the census already knows how to count.
+     *
+     * Words are excluded because these renderers keep the words; it is the
+     * links, images and buttons inside them that go.
+     */
+    public function acknowledge_discarded( string $divi_fragment ) {
+        foreach ( D2G_Census::of_divi( $divi_fragment ) as $kind => $count ) {
+            if ( 'words' !== $kind ) {
+                $this->acknowledge_loss( $kind, $count );
+            }
+        }
     }
 
     /**

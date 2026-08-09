@@ -231,7 +231,8 @@ class D2G_Renderer_Interactive extends D2G_Module_Renderer {
         // *markup* on the page: a body of `<p>Sales</p>` was published as the
         // visible characters `&lt;p&gt;Sales&lt;/p&gt;`. Reduce it to its words
         // first, then escape those.
-        $label = trim( wp_strip_all_tags( $this->context->get_inner_content( $node ), true ) );
+        $body  = $this->context->get_inner_content( $node );
+        $label = trim( wp_strip_all_tags( $body, true ) );
         if ( '' === $label ) {
             $label = (string) ( $attrs['title'] ?? '' );
         }
@@ -240,6 +241,22 @@ class D2G_Renderer_Interactive extends D2G_Module_Renderer {
             'et_pb_counter',
             __( 'Bar counters became a line of text showing their label and percentage. Core has no animated bar-counter block, so the bar and its animation were not carried over.', 'block-converter-for-divi' )
         );
+
+        // A counter's label is text, so anything a user nested inside it — a
+        // button, an image — is reduced to its words and the rest is gone. That
+        // was true before and said nothing; the warning above is about the bar,
+        // which is not the same loss. Found by the census, which is what it is
+        // for.
+        if ( ! empty( $node['children'] ) ) {
+            // The raw inner span, not $body: get_inner_content() has already
+            // dropped the child modules, which are the thing being accounted
+            // for here.
+            $this->context->acknowledge_discarded( (string) ( $node['content'] ?? '' ) );
+            $this->warn(
+                'et_pb_counter',
+                __( 'A counter had modules nested inside its label. A label is plain text, so their words were kept and the modules themselves — buttons, images and any links they carried — were not.', 'block-converter-for-divi' )
+            );
+        }
 
         $html = '<p><strong>' . D2G_Block_Builder::text( $label ) . '</strong>: ' . esc_html( $percent ) . '%</p>';
         return D2G_Block_Builder::block( 'paragraph', [], $html );

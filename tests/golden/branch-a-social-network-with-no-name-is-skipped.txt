@@ -4,3 +4,6 @@
 
 </ul>
 <!-- /wp:social-links -->
+
+===== WARNINGS =====
+[et_pb_social_media_follow] A social follow link named no network, so there was no icon to convert it to and the address was not carried over. Add it back with a Social Icons block.

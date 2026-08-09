@@ -1,6 +1,6 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.8.0` — released. Runs against real WordPress
+**Status:** `2.9.0` — released. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
 checked by WordPress's own block validator against the block library **each**
 supported release actually ships (`bin/block-library-matrix.sh`) and the admin
@@ -21,6 +21,14 @@ spacing settings still reported as lost rather than carried, 247 of those
 reports wrong, and one page that had been converted from a previous conversion
 instead of from Divi. After 2.8.0 the corpus converts to 8,287 valid blocks with
 spacing loss at zero and warnings down from 5.0 to 2.7 a page.
+**2.9.0 moves the counting into the plugin.** Both of those releases were found
+by counting the corpus by hand; a conversion now counts itself — words, links,
+images and buttons in and out — and reports any shortfall nothing accounted for,
+on every page, without anyone having to think to look. It shares no code with
+the parser on purpose, because a counter built on the parser would have been
+blind to the `&quot;` defect in exactly the way the parser was. It found a real
+loss on its first run over the corpus (a video module carrying two sources kept
+one silently) and two more in the fixture set, and reports none now.
 **Remaining caveat:** the corpus is real but narrow — 13 of the 58 supported
 modules. It is section, row, column, text, image, button and gallery, with a
 little video, divider, signup and audio. **Tabs, accordions, toggles, pricing

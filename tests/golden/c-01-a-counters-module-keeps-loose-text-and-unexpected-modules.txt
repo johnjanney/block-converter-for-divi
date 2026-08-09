@@ -21,5 +21,6 @@
 <!-- /wp:group -->
 
 ===== WARNINGS =====
+[et_pb_counter] A counter had modules nested inside its label. A label is plain text, so their words were kept and the modules themselves — buttons, images and any links they carried — were not.
 [et_pb_counter] Bar counters became a line of text showing their label and percentage. Core has no animated bar-counter block, so the bar and its animation were not carried over.
 [et_pb_counters] The module "et_pb_counters" held content this converter does not model as part of that module — loose text, or another module nested inside it. The content was kept in place, but check where it landed and how it is styled.

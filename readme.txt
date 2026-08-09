@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.8.0
+Stable tag: 2.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -174,6 +174,18 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.9.0 =
+* Every conversion is now counted in and counted out — words, links, images and
+  buttons — and anything missing that the conversion did not already explain is
+  reported alongside the other warnings. The last two releases fixed losses that
+  happened silently; this is the check that says so at the time, on your pages,
+  instead of leaving you to find it later.
+* Fixed a video module with two sources keeping one and dropping the other
+  without saying so. Usually the two are the same video in two formats and
+  nothing is lost, but they can be different videos, so it now tells you.
+* Fixed two more silent drops the new check found: modules nested inside a
+  counter's label, and a social follow link that named no network.
 
 = 2.8.0 =
 * Padding and margin set on a text block, gallery, image, button, divider, video
@@ -409,6 +421,14 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.9.0 =
+Nothing changes about pages you have already converted. What this adds is a
+check that runs on every conversion from now on: it counts the text, links,
+images and buttons going in and coming out, and tells you when something is
+missing that the conversion did not already account for. If you see one of those
+warnings, compare the page with the original before relying on it, and please
+report it.
 
 = 2.8.0 =
 Padding and margin on text, image, gallery, button, divider, video and audio

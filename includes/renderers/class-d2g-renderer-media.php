@@ -144,8 +144,25 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
         $src   = D2G_Block_Builder::url( $attrs['src'] ?? '' );
 
         // Fallback to alternative source attributes.
+        $webm = D2G_Block_Builder::url( $attrs['src_webm'] ?? '' );
+
         if ( '' === $src ) {
-            $src = D2G_Block_Builder::url( $attrs['src_webm'] ?? '' );
+            $src = $webm;
+            $webm = '';
+        }
+
+        // Divi offers two sources so a browser can pick the format it supports;
+        // core/video takes one, so the second has nowhere to go. Usually that
+        // costs nothing, because the two are the same video in two encodings —
+        // but nothing makes an author use them that way, and on a real page
+        // src_webm held an entirely different Vimeo film, which this dropped
+        // without a word until the census counted the links and noticed.
+        if ( '' !== $webm && $webm !== $src ) {
+            $this->context->acknowledge_loss( 'links', 1 );
+            $this->warn(
+                $node['tag'],
+                __( 'A video module listed a second, alternative source. The Video block holds one source, so only the first was carried over — check whether the second was a different video rather than the same one in another format.', 'block-converter-for-divi' )
+            );
         }
 
         // Check if the inner content contains an iframe embed (common in Divi).
@@ -371,6 +388,10 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
         }
 
         if ( $missing ) {
+            // Named here, so the census does not count them a second time in
+            // vaguer words. See D2G_Converter::acknowledge_loss().
+            $this->context->acknowledge_loss( 'images', $missing );
+
             $this->warn(
                 'et_pb_gallery',
                 $missing === count( $ids )

@@ -115,6 +115,10 @@ class D2G_Renderer_Layout extends D2G_Module_Renderer {
         // core/group has no image background, and turning the section into a
         // core/cover would change the layout semantics of everything inside it.
         if ( ! empty( $attrs['background_image'] ) ) {
+            // Accounted for, so the census reports it once — here, where the
+            // message can say what to do about it — rather than twice.
+            $this->context->acknowledge_loss( 'images', 1 );
+
             $this->warn(
                 'et_pb_section',
                 __( 'A section had a background image. The Group block it became has no image background, so the image was not carried over — rebuild it with a Cover block or theme styles.', 'block-converter-for-divi' )

@@ -100,6 +100,69 @@ _Nothing yet._
 
 ---
 
+## [2.9.0] — 2026-08-09
+
+Both of the last two releases were found by counting a real corpus by hand.
+This one moves the counting into the plugin, so it happens on every conversion
+and nobody has to think to look.
+
+### Added
+
+- **A content census.** Every conversion is now counted in and counted out —
+  words, links, images, buttons — and any shortfall nothing accounted for is
+  reported in the same list as every other loss.
+
+  It shares no code with the parser, and that restriction is the whole value of
+  it. A counter built on the parser would have read
+  `[et_pb_button button_url=&quot;…&quot;]` as an attribute-less tag in exactly
+  the way the converter did before 2.7.0: zero links going in, zero coming out,
+  and a clean bill of health for a page that had lost every link on it. The
+  duplicated, naive regexes in `class-d2g-census.php` are deliberate. Two
+  implementations that fail the same way are one implementation.
+
+  A renderer that drops something on purpose says so, and the census subtracts
+  it — the gallery images whose attachments are gone, a section's background
+  image. That subtraction is what makes the remainder worth reading: what is
+  left is loss that nothing in the converter knew about, which is precisely the
+  class of defect that produced 2.7.0 and 2.8.0.
+
+  It reports; it does not refuse. A count is evidence, not proof. A module that
+  legitimately becomes a placeholder loses words, and blocking a conversion over
+  arithmetic would stop work the user asked for.
+
+### Fixed
+
+- A video module carrying two sources kept one and dropped the other in silence.
+  Divi offers `src` and `src_webm` so a browser can pick a format it supports,
+  and the renderer only read the second when the first was empty. Usually that
+  costs nothing, because the two are the same video in two encodings — but
+  nothing obliges an author to use them that way, and on a real page they were
+  two different Vimeo films. `core/video` holds one source, so this cannot be
+  repaired; it is now reported so it can be rebuilt by hand.
+
+  This was the census's first finding on real content, and the only one it
+  raised across 247 pages. After the fix it reports none.
+
+- A counter with modules nested inside its label reduced them to their words and
+  discarded the rest. It did warn, but about the bar animation, which is a
+  different loss; the modules going missing is now its own line.
+
+- A social follow link that named no network was skipped, and its address went
+  with it. `core/social-link` is keyed by service, so there was no icon to
+  convert it to — but that is a thing to say, not a thing to do quietly.
+
+### Changed
+
+- The offline suite is 211 tests, up from 207, and gained a standing gate: no
+  fixture may produce a census warning, so a future change that silently drops
+  content turns the run red on its own. It also asserts that the census can
+  still detect loss, because a counter that never fires reads as proof.
+
+- Conversion costs about 13% more — 0.74 to 0.84 ms a page — which is what the
+  second reading of every document buys.
+
+---
+
 ## [2.8.0] — 2026-08-09
 
 The corpus from 2.7.0 was run a second time, against 2.7.0, and read again. That

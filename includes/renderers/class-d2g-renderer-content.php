@@ -376,13 +376,30 @@ class D2G_Renderer_Content extends D2G_Module_Renderer {
             $node,
             [ 'et_pb_social_media_follow_network' ],
             function ( array $networks ) {
-                $links = [];
+                $links   = [];
+                $skipped = 0;
                 foreach ( $networks as $child ) {
                     $network = $child['attrs']['social_network'] ?? '';
                     if ( $network ) {
                         $links[ $network ] = $child['attrs']['url'] ?? '#';
+                        continue;
+                    }
+                    // core/social-link is keyed by service; without one there
+                    // is no block to make. The address goes with it, which used
+                    // to happen without a word — the census is what noticed.
+                    if ( '' !== trim( (string) ( $child['attrs']['url'] ?? '' ) ) ) {
+                        $skipped++;
                     }
                 }
+
+                if ( $skipped ) {
+                    $this->context->acknowledge_loss( 'links', $skipped );
+                    $this->warn(
+                        'et_pb_social_media_follow',
+                        __( 'A social follow link named no network, so there was no icon to convert it to and the address was not carried over. Add it back with a Social Icons block.', 'block-converter-for-divi' )
+                    );
+                }
+
                 return D2G_Block_Builder::social_links( $links );
             },
             $node['attrs']

@@ -19,6 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 $d2g_includes = __DIR__ . '/';
 
 require_once $d2g_includes . 'class-d2g-parser.php';
+require_once $d2g_includes . 'class-d2g-census.php';
 require_once $d2g_includes . 'class-d2g-style-mapper.php';
 require_once $d2g_includes . 'class-d2g-block-builder.php';
 require_once $d2g_includes . 'class-d2g-html-converter.php';

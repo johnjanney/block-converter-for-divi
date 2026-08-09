@@ -240,6 +240,95 @@ if ( '' === $filter ) {
     }
 }
 
+// --------------------------------------------------------------- census -----
+//
+// The census is a second opinion on every conversion: it counts words, links,
+// images and buttons going in and coming out, and reports a shortfall nothing
+// accounted for. Two things are checked here.
+//
+// First, that it can still tell. A counter that never fires is worse than no
+// counter, because it reads as proof.
+//
+// Second, that no fixture trips it. That is the standing gate: any future
+// change which silently drops content makes some fixture start reporting a
+// shortfall, and this run turns red without anyone having thought to look.
+if ( '' === $filter ) {
+    $census_problems = [];
+
+    // One image, one link, one button, and four words — every count
+    // unambiguous, so the assertions below can be about the census rather than
+    // about how the example was written.
+    $before = D2G_Census::of_divi(
+        '[et_pb_text]<p>One two three</p>'
+        . '<p><a href="https://example.com/a">alpha</a></p>'
+        . '<img src="https://example.com/a.jpg" />[/et_pb_text]'
+        . '[et_pb_button button_url="https://example.com/go" button_text="Go" /]'
+    );
+
+    foreach ( [ 'words' => 4, 'links' => 2, 'images' => 1, 'buttons' => 1 ] as $kind => $expected ) {
+        if ( $before[ $kind ] !== $expected ) {
+            $census_problems[] = sprintf( 'counted %d %s in the source, expected %d', $before[ $kind ], $kind, $expected );
+        }
+    }
+
+    // A conversion that kept the words and dropped everything else.
+    $after = D2G_Census::of_blocks( "<!-- wp:paragraph -->\n<p>One two three alpha</p>\n<!-- /wp:paragraph -->" );
+    $lost  = D2G_Census::unexplained( $before, $after );
+
+    foreach ( [ 'links', 'images', 'buttons' ] as $kind ) {
+        if ( ! isset( $lost[ $kind ] ) ) {
+            $census_problems[] = "a conversion that dropped every $kind was not reported";
+        }
+    }
+    if ( isset( $lost['words'] ) ) {
+        $census_problems[] = 'words that survived were reported as lost';
+    }
+
+    // An acknowledged loss is not reported twice.
+    $still = D2G_Census::unexplained( $before, $after, [ 'links' => 2, 'images' => 1, 'buttons' => 1 ] );
+    if ( $still ) {
+        $census_problems[] = 'an acknowledged loss was reported anyway: ' . implode( ', ', array_keys( $still ) );
+    }
+
+    // Acknowledging less than was lost still reports the remainder.
+    $partial = D2G_Census::unexplained( $before, $after, [ 'links' => 1 ] );
+    if ( ! isset( $partial['links'] ) || 1 !== $partial['links']['lost'] ) {
+        $census_problems[] = 'acknowledging one of two lost links did not leave the other reported';
+    }
+
+    // Gaining content is not a loss: a text module's body can hold links its
+    // shortcode never mentioned.
+    $gained = D2G_Census::unexplained( [ 'links' => 1 ], [ 'links' => 4 ] );
+    if ( $gained ) {
+        $census_problems[] = 'a conversion that produced more than it consumed was reported as lossy';
+    }
+
+    // And the gate: nothing in the corpus may trip it.
+    foreach ( $fixtures as $name => $fixture ) {
+        $GLOBALS['d2g_test_unregistered'] = $fixture['unregistered'] ?? [];
+        $converter = new D2G_Converter();
+        $converter->convert( $fixture['divi'] );
+        $GLOBALS['d2g_test_unregistered'] = [];
+
+        foreach ( $converter->get_warnings() as $warning ) {
+            if ( 'content-census' === $warning['module'] ) {
+                $census_problems[] = "$name: " . $warning['message'];
+            }
+        }
+    }
+
+    if ( $census_problems ) {
+        $failed++;
+        echo "FAIL  content census\n";
+        foreach ( $census_problems as $problem ) {
+            echo "        - $problem\n";
+        }
+    } else {
+        $passed++;
+        printf( "ok    content census: reports real loss, and %d fixtures convert with none\n", count( $fixtures ) );
+    }
+}
+
 // ------------------------------------------------------------- summary ------
 echo "\n";
 
