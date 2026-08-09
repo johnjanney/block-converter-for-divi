@@ -23,10 +23,20 @@ foreach ( $existing as $old ) {
 $section = '[et_pb_section][et_pb_row][et_pb_column type="4_4"]%s[/et_pb_column][/et_pb_row][/et_pb_section]';
 
 $pages = [
-    // Converts cleanly. Carries a lossy setting so the preview has a warning to
-    // show, and an ampersand so the encoding fix is visible in the browser.
+    // Converts cleanly. Carries an ampersand so the encoding fix is visible in
+    // the browser, and a permanently lossy setting so the preview has a warning
+    // to show.
+    //
+    // The lossy setting is deliberately an animation rather than padding. This
+    // page used to rely on custom_padding being unmappable, and when spacing
+    // was mapped onto core's block supports the warning stopped firing and two
+    // browser tests failed — they were asserting on a loss the converter had
+    // just fixed. An animation needs JavaScript that core has no block for, so
+    // it stays lost however far the style layer goes.
+    //
+    // The padding stays too, so the page still exercises the mapping.
     'e2e: simple page' => sprintf(
-        '[et_pb_section custom_padding="40px||40px||true"][et_pb_row][et_pb_column type="4_4"]'
+        '[et_pb_section custom_padding="40px||40px||true" animation_style="slide"][et_pb_row][et_pb_column type="4_4"]'
         . '[et_pb_text]<h2>Rates &amp; Times</h2><p>Body copy.</p>[/et_pb_text]'
         . '[et_pb_button button_text="Book now" button_url="/book" /]'
         . '[/et_pb_column][/et_pb_row][/et_pb_section]'
