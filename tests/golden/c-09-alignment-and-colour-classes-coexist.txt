@@ -1,0 +1,3 @@
+<!-- wp:paragraph {"align":"center","style":{"color":{"text":"#444444"}}} -->
+<p class="has-text-align-center has-text-color" style="color:#444444">B</p>
+<!-- /wp:paragraph -->

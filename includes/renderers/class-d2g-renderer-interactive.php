@@ -24,6 +24,23 @@ class D2G_Renderer_Interactive extends D2G_Module_Renderer {
     /**
      * @return array<string, string>
      */
+    /**
+     * These modules render their body through the HTML engine, so body_*
+     * typography reaches the paragraphs it produces — verified per tag rather
+     * than assumed from the family. Their headings are built here from an
+     * attribute and never see header_*, which is why only the body settings
+     * are declared.
+     *
+     * @return array<string, string[]>
+     */
+    public static function mapped_style_attrs(): array {
+        $body = [ 'body_text_color', 'body_font_size', 'body_line_height', 'body_letter_spacing' ];
+        return [
+            'et_pb_toggle' => $body,
+            'et_pb_tab' => $body,
+        ];
+    }
+
     public static function tags(): array {
         return [
             'et_pb_accordion'             => 'accordion',

@@ -371,6 +371,57 @@ return [
         'warns'  => [ 'et_pb_section' ],
     ],
 
+    // ---------------------------------------------------------------- C-09 --
+    //
+    // Typography onto core's text block supports. Core serializes these
+    // alphabetically by CSS property — color, font-size, letter-spacing,
+    // line-height — and a block that lists them differently is reported as
+    // containing unexpected content.
+
+    'C-09 a text module carries its body and heading typography' => [
+        'divi'   => '[et_pb_text header_text_color="#1a1a1a" header_font_size="32px"'
+            . ' body_text_color="#444444" body_font_size="18px" body_line_height="1.6"]'
+            . '<h2>Title</h2><p>Body</p>[/et_pb_text]',
+        'expect' => [
+            '<h2 class="has-text-color" style="color:#1a1a1a;font-size:32px">',
+            '<p class="has-text-color" style="color:#444444;font-size:18px;line-height:1.6">',
+            '"typography":{"fontSize":"32px"}',
+        ],
+        'rejectWarnings' => [ 'et_pb_text' ],
+    ],
+
+    'C-09 alignment and colour classes coexist' => [
+        'divi'   => '[et_pb_text text_orientation="center" body_text_color="#444444"]<p>B</p>[/et_pb_text]',
+        'expect' => [ 'class="has-text-align-center has-text-color"', '"align":"center"' ],
+    ],
+
+    'C-09 line height may be unitless, which css_length alone would reject' => [
+        'divi'   => '[et_pb_text body_line_height="1.6"]<p>B</p>[/et_pb_text]',
+        'expect' => [ 'line-height:1.6' ],
+    ],
+
+    'C-09 a typographic value that is not a length is dropped' => [
+        'divi'   => '[et_pb_text body_font_size="18px;position:fixed" body_letter_spacing="2px"]<p>B</p>[/et_pb_text]',
+        'expect' => [ 'letter-spacing:2px' ],
+        'reject' => [ 'position:fixed', 'font-size' ],
+    ],
+
+    // header_* only reaches the Text module. Every other module builds its
+    // heading in its own renderer from an attribute and never sees the setting,
+    // so it must still be reported.
+    'C-09 a CTA carries body typography but still reports its heading typography' => [
+        'divi'   => '[et_pb_cta title="T" body_font_size="18px" header_font_size="40px"]<p>B</p>[/et_pb_cta]',
+        'expect' => [ 'font-size:18px' ],
+        'reject' => [ 'font-size:40px' ],
+        'warns'  => [ 'et_pb_cta' ],
+    ],
+
+    'C-09 a module that does not render a body still reports its typography' => [
+        'divi'   => '[et_pb_image src="https://example.com/a.jpg" body_font_size="18px" /]',
+        'reject' => [ 'font-size' ],
+        'warns'  => [ 'et_pb_image' ],
+    ],
+
     'C-08 a text module still reports the padding it loses' => [
         'divi'   => '[et_pb_text custom_padding="10px|||"]<p>Hi</p>[/et_pb_text]',
         'warns'  => [ 'et_pb_text' ],

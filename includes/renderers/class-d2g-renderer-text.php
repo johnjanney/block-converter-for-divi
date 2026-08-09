@@ -19,6 +19,30 @@ class D2G_Renderer_Text extends D2G_Module_Renderer {
     /**
      * @return array<string, string>
      */
+    /**
+     * Verified by measurement, not assumed.
+     *
+     * A module's body goes through the HTML engine, so body_* typography
+     * reaches the paragraphs it produces. header_* only lands where the
+     * *headings* also come from that engine, which for now is the Text module
+     * alone — every other module builds its headings directly in its renderer
+     * from an attribute, and never sees header_font_size at all.
+     *
+     * Claiming otherwise would be the worse of the two errors: reporting a loss
+     * that did not happen trains users to ignore the report, but staying quiet
+     * about one that did is how they lose something without being told.
+     *
+     * @return array<string, string[]>
+     */
+    public static function mapped_style_attrs(): array {
+        return [
+            'et_pb_text' => [
+                'body_text_color', 'body_font_size', 'body_line_height', 'body_letter_spacing',
+                'header_text_color', 'header_font_size', 'header_line_height', 'header_letter_spacing',
+            ],
+        ];
+    }
+
     public static function tags(): array {
         return [
             'et_pb_text'           => 'text_module',
