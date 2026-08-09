@@ -94,6 +94,17 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [2.4.0] — 2026-08-09
+
+The first release that repairs a design setting rather than reporting it. Every
+converted page used to say "Design settings were not carried over: spacing
+(padding or margin)" and leave the user to rebuild by hand what the Divi source
+had stated precisely.
+
 ### Added
 
 - Divi spacing and background colour on sections, rows and columns are now
@@ -867,7 +878,8 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.1.0...v2.2.0

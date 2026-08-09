@@ -1,6 +1,6 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.3.1` — released. Runs against real WordPress
+**Status:** `2.4.0` — released. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
 checked by WordPress's own block validator against the block library **each**
 supported release actually ships (`bin/block-library-matrix.sh`) and the admin
@@ -20,7 +20,7 @@ decision, not yet made.
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later
-**Last brief update:** 2026-08-07
+**Last brief update:** 2026-08-09
 
 ---
 
@@ -259,7 +259,7 @@ Before 2.2.0 nothing detected any of it. The claim on this page that losses were
 above — a Section with `custom_padding` lost its padding and produced no
 warning at all.
 
-Spacing was mapped in the release after 2.3.1, and how it was done matters more
+Spacing was mapped in 2.4.0, and how it was done matters more
 than that it was done. Naively wiring the old style mapper in is what would have
 broken block validation: WordPress regenerates a static block's markup from its
 attributes and compares, and an inline `style` the block's own save function
