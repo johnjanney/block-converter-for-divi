@@ -1,21 +1,30 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.6.0` — released. Runs against real WordPress
+**Status:** `2.7.0` — released. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
 checked by WordPress's own block validator against the block library **each**
 supported release actually ships (`bin/block-library-matrix.sh`) and the admin
 screen driven in a browser. `Requires at least` and `Tested up to` are both
 measurements now, not estimates. 2.3.0 also fixes the upgrade from the
 pre-rename plugin, which had failed with a fatal error since 2.0.0.
-**Remaining caveat:** the fixture corpus is still entirely synthetic — every
-fixture was written by someone who already knew what the converter does. 2.3.0
-is the first version run against real content: about 15 pages from a live Divi
-site, converted successfully. Those pages were sections, rows, text and images,
-which is the simplest module set and the one already best covered, so it
-confirms the common path and leaves the modules where loss actually happens
-(tabs, sliders, pricing tables, forms, galleries, code) unexercised on real
-content. It is still best described as an assisted migration tool that produces
-a first block draft for review. WordPress.org submission is a separate
+**2.7.0 is the first version measured against a real corpus** — 247 Divi pages
+from a live site, converted and read back out of the database — and the
+measurement was worth having: it found that content storing its shortcode
+attribute quotes as `&quot;` parsed as no attributes at all, so every module
+setting on 246 of the 247 pages had been discarded in silence. Every fixture in
+the suite had been written with canonical `"` delimiters, so 189 passing tests
+and 58/58 module coverage could not see it. All 247 pages now validate against
+core's own parser (8,020 blocks), word loss across the corpus is zero, and all
+1,189 source URLs survive.
+**Remaining caveat:** the corpus is real but narrow — 13 of the 58 supported
+modules. It is section, row, column, text, image, button and gallery, with a
+little video, divider, signup and audio. **Tabs, accordions, toggles, pricing
+tables, forms, blurbs, sliders, testimonials, counters, maps, code and blog
+modules remain unexercised on real content**, and those are where the
+conversion has the least to work with. What the corpus proved is the common
+path and one class of input the fixtures had never modelled; it did not prove
+the hard modules. It is still best described as an assisted migration tool that
+produces a first block draft for review. WordPress.org submission is a separate
 decision, not yet made.
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney

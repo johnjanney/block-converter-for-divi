@@ -108,6 +108,7 @@ rsync -a \
     --exclude 'playwright.config.js' \
     --exclude 'test-results' \
     --exclude 'playwright-report' \
+    --exclude 'live-test-files' \
     ./ "build/${SLUG}/"
 
 # A single top-level directory, so the WordPress plugin uploader installs it

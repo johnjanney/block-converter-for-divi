@@ -302,16 +302,22 @@
             $filters.show();
             syncControls();
 
+            // Divi 5 pages are not in `pages` and cannot be converted, so this
+            // has to be said on the "nothing found" path too — that is the one
+            // where a site with only Divi 5 content would otherwise be told it
+            // has no Divi left.
+            var divi5 = data.divi5_count ? ' ' + fmt(t('divi5'), data.divi5_count) : '';
+
             if (!data.total_items) {
-                showStatus(t('noResults'), 'success');
+                showStatus(t('noResults') + divi5, divi5 ? 'error' : 'success');
                 return;
             }
 
             if (data.truncated) {
                 showStatus(fmt(t('found'), data.total_items) + ' ' +
-                    fmt(t('items'), data.shown) + ' — ' + t('truncated'), 'error');
+                    fmt(t('items'), data.shown) + ' — ' + t('truncated') + divi5, 'error');
             } else {
-                showStatus(fmt(t('found'), data.total_items), 'success');
+                showStatus(fmt(t('found'), data.total_items) + divi5, divi5 ? 'error' : 'success');
             }
 
             $.each(data.pages, function (i, page) {

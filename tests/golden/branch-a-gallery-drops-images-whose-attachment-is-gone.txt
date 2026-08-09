@@ -6,3 +6,6 @@
 
 </figure>
 <!-- /wp:gallery -->
+
+===== WARNINGS =====
+[et_pb_gallery] 1 of the 2 images in a gallery were dropped because they are not in this site's media library. Divi stores galleries as attachment IDs, so there is no image address to fall back on — re-add those images by hand.

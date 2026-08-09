@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.6.0
+ * Version:     2.7.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -141,7 +141,7 @@ if ( bcfd_legacy_plugin_present() ) {
  * error" that upgrading from 1.x produced. Nothing outside this file reads
  * these, and no stored data is keyed on them, so the prefix is free to change.
  */
-define( 'BCFD_VERSION', '2.6.0' );
+define( 'BCFD_VERSION', '2.7.0' );
 define( 'BCFD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BCFD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -224,6 +224,8 @@ final class Block_Converter_For_Divi {
                 'found'             => __( '%s page(s) found.', 'block-converter-for-divi' ),
                 /* translators: %s: number of items in the result set. */
                 'items'             => __( '%s item(s)', 'block-converter-for-divi' ),
+                /* translators: %s: number of pages built with Divi 5. */
+                'divi5'             => __( '%s page(s) are built with Divi 5, which stores pages as Divi blocks rather than shortcodes. This plugin does not convert those, and they are not listed above — they will still need Divi installed.', 'block-converter-for-divi' ),
                 'noTitle'           => __( '(no title)', 'block-converter-for-divi' ),
                 'preview'           => __( 'Preview', 'block-converter-for-divi' ),
                 'loading'           => __( 'Loading…', 'block-converter-for-divi' ),
@@ -406,6 +408,45 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         $total_items = (int) $total_items;
         $total_pages = $per_page ? (int) ceil( $total_items / $per_page ) : 1;
 
+        // Divi 5 stores a page as `<!-- wp:divi/… -->` blocks instead of
+        // shortcodes, so a scan that looks for `[et_pb_` cannot see one. Those
+        // pages are not converted and stay bound to Divi — and until now they
+        // left no trace in this screen at all, so a site could report every
+        // page converted while some still needed the builder installed. That is
+        // the worst shape a gap can take: invisible.
+        //
+        // Counted rather than listed. Converting Divi 5's block format is a
+        // different feature; saying the pages are there is what this release
+        // can honestly do. Shares the count cache and its recount-on-page-1
+        // rule, because it is the same expensive unindexed content scan.
+        $divi5_key   = 'd2g_divi5_count_' . md5( wp_json_encode( [ $post_type ] ) );
+        $divi5_count = $paged > 1 ? get_transient( $divi5_key ) : false;
+
+        if ( false === $divi5_count ) {
+            $divi5_like  = '%' . $wpdb->esc_like( '<!-- wp:divi/' ) . '%';
+            $divi5_args  = [ $divi5_like, $like ];
+            if ( 'all' !== $post_type ) {
+                $divi5_args[] = $post_type;
+            }
+
+            // A page holding both is a shortcode page carrying a Divi 5
+            // placeholder comment; the converter already handles it and reports
+            // the comment. Only the pages with no shortcode at all are stranded.
+            $divi5_count = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(p.ID) FROM {$wpdb->posts} p
+                      WHERE p.post_content LIKE %s
+                        AND p.post_content NOT LIKE %s
+                        AND p.post_status IN ('publish','draft','private','pending')
+                        AND {$type_sql}",
+                    $divi5_args
+                )
+            );
+            set_transient( $divi5_key, $divi5_count, self::SCAN_COUNT_TTL );
+        }
+
+        $divi5_count = (int) $divi5_count;
+
         // Never select p.post_content or bk.meta_value — either can be
         // megabytes, and 500 rows of it would be built in PHP and then shipped
         // to the browser. MD5() is computed by the database so the conversion
@@ -466,6 +507,7 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             'order'        => strtolower( $order ),
             'truncated'    => $truncated,
             'shown'        => count( $pages ),
+            'divi5_count'  => $divi5_count,
         ] );
     }
 

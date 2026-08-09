@@ -20,3 +20,10 @@
 tests/e2e/.auth.json
 test-results/
 playwright-report/
+
+# Real site exports used to measure a release against real content (2.7.0).
+# Never committed and never shipped: they are whole-site WXR dumps of somebody's
+# live WordPress, complete with author names and email addresses, and they run
+# to tens of megabytes. bin/build-zip.sh excludes the directory as well, and its
+# manifest check fails the build if that exclusion is ever removed.
+/live-test-files/

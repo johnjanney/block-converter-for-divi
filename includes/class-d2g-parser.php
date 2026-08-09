@@ -245,24 +245,51 @@ class D2G_Parser {
      * as a tag ending at the bracket inside the title, and the leftover `"]`
      * was emitted as visible text in the converted page.
      *
+     * An encoded `&quot;` opens a value the same way a literal quote does, and
+     * closes one that an encoded quote opened. Counting only literal quotes in
+     * a tag whose encoding stops partway through leaves the scan permanently
+     * inside a value: it swallows every following `]`, runs to the end of the
+     * document, and the rest of the page is emitted as raw shortcode text.
+     *
+     * Which delimiters close a value follows scan_value_end(), and has to: a
+     * tokenizer that disagrees with the attribute reader about where a value
+     * ends is how a tag comes out split down the middle.
+     *
      * @return int|false Offset of the closing `]`, or false when it never closes.
      */
     private static function scan_tag_end( string $content, int $open ) {
-        $len   = strlen( $content );
-        $quote = '';
+        $len     = strlen( $content );
+        $quote   = '';
+        $encoded = false;
 
         for ( $i = $open + 1; $i < $len; $i++ ) {
-            $ch = $content[ $i ];
+            $entity = self::quote_entity_len( $content, $i );
 
             if ( '' !== $quote ) {
-                if ( $ch === $quote ) {
+                if ( $entity && $encoded ) {
                     $quote = '';
+                    $i    += $entity - 1;
+                } elseif ( ! $entity && $content[ $i ] === $quote ) {
+                    $quote = '';
+                } elseif ( $entity ) {
+                    // Encoded punctuation inside a literal-quoted value.
+                    $i += $entity - 1;
                 }
                 continue;
             }
 
+            if ( $entity ) {
+                $quote   = '"';
+                $encoded = true;
+                $i      += $entity - 1;
+                continue;
+            }
+
+            $ch = $content[ $i ];
+
             if ( '"' === $ch || "'" === $ch ) {
-                $quote = $ch;
+                $quote   = $ch;
+                $encoded = false;
             } elseif ( ']' === $ch ) {
                 return $i;
             } elseif ( '[' === $ch ) {
@@ -420,23 +447,111 @@ class D2G_Parser {
         $str = str_replace( [ '&#8220;', '&#8221;', '&#8243;' ], '"', $str );
         $str = str_replace( [ '&#8216;', '&#8217;' ], "'", $str );
 
-        // Match key="value" pairs. Divi uses double quotes.
-        if ( preg_match_all( '#([\w_-]+)\s*=\s*"([^"]*)"#s', $str, $matches, PREG_SET_ORDER ) ) {
-            foreach ( $matches as $m ) {
-                $attrs[ $m[1] ] = $m[2];
-            }
-        }
+        // Walked left to right rather than matched with preg_match_all, because
+        // a value's opening and closing delimiter are not always the same form:
+        // real exports contain
+        //
+        //     [et_pb_signup title=&quot;Stay Informed&quot; description=&quot;<p>…</p>
+        //     " footer_content="<p>…</p>
+        //     "]
+        //
+        // where the encoding stops partway through the tag. A pattern anchored
+        // on one delimiter form reads only the half of the tag that happens to
+        // match it; scanning claims each value from whichever form closes it.
+        $len    = strlen( $str );
+        $offset = 0;
 
-        // Also match single-quoted values.
-        if ( preg_match_all( "#([\w_-]+)\s*=\s*'([^']*)'#s", $str, $matches, PREG_SET_ORDER ) ) {
-            foreach ( $matches as $m ) {
-                if ( ! isset( $attrs[ $m[1] ] ) ) {
-                    $attrs[ $m[1] ] = $m[2];
-                }
+        while ( $offset < $len && preg_match( '#([\w_-]+)\s*=\s*#', $str, $m, PREG_OFFSET_CAPTURE, $offset ) ) {
+            $key   = $m[1][0];
+            $after = $m[0][1] + strlen( $m[0][0] );
+
+            $entity = self::quote_entity_len( $str, $after );
+            if ( $entity ) {
+                $kind    = '"';
+                $encoded = true;
+                $start   = $after + $entity;
+            } elseif ( isset( $str[ $after ] ) && ( '"' === $str[ $after ] || "'" === $str[ $after ] ) ) {
+                $kind    = $str[ $after ];
+                $encoded = false;
+                $start   = $after + 1;
+            } else {
+                // Unquoted or truncated. Step past this `=` so the scan cannot
+                // stall, and let the next key be found on its own terms.
+                $offset = $after > $offset ? $after : $offset + 1;
+                continue;
+            }
+
+            [ $value_end, $offset ] = self::scan_value_end( $str, $start, $kind, $encoded );
+
+            // Matches the previous two-pass behaviour: a later double-quoted
+            // value replaces an earlier one, a single-quoted value never
+            // overwrites a value already claimed.
+            if ( "'" !== $kind || ! isset( $attrs[ $key ] ) ) {
+                $attrs[ $key ] = substr( $str, $start, $value_end - $start );
             }
         }
 
         return $attrs;
+    }
+
+    /**
+     * Length of the double-quote entity at $i, or 0 when there is not one.
+     *
+     * Divi content reaches this plugin having been through storage paths that
+     * encode an attribute's delimiting quotes. Recognising the encoded form as
+     * a delimiter is what keeps a whole page's attributes from parsing as an
+     * empty array — which is silent, total loss of every design setting, every
+     * image source and every button link on the page.
+     */
+    private static function quote_entity_len( string $str, int $i ): int {
+        // Called once per character by the two scanners below, so the cheap
+        // rejection comes first: an entity starts with '&' and nothing else.
+        if ( ! isset( $str[ $i ] ) || '&' !== $str[ $i ] ) {
+            return 0;
+        }
+
+        foreach ( [ '&quot;' => 6, '&#34;' => 5, '&#034;' => 6 ] as $entity => $entity_len ) {
+            if ( $entity === substr( $str, $i, $entity_len ) ) {
+                return $entity_len;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Scan forward to the delimiter that closes a value opened at $from.
+     *
+     * The form that *opened* the value decides what can close it, and the
+     * asymmetry is deliberate:
+     *
+     *   - Opened with a literal quote, only a literal quote closes it. That
+     *     keeps `button_text="He said &quot;hello&quot;"` intact — those
+     *     encoded quotes are the author's punctuation, not delimiters.
+     *   - Opened with `&quot;`, either form closes it, because encoding stops
+     *     partway through real tags: `description=&quot;<p>…</p>\n"`.
+     *
+     * @return array{0: int, 1: int} Offset the value ends at, and the offset to
+     *                               resume scanning from.
+     */
+    private static function scan_value_end( string $str, int $from, string $kind, bool $encoded ): array {
+        $len = strlen( $str );
+
+        for ( $i = $from; $i < $len; $i++ ) {
+            if ( $encoded ) {
+                $entity = self::quote_entity_len( $str, $i );
+                if ( $entity ) {
+                    return [ $i, $i + $entity ];
+                }
+            }
+
+            if ( $str[ $i ] === $kind ) {
+                return [ $i, $i + 1 ];
+            }
+        }
+
+        // Unterminated: the value runs to the end of the attribute string.
+        return [ $len, $len ];
     }
 
     /**

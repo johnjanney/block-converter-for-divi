@@ -824,6 +824,19 @@ line two</pre>[/et_pb_text]',
         'divi'   => '[et_pb_gallery gallery_ids="11,999" /]',
         'expect' => [ 'attachment-11.jpg' ],
         'reject' => [ 'src=""' ],
+        'warns'  => [ 'et_pb_gallery' ],
+    ],
+
+    // A gallery whose every ID is dead converts to a valid, empty gallery
+    // block. That is the right markup and the wrong thing to do quietly: a
+    // Divi gallery holds attachment IDs and no URLs, so nothing downstream can
+    // reconstruct what was in it. On a live corpus this silently emptied 202
+    // of 243 galleries.
+    'a gallery with no resolvable images says so' => [
+        'divi'   => '[et_pb_gallery gallery_ids="999" /]',
+        'expect' => [ 'wp:gallery' ],
+        'reject' => [ 'wp:image', 'src=""' ],
+        'warns'  => [ 'et_pb_gallery' ],
     ],
 
     'branch a social network with no name is skipped' => [
@@ -1047,6 +1060,77 @@ line two</pre>[/et_pb_text]',
     'attribute values containing brackets do not truncate the tag' => [
         'divi'   => '[et_pb_text text_orientation="left"]<p>Array[0] and [1]</p>[/et_pb_text]',
         'expect' => [ 'Array[0] and [1]' ],
+    ],
+
+    // ------------------------------------------------- entity-quoted attrs --
+    //
+    // Divi content reaches this plugin having been through storage paths that
+    // write an attribute's delimiting quotes as &quot;. Every fixture above was
+    // written with literal quotes, so nothing caught what that does: the
+    // attribute regex matched nothing, every module rendered with an empty
+    // attribute array, and a 247-page live corpus lost all 278 of its images,
+    // 249 of its 252 button links, and 97% of its mapped design settings —
+    // reporting 783 warnings where 1,243 were due.
+
+    'entity-quoted attributes are read as attributes' => [
+        'divi'   => '[et_pb_image src=&quot;https://example.com/a.jpg&quot; align=&quot;center&quot; /]',
+        'expect' => [ '<!-- wp:image', 'https://example.com/a.jpg', 'aligncenter' ],
+        'reject' => [ '&quot;', 'et_pb_image' ],
+    ],
+
+    'an entity-quoted button keeps its link and its label' => [
+        'divi'   => '[et_pb_button button_url=&quot;https://example.com/donate&quot; button_text=&quot;Donate Now&quot; /]',
+        'expect' => [ 'href="https://example.com/donate"', '>Donate Now<' ],
+        'reject' => [ 'href="#"' ],
+    ],
+
+    'an entity-quoted column keeps its width' => [
+        'divi'   => '[et_pb_section][et_pb_row][et_pb_column type=&quot;1_3&quot;][et_pb_text]<p>x</p>[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]',
+        'expect' => [ '<!-- wp:column {"width":"33.33%"} -->' ],
+    ],
+
+    // The encoding stops partway through this tag, which is exactly how real
+    // exports store it: `description` opens with &quot; and closes with a
+    // literal quote. A scanner that counts only literal quotes never leaves the
+    // value, swallows the closing `]`, and spills the rest of the document into
+    // the page as raw shortcode text.
+    'a tag that mixes quoted and entity-quoted values still closes' => [
+        'divi'   => '[et_pb_section][et_pb_row][et_pb_column type=&quot;4_4&quot;]'
+            . '[et_pb_signup title=&quot;Stay Informed&quot; description=&quot;<p>News</p>' . "\n"
+            . '" footer_content="<p>Privacy</p>' . "\n"
+            . '" background_color="#FFCA08"][/et_pb_signup]'
+            . '[et_pb_text]<p>After the signup</p>[/et_pb_text]'
+            . '[/et_pb_column][/et_pb_row][/et_pb_section]',
+        'expect' => [ '<h3>Stay Informed</h3>', '<p>After the signup</p>' ],
+        'reject' => [ 'et_pb_signup', 'mailchimp_list', '&quot;' ],
+    ],
+
+    // The narrow risk in accepting &quot; as a delimiter: a value that contains
+    // one as content. The delimiter that opened the value decides where it
+    // ends, so a literal-quoted value keeps its encoded quotes intact.
+    'an encoded quote inside a quoted value stays in the value' => [
+        'divi'   => '[et_pb_button button_url="https://example.com/" button_text="He said &quot;hello&quot;" /]',
+        'expect' => [ 'He said &quot;hello&quot;' ],
+        'reject' => [ 'href="#"' ],
+    ],
+
+    // A sub-list written as a sibling of the <li> it belongs under, which is
+    // what editors that let authors "indent" a bullet produce. Invalid HTML,
+    // rendered by every browser as a sub-list, and dropped outright until now.
+    'a sub-list written beside its item is kept under that item' => [
+        'divi'   => '[et_pb_text]<ul><li>Coverage</li><ul><li>FOX 43 <a href="https://example.com/fox">report</a></li>'
+            . '<li>Radio <a href="https://example.com/radio">segment</a></li></ul><li>Website</li></ul>[/et_pb_text]',
+        'expect' => [
+            '<li>Coverage',
+            'https://example.com/fox',
+            'https://example.com/radio',
+            '<li>Website</li>',
+        ],
+    ],
+
+    'a sub-list with no item above it is still kept' => [
+        'divi'   => '[et_pb_text]<ul><ul><li>Orphan</li></ul><li>Second</li></ul>[/et_pb_text]',
+        'expect' => [ 'Orphan', '<li>Second</li>' ],
     ],
 
     'unknown modules keep their contents and are reported' => [

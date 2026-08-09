@@ -320,16 +320,51 @@ class D2G_HTML_Converter {
         $ordered     = ( 'ol' === $tag_name );
         $block_attrs = $ordered ? [ 'ordered' => true ] : [];
 
-        $items = '';
-        foreach ( $el->childNodes as $li ) {
-            if ( XML_ELEMENT_NODE !== $li->nodeType || 'li' !== strtolower( $li->nodeName ) ) {
+        $collected = [];
+        $previous  = null;
+
+        foreach ( $el->childNodes as $child ) {
+            if ( XML_ELEMENT_NODE !== $child->nodeType ) {
+                continue;
+            }
+
+            $child_name = strtolower( $child->nodeName );
+
+            if ( in_array( $child_name, [ 'ul', 'ol' ], true ) ) {
+                // A list nested directly inside a list rather than inside an
+                // <li>. That is invalid HTML which authors write constantly —
+                // every browser renders it as a sub-list of the item above —
+                // and this loop used to skip it, deleting the whole sub-tree
+                // without a word. One real page lost 173 words and 10 links
+                // that way, the entire press-coverage section of a release.
+                $stray = $this->list_block( $child, $attrs, $depth + 1 );
+                if ( '' === $stray ) {
+                    continue;
+                }
+
+                if ( null === $previous ) {
+                    // Nothing to hang it on: keep it as an item of its own
+                    // rather than drop it.
+                    $collected[] = [
+                        'inline' => '',
+                        'nested' => $stray,
+                    ];
+                    $previous = array_key_last( $collected );
+                } else {
+                    $collected[ $previous ]['nested'] .= $stray;
+                }
+
+                continue;
+            }
+
+            if ( 'li' !== $child_name ) {
                 continue;
             }
 
             $item_inline = '';
             $item_nested = '';
 
-            foreach ( $li->childNodes as $part ) {
+            foreach ( $child->childNodes as $part ) {
                 if ( XML_ELEMENT_NODE === $part->nodeType
                     && in_array( strtolower( $part->nodeName ), [ 'ul', 'ol' ], true )
                 ) {
@@ -340,9 +375,18 @@ class D2G_HTML_Converter {
                 $item_inline .= $el->ownerDocument->saveHTML( $part );
             }
 
-            $item_html = '<li>' . trim( $item_inline );
-            if ( '' !== $item_nested ) {
-                $item_html .= "\n" . $item_nested;
+            $collected[] = [
+                'inline' => $item_inline,
+                'nested' => $item_nested,
+            ];
+            $previous = array_key_last( $collected );
+        }
+
+        $items = '';
+        foreach ( $collected as $item ) {
+            $item_html = '<li>' . trim( $item['inline'] );
+            if ( '' !== $item['nested'] ) {
+                $item_html .= "\n" . $item['nested'];
             }
             $item_html .= '</li>';
 

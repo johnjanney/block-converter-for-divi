@@ -283,6 +283,7 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
 
         // Build individual wp:image inner blocks for each gallery image.
         $images_markup = '';
+        $missing       = 0;
         foreach ( $ids as $id ) {
             $url     = D2G_Block_Builder::url( $this->resolve_attachment_url( $id ) );
             $alt     = function_exists( 'get_post_meta' ) ? (string) get_post_meta( $id, '_wp_attachment_image_alt', true ) : '';
@@ -301,6 +302,14 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
             } else {
                 // Attachment not found — skip this image entirely rather than
                 // producing a broken <img src=""> that shows nothing.
+                //
+                // Skipping it *silently* is a different matter. A Divi gallery
+                // stores attachment IDs and nothing else, so an ID that no
+                // longer resolves cannot be recovered from the shortcode: there
+                // is no URL to fall back to. That makes this the one loss in
+                // the converter that the user cannot see coming and cannot undo
+                // from the backup, so it is counted and reported below.
+                $missing++;
                 continue;
             }
 
@@ -311,6 +320,24 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
             $fig_html .= '</figure>';
 
             $images_markup .= D2G_Block_Builder::block( 'image', $img_attrs, $fig_html );
+        }
+
+        if ( $missing ) {
+            $this->warn(
+                'et_pb_gallery',
+                $missing === count( $ids )
+                    ? sprintf(
+                        /* translators: %d: number of images. */
+                        __( 'A gallery converted to an empty gallery block: none of its %d images are in this site\'s media library. Divi stores galleries as attachment IDs, so there is no image address to fall back on — re-add the images, or restore the page and repair the gallery in Divi first.', 'block-converter-for-divi' ),
+                        $missing
+                    )
+                    : sprintf(
+                        /* translators: 1: number of images dropped. 2: total number of images in the gallery. */
+                        __( '%1$d of the %2$d images in a gallery were dropped because they are not in this site\'s media library. Divi stores galleries as attachment IDs, so there is no image address to fall back on — re-add those images by hand.', 'block-converter-for-divi' ),
+                        $missing,
+                        count( $ids )
+                    )
+            );
         }
 
         $gallery_classes = 'wp-block-gallery has-nested-images columns-' . $columns . ' is-cropped';

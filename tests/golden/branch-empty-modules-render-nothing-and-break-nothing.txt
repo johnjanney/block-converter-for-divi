@@ -41,4 +41,5 @@
 <!-- /wp:group -->
 
 ===== WARNINGS =====
+[et_pb_gallery] A gallery converted to an empty gallery block: none of its 1 images are in this site's media library. Divi stores galleries as attachment IDs, so there is no image address to fall back on — re-add the images, or restore the page and repair the gallery in Divi first.
 [et_pb_nothinghere] The module "et_pb_nothinghere" has no mapping. Its contents were preserved, but its layout and settings were not.

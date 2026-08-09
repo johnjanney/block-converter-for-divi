@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.6.0
+Stable tag: 2.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -171,6 +171,27 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.7.0 =
+* Fixed the defect this release exists for: Divi stores a shortcode attribute's
+  quotes as `&quot;` in some setups, and against that content the parser read no
+  attributes at all — so images vanished, buttons lost their link and their
+  label, column widths collapsed and design settings were dropped, all without a
+  warning. Measured on 247 real pages: every one of 278 images, and 249 of 252
+  buttons. Pages you converted before 2.7.0 are not repaired automatically — see
+  the upgrade notice.
+* Fixed a page being cut short when one tag mixed both quote styles. The rest of
+  the page was published as raw shortcode text.
+* Gallery images that are no longer in your media library are now reported
+  rather than dropped in silence, with a clear message when it leaves the
+  gallery empty. They cannot be recovered: Divi stores galleries as media IDs,
+  so there is no image address left to fall back on. Convert before moving a
+  site between installs, not after.
+* Fixed sub-lists disappearing. A bullet indented under another bullet was
+  dropped along with everything in it.
+* Pages built with Divi 5, which stores pages as Divi blocks rather than
+  shortcodes, are now counted and reported instead of passed over without
+  mention. They are not converted — this plugin reads Divi's shortcode format.
 
 = 2.6.0 =
 * Borders on sections, rows and columns are now carried over: width, colour,
@@ -369,6 +390,16 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.7.0 =
+Fixes a defect that silently discarded every module setting on sites whose Divi
+content stores attribute quotes as `&quot;` — images, button links, column
+widths and design settings all lost, with no warning that anything had gone.
+Pages already converted are not repaired by upgrading. To pick the settings up,
+restore an affected page from its backup and convert it again; that needs a
+backup to exist and it replaces any block editor work done since. Convert one
+page and compare it with the original before deciding for the rest. If your
+pages converted correctly before, this release changes nothing about them.
 
 = 2.6.0 =
 Borders now survive conversion, completing the set with spacing (2.4.0) and

@@ -208,6 +208,52 @@ d2g_ok( 'the write lock is exclusive', $locked[0] && ! $locked[1],
 
 wp_delete_post( $post_id, true );
 
+// ------------------------------------------------------------ the scan query --
+//
+// The scan is SQL, so nothing in tests/run.php can reach it — and it was the
+// one endpoint with no live coverage at all until a real corpus showed what it
+// misses. Divi 5 stores a page as `<!-- wp:divi/… -->` blocks rather than
+// shortcodes, so `LIKE '%[et_pb_%'` cannot see one: those pages were listed
+// nowhere, converted never, and left needing Divi with nothing said about it.
+
+$scan_ids = [
+    'shortcode' => d2g_make_post( '[et_pb_text]<p>Shortcode</p>[/et_pb_text]', 'zz scan shortcode' ),
+    // A shortcode page carrying a Divi 5 placeholder comment. Convertible, and
+    // it must not be counted as a Divi 5 page.
+    'hybrid'    => d2g_make_post( '<!-- wp:divi/placeholder --><!-- /wp:divi/placeholder -->[et_pb_text]<p>Hybrid</p>[/et_pb_text]', 'zz scan hybrid' ),
+    'divi5'     => d2g_make_post( '<!-- wp:divi/section --><!-- wp:divi/text --><p>Divi 5</p><!-- /wp:divi/text --><!-- /wp:divi/section -->', 'zz scan divi5' ),
+];
+
+foreach ( [ 'all', 'post' ] as $scan_filter ) {
+    delete_transient( 'd2g_divi5_count_' . md5( wp_json_encode( [ $scan_filter ] ) ) );
+    delete_transient( 'd2g_scan_count_' . md5( wp_json_encode( [ $scan_filter ] ) ) );
+}
+
+$scan = d2g_call( 'd2g_scan_pages', [ 'per_page' => '100', 'paged' => 1, 'post_type' => 'all' ] );
+d2g_ok( 'the scan endpoint answers', ! empty( $scan['success'] ) );
+
+$scan_titles = array_column( $scan['data']['pages'] ?? [], 'title' );
+d2g_ok( 'a shortcode page is listed', in_array( 'zz scan shortcode', $scan_titles, true ) );
+d2g_ok( 'a page holding both shortcodes and Divi 5 blocks is listed',
+    in_array( 'zz scan hybrid', $scan_titles, true ) );
+d2g_ok( 'a Divi 5 page is not listed as convertible',
+    ! in_array( 'zz scan divi5', $scan_titles, true ) );
+d2g_ok( 'a Divi 5 page is counted and reported rather than passed over silently',
+    1 === (int) ( $scan['data']['divi5_count'] ?? -1 ),
+    sprintf( 'divi5_count=%s', var_export( $scan['data']['divi5_count'] ?? null, true ) ) );
+
+$scan_page2 = d2g_call( 'd2g_scan_pages', [ 'per_page' => '1', 'paged' => 2, 'post_type' => 'all' ] );
+d2g_ok( 'the Divi 5 count survives paging on its cache',
+    1 === (int) ( $scan_page2['data']['divi5_count'] ?? -1 ) );
+
+$scan_posts = d2g_call( 'd2g_scan_pages', [ 'per_page' => '100', 'paged' => 1, 'post_type' => 'post' ] );
+d2g_ok( 'the post-type filter narrows the Divi 5 count too',
+    0 === (int) ( $scan_posts['data']['divi5_count'] ?? -1 ) );
+
+foreach ( $scan_ids as $scan_id ) {
+    wp_delete_post( $scan_id, true );
+}
+
 // ------------------------------------------- an edit that lands mid-conversion --
 //
 // The lock stops two *conversions* overlapping. It cannot stop an ordinary

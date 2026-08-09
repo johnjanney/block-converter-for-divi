@@ -25,9 +25,11 @@ The changelog format follows
 Every release **must**:
 
 1. **Bump the version in all three places** — the `Version:` header in
-   `block-converter-for-divi.php`, the `D2G_VERSION` constant, and `Stable tag:`
-   in `readme.txt`. They must always match: `D2G_VERSION` drives asset
-   cache-busting, and WordPress.org serves whatever `Stable tag` names.
+   `block-converter-for-divi.php`, the `BCFD_VERSION` constant, and `Stable tag:`
+   in `readme.txt`. They must always match: `BCFD_VERSION` drives asset
+   cache-busting, and WordPress.org serves whatever `Stable tag` names. The
+   constant was `D2G_VERSION` before the 2.0.0 rename, and this list said so
+   until 2.7.0; the rename is described at the top of the plugin file.
    `bin/build-zip.sh` refuses to build if they disagree.
 2. **Have a dated section in this file** listing every user-visible change.
 3. **Be tagged in git** as `vX.Y.Z` on the release commit.
@@ -95,6 +97,97 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 ## [Unreleased]
 
 _Nothing yet._
+
+---
+
+## [2.7.0] — 2026-08-09
+
+The first release driven by a real corpus rather than by fixtures: 247 Divi
+pages from a live site, converted and then read back out of the database.
+
+It found that the converter had been discarding almost everything it was
+supposed to carry. Every fixture in the suite had been written with canonical
+`"` delimiters around shortcode attributes, because that is what someone
+writing a fixture types. Real Divi content reaches the plugin having been
+through storage paths that write those delimiters as `&quot;`, and against
+that input the attribute parser matched nothing at all — so every module
+rendered from an empty attribute array, and the loss reporter, which works by
+inspecting parsed attributes, had nothing to report. 189 passing tests, 58/58
+module coverage and byte-exact golden snapshots could not see any of it.
+
+That is the honest lesson of this release: the fixture corpus was not merely
+incomplete, it was systematically biased toward the one input shape that
+already worked.
+
+### Fixed
+
+- Shortcode attributes whose delimiting quotes are stored as `&quot;` are read
+  as attributes. They previously parsed as an empty array, so **every setting on
+  every module was silently discarded**. Measured across the 247-page corpus,
+  where 246 pages were affected: all **278** `et_pb_image` modules produced no
+  image block at all, **249 of 252** buttons became `<a href="#">Click Here</a>`
+  — 207 of them had pointed at a donation page — column widths survived on 24
+  blocks instead of 533, and mapped design settings on 17 instead of 550. Only
+  783 of the 1,243 warnings that were due were raised, because a loss detector
+  that reads parsed attributes cannot report what never parsed.
+
+  `parse_attrs()` is now a left-to-right scanner rather than two anchored
+  patterns, and the form that *opened* a value decides what may close it. A
+  value opened with a literal quote is closed only by a literal quote, so
+  `button_text="He said &quot;hello&quot;"` keeps the author's punctuation. A
+  value opened with `&quot;` is closed by either form, because real exports stop
+  encoding partway through a tag.
+
+  This does not repair pages already converted by an earlier version. Restore
+  them from their backup and convert again — see the upgrade notice.
+
+- A tag mixing both quote forms no longer runs off the end of the document. The
+  tokenizer counted only literal quotes, so a tag that opened a value with
+  `&quot;` and closed it with `"` left the scan permanently inside a value: it
+  swallowed the closing `]`, consumed the rest of the page, and published what
+  it had eaten as raw shortcode text. Two pages did this, one of them printing a
+  Mailchimp list ID onto the page. `scan_tag_end()` now follows the same
+  open-decides-close rule as the attribute reader, which is what keeps the two
+  from disagreeing about where a tag ends.
+
+- Gallery images whose attachment ID no longer resolves are reported instead of
+  dropped in silence. The renderer skipped them with a bare `continue`, which is
+  the right markup — a broken `<img src="">` helps nobody — and the wrong thing
+  to do quietly: on the corpus it emptied 202 of 243 galleries without a word.
+  The count is now named, with a distinct message when the gallery ends up empty
+  and nothing is left to see.
+
+  It cannot recover them. A Divi gallery stores attachment IDs and no URLs, so
+  there is no address to fall back on, which also makes moving a site between
+  installs before converting a genuinely destructive order of operations — the
+  IDs do not survive the move.
+
+- A sub-list written as a sibling of its `<li>` rather than inside it is kept.
+  That is invalid HTML which authors produce constantly and every browser
+  renders as a sub-list; the converter dropped the whole subtree without a
+  warning. One page in the corpus lost 173 words and 10 press-coverage links to
+  it. Corpus-wide word loss is now zero, and all 1,189 source URLs survive.
+
+### Added
+
+- Pages stored in Divi 5's block format are counted and reported. Divi 5 writes
+  `<!-- wp:divi/… -->` blocks rather than shortcodes, so a scan that looks for
+  `[et_pb_` cannot see one: 19 pages in the corpus were listed nowhere,
+  converted never, and left needing Divi with nothing said about it — a site
+  could report every page converted while some still required the builder. The
+  scan now says how many there are, including on the "nothing found" result,
+  which is the case where a Divi-5-only site would otherwise be told it has
+  nothing left to do.
+
+  They are **counted, not converted.** Converting Divi 5's block format is a
+  separate feature and is not in this release.
+
+### Changed
+
+- The offline suite is 197 tests, up from 189, and the live suite is 30, up from
+  23. The live suite now covers the scan endpoint, which had no live coverage of
+  any kind before — it is SQL, so nothing in the offline suite could reach it,
+  and it was where the Divi 5 gap lived.
 
 ---
 
