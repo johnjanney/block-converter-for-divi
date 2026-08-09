@@ -234,6 +234,8 @@ What conversion actually preserves:
 | `text_orientation` | `has-text-align-*` class **and** the matching `textAlign` / `align` block attribute on headings and paragraphs |
 | `background_color` (section, row, column, CTA) | `style.color.background` + `has-background` |
 | `custom_padding`, `custom_margin` (section, row, column) | `style.spacing.padding` / `.margin` on `core/group`, `core/columns`, `core/column` |
+| `body_text_color`, `body_font_size`, `body_line_height`, `body_letter_spacing` | `style.color.text` + `style.typography.*` on the paragraphs a module's body produces |
+| `header_*` equivalents (Text module only) | the same, on the headings it produces |
 | `button_bg_color`, `button_text_color` | `core/button` `style.color.*` |
 | `type` (column) | `core/column` `width` |
 | `color` (divider) | `core/separator` `style.color.background` |
@@ -241,7 +243,12 @@ What conversion actually preserves:
 | `header_level` (blurb) | heading `level` |
 
 What is **not** carried over: spacing on any module *other than* section, row
-and column, explicit sizing (`max_width`, `min_height`), borders and `border_radii`, box and text shadows,
+and column; `header_font` and `body_font`, which pack family, weight, style and
+transform into one pipe-delimited value whose grammar this project has not seen
+enough real examples of to encode — guessing would put the wrong weight on
+somebody's page, which is worse than reporting the loss; `header_*` typography
+on any module except Text, because every other module builds its headings in its
+own renderer from an attribute and never sees the setting; explicit sizing (`max_width`, `min_height`), borders and `border_radii`, box and text shadows,
 fonts, font sizes, line heights, letter spacing, background gradients and
 parallax, `custom_css_main_element`, module IDs and classes, hover states,
 animations and filters, positioning and transforms, per-device visibility

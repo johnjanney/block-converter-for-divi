@@ -1,0 +1,6 @@
+<!-- wp:image {"sizeSlug":"large","linkDestination":"none","url":"https://example.com/a.jpg","alt":""} -->
+<figure class="wp-block-image size-large"><img src="https://example.com/a.jpg" alt=""/></figure>
+<!-- /wp:image -->
+
+===== WARNINGS =====
+[et_pb_image] Design settings were not carried over and need rebuilding with block or theme styles: typography.

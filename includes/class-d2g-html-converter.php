@@ -238,18 +238,30 @@ class D2G_HTML_Converter {
         if ( preg_match( '/^h([1-6])$/', $tag_name, $hm ) ) {
             $level       = (int) $hm[1];
             $block_attrs = [ 'level' => $level ];
-            $cls         = '';
+            $classes     = [];
+
             if ( $align ) {
                 // The class and the block attribute have to agree: core/heading
                 // regenerates the class from textAlign, so emitting one without
                 // the other is exactly the mismatch that invalidates the block.
                 $block_attrs['textAlign'] = $attrs['text_orientation'];
-                $cls                      = ' class="' . $align . '"';
+                $classes[]                = $align;
             }
+
+            // A heading takes its typography from Divi's header_* settings,
+            // a paragraph from body_*. That split is Divi's, and it is why
+            // text_styles() takes a prefix rather than guessing.
+            $styles       = D2G_Block_Builder::text_styles( $attrs, 'header_' );
+            $block_attrs += $styles['attrs'];
+            $classes      = array_merge( $classes, $styles['classes'] );
+
+            $cls   = $classes ? ' class="' . implode( ' ', $classes ) . '"' : '';
+            $style = $styles['css'] ? ' style="' . esc_attr( implode( ';', $styles['css'] ) ) . '"' : '';
+
             return D2G_Block_Builder::block(
                 'heading',
                 $block_attrs,
-                '<' . $tag_name . $cls . '>' . $inner_html . '</' . $tag_name . '>'
+                '<' . $tag_name . $cls . $style . '>' . $inner_html . '</' . $tag_name . '>'
             );
         }
 

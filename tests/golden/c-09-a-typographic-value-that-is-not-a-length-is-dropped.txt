@@ -1,0 +1,3 @@
+<!-- wp:paragraph {"style":{"typography":{"letterSpacing":"2px"}}} -->
+<p style="letter-spacing:2px">B</p>
+<!-- /wp:paragraph -->

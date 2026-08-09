@@ -94,7 +94,38 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Divi typography and text colour are carried over where a module renders its
+  body through the HTML engine. `body_text_color`, `body_font_size`,
+  `body_line_height` and `body_letter_spacing` become core's `style.color.text`
+  and `style.typography.*` on the paragraphs that body produces; the Text
+  module's `header_*` equivalents do the same for its headings.
+
+  Core serializes these alphabetically by CSS property — colour, font size,
+  letter spacing, line height — which was measured with `tests/js/canonical.mjs`
+  rather than assumed, and the result is validated on all nine supported
+  WordPress releases.
+
+  `line-height` gets its own grammar, because it is the one typographic value
+  CSS defines as valid without a unit and Divi writes it both ways. Everything
+  else goes through the same length grammar as spacing, so
+  `body_font_size="18px;position:fixed"` contributes nothing.
+
+- The loss reporter narrows per module rather than globally. `header_*`
+  typography reaches only the Text module — every other module builds its
+  headings in its own renderer from an attribute and never sees the setting — so
+  a CTA now carries its body typography and still reports the heading typography
+  it loses. Which modules those are was determined by measurement, not by
+  assuming a whole renderer family behaves alike.
+
+### Known
+
+- `header_font` and `body_font` are still reported as lost. Divi packs family,
+  weight, style and transform into one pipe-delimited value whose grammar is not
+  documented, and this project has not seen enough real examples to encode it.
+  Getting it wrong would put the wrong font weight on somebody's page, which is
+  worse than saying it was not carried over.
 
 ---
 

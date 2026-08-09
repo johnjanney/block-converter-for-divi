@@ -191,15 +191,22 @@ class D2G_Block_Builder {
         }
 
         $align       = D2G_Style_Mapper::text_align_class( $attrs );
+        $styles      = self::text_styles( $attrs, 'body_' );
         $block_attrs = [];
-        $cls         = '';
+        $classes     = [];
 
         if ( $align ) {
             $block_attrs['align'] = $attrs['text_orientation'];
-            $cls                  = ' class="' . $align . '"';
+            $classes[]            = $align;
         }
 
-        return D2G_Block_Builder::block( 'paragraph', $block_attrs, '<p' . $cls . '>' . trim( $inner_html ) . '</p>' );
+        $block_attrs += $styles['attrs'];
+        $classes      = array_merge( $classes, $styles['classes'] );
+
+        $cls   = $classes ? ' class="' . implode( ' ', $classes ) . '"' : '';
+        $style = $styles['css'] ? ' style="' . esc_attr( implode( ';', $styles['css'] ) ) . '"' : '';
+
+        return D2G_Block_Builder::block( 'paragraph', $block_attrs, '<p' . $cls . $style . '>' . trim( $inner_html ) . '</p>' );
     }
 
     /**
@@ -409,6 +416,87 @@ class D2G_Block_Builder {
 
         if ( $spacing ) {
             $style['spacing'] = $spacing;
+        }
+
+        return [
+            'attrs'   => $style ? [ 'style' => $style ] : [],
+            'classes' => $classes,
+            'css'     => $css,
+        ];
+    }
+
+    /**
+     * A line-height value that is safe to write into a CSS declaration.
+     *
+     * Separate from css_length() because line-height is the one typographic
+     * value CSS defines as valid *without* a unit — `1.6` means 1.6 times the
+     * font size, and Divi writes it both ways.
+     */
+    public static function css_line_height( $value ): string {
+        $value = strtolower( trim( (string) $value ) );
+
+        if ( '' === $value ) {
+            return '';
+        }
+        if ( preg_match( '/^\d+(?:\.\d+)?$/', $value ) ) {
+            return $value;
+        }
+
+        return self::css_length( $value );
+    }
+
+    /**
+     * The block attributes, classes and CSS declarations for text styling.
+     *
+     * The sibling of wrapper_styles(), and it exists for the same reason: the
+     * declaration order is what core's serializer produces, and a block that
+     * lists them differently is reported as containing unexpected content.
+     * Measured, not assumed — core emits them alphabetically by CSS property:
+     *
+     *     color, font-size, font-style, font-weight,
+     *     letter-spacing, line-height, text-transform
+     *
+     * Only the four Divi actually gives us a clean value for are mapped here.
+     * `header_font` and `body_font` are deliberately not: Divi packs family,
+     * weight, style and transform into one pipe-delimited value whose grammar
+     * is not documented and which this project has never seen enough real
+     * examples of to encode. Guessing at it would put the wrong font weight on
+     * somebody's page, which is worse than reporting the loss.
+     *
+     * @param string $prefix  'header_' for headings, 'body_' for body text.
+     * @return array{attrs: array, classes: string[], css: string[]}
+     */
+    public static function text_styles( array $attrs, string $prefix ): array {
+        $colour  = self::css_color( $attrs[ $prefix . 'text_color' ] ?? '' );
+        $size    = self::css_length( $attrs[ $prefix . 'font_size' ] ?? '' );
+        $spacing = self::css_length( $attrs[ $prefix . 'letter_spacing' ] ?? '' );
+        $height  = self::css_line_height( $attrs[ $prefix . 'line_height' ] ?? '' );
+
+        $style   = [];
+        $classes = [];
+        $css     = [];
+
+        if ( '' !== $colour ) {
+            $style['color'] = [ 'text' => $colour ];
+            $classes[]      = 'has-text-color';
+            $css[]          = 'color:' . $colour;
+        }
+
+        $typography = [];
+        foreach ( [
+            'fontSize'      => [ $size, 'font-size' ],
+            'letterSpacing' => [ $spacing, 'letter-spacing' ],
+            'lineHeight'    => [ $height, 'line-height' ],
+        ] as $key => $pair ) {
+            list( $value, $property ) = $pair;
+            if ( '' !== $value ) {
+                $typography[ $key ] = $value;
+                $css[]              = $property . ':' . $value;
+            }
+        }
+
+        if ( $typography ) {
+            $style['typography'] = $typography;
         }
 
         return [
