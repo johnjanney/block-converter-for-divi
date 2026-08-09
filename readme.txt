@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.5.0
+Stable tag: 2.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -171,6 +171,14 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.6.0 =
+* Borders on sections, rows and columns are now carried over: width, colour,
+  style, and corner radius where all four corners are the same.
+* A radius that differs per corner is reported rather than guessed at. Divi does
+  not document which corner it lists first, and rounding the wrong corner of
+  your box would be worse than telling you it was not carried over.
+* Border widths set per side are still reported as lost.
 
 = 2.5.0 =
 * Text colour, font size, line height and letter spacing are now carried over
@@ -361,6 +369,14 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.6.0 =
+Borders now survive conversion, completing the set with spacing (2.4.0) and
+typography (2.5.0). If you converted pages before 2.4.0 they kept none of the
+three. Restoring such a page from its backup and converting it again picks all
+of them up at once — which needs a backup to exist, and replaces any block
+editor work done since. Convert one page and compare it with the original before
+deciding for the rest.
 
 = 2.5.0 =
 Body text colour, font size, line height and letter spacing now survive
