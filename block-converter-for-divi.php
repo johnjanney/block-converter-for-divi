@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.9.1
+ * Version:     2.9.2
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -141,7 +141,7 @@ if ( bcfd_legacy_plugin_present() ) {
  * error" that upgrading from 1.x produced. Nothing outside this file reads
  * these, and no stored data is keyed on them, so the prefix is free to change.
  */
-define( 'BCFD_VERSION', '2.9.1' );
+define( 'BCFD_VERSION', '2.9.2' );
 define( 'BCFD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BCFD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -946,16 +946,24 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         // leaving a conversion that nothing could undo. "There are revisions"
         // is not an answer: revisions can be turned off with a constant, pruned
         // by a plugin, or simply not go back far enough, and the builder meta
-        // is not in a revision at all. write_backup() keeps the first snapshot
-        // and never overwrites it, so calling it unconditionally cannot damage
-        // an existing backup.
-        self::write_backup( $post );
+        // is not in a revision at all.
+        //
+        // Three things below this line can still refuse the write, and until
+        // 2.9.2 a refusal left the snapshot behind. Because the snapshot is
+        // write-once, it then stayed — and a later conversion of the same page
+        // would be backed by a copy of content that had moved on. That is worse
+        // than no backup, because it looks like one: on a real site a page ended
+        // up with a rollback target holding an image URL the WordPress importer
+        // had since renamed, so restoring it would have put back an address that
+        // no longer resolved. $backup_undo is what lets each refusal below
+        // put back exactly what it found.
+        $backup_undo = self::write_backup( $post );
 
         $converter = new D2G_Converter();
         $converted = $converter->convert( $post->post_content );
 
         if ( '' === trim( $converted ) ) {
-            self::release_lock( $post_id, $lock );
+            self::abandon_conversion( $post_id, $lock, $backup_undo );
             wp_send_json_error( __( 'Conversion produced no content. Nothing was saved.', 'block-converter-for-divi' ) );
         }
 
@@ -964,14 +972,14 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         // and a page with a Divi Code module loses its scripts and iframes.
         $losses = self::kses_losses( $converted );
         if ( $losses ) {
-            self::release_lock( $post_id, $lock );
+            self::abandon_conversion( $post_id, $lock, $backup_undo );
             wp_send_json_error( self::kses_refusal( $losses ) );
         }
 
         $update = self::guarded_update( $post_id, $converted, $expected_hash );
 
         if ( is_wp_error( $update ) ) {
-            self::release_lock( $post_id, $lock );
+            self::abandon_conversion( $post_id, $lock, $backup_undo );
             wp_send_json_error( $update->get_error_message() );
         }
 
@@ -1087,7 +1095,22 @@ Backups are the only way to restore a converted page. Once the plugin is removed
     private static function write_backup( WP_Post $post ) {
         $existing = get_post_meta( $post->ID, '_d2g_divi_backup', true );
 
-        if ( '' === $existing || null === $existing || false === $existing ) {
+        // Everything this function is about to touch, as it found it. Returned
+        // so a refused conversion can put it all back — not just the case where
+        // there was nothing here before. The first attempt at this only undid a
+        // snapshot it had *created*, which left the refresh path below able to
+        // overwrite somebody else's backup and never give it back.
+        $undo = [
+            '_d2g_divi_backup'  => $existing,
+            '_d2g_backup_date'  => get_post_meta( $post->ID, '_d2g_backup_date', true ),
+            '_d2g_builder_meta' => get_post_meta( $post->ID, '_d2g_builder_meta', true ),
+        ];
+
+        $absent = ( '' === $existing || null === $existing || false === $existing );
+
+        // Replaced only when it has gone stale — see backup_is_stale() for why
+        // that does not break the write-once rule.
+        if ( $absent || self::backup_is_stale( $post, (string) $existing ) ) {
             update_post_meta( $post->ID, '_d2g_divi_backup', wp_slash( $post->post_content ) );
             update_post_meta( $post->ID, '_d2g_backup_date', current_time( 'mysql' ) );
         }
@@ -1115,6 +1138,67 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         }
 
         update_post_meta( $post->ID, '_d2g_builder_meta', wp_slash( $builder_meta ) );
+
+        return $undo;
+    }
+
+    /**
+     * Is a stored snapshot older than the Divi content it is supposed to hold?
+     *
+     * The write-once rule exists to stop a *second conversion* replacing the
+     * original with converted output — that is the loss it was written to
+     * prevent, and it still cannot happen: the only content this replaces a
+     * snapshot with is Divi content, checked here rather than assumed.
+     *
+     * What it did not anticipate is the snapshot going stale while the page it
+     * describes is still Divi. That happens when something edits the page
+     * between one conversion attempt and the next: on a real site the WordPress
+     * importer was still remapping image URLs, a conversion was refused after
+     * its snapshot had been taken, and the snapshot kept an address the importer
+     * then renamed. Keeping the older copy there serves nobody — the page in
+     * front of us is Divi, it is what the author has now, and it is what a
+     * restore should give back.
+     *
+     * Deliberately conservative: identical content is left alone, content
+     * holding a previous conversion is never written over a snapshot, and a page
+     * with no Divi content in it at all is not touched either.
+     */
+    private static function backup_is_stale( WP_Post $post, string $existing ): bool {
+        if ( $existing === $post->post_content ) {
+            return false;
+        }
+
+        if ( self::holds_converted_blocks( $post->post_content ) ) {
+            return false;
+        }
+
+        return D2G_Parser::has_divi_content( $post->post_content );
+    }
+
+    /**
+     * Undo a conversion that was refused after its snapshot was written.
+     *
+     * Puts every key write_backup() touched back exactly as it found it, from
+     * the record write_backup() returned: absent stays absent, and a snapshot
+     * that was already there — somebody's rollback path for an earlier
+     * conversion — is returned unchanged even if this attempt had refreshed it.
+     *
+     * "Restore what was there" rather than "delete what we added", because the
+     * two are only the same when there was nothing there to begin with, and the
+     * case that bit was the other one.
+     */
+    private static function abandon_conversion( $post_id, $lock, $undo ) {
+        if ( is_array( $undo ) ) {
+            foreach ( $undo as $key => $value ) {
+                if ( '' === $value || null === $value || false === $value ) {
+                    delete_post_meta( $post_id, $key );
+                    continue;
+                }
+                update_post_meta( $post_id, $key, wp_slash( $value ) );
+            }
+        }
+
+        self::release_lock( $post_id, $lock );
     }
 
     /**

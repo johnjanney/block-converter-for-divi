@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.9.1
+Stable tag: 2.9.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -174,6 +174,16 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.9.2 =
+* Fixed the backup a page keeps for its Restore button going out of date. If a
+  conversion was refused — because it would have produced nothing, because your
+  site strips scripts, or because the page changed while it was being converted
+  — the backup taken at the start was left behind, and it was never replaced.
+  Restoring such a page could put back content that had since moved on.
+* A backup that has already gone out of date is repaired the next time that page
+  is converted. Pages that have already been converted are untouched: their
+  backups are still the original Divi content, which is what Restore is for.
 
 = 2.9.1 =
 * Fixed the new conversion check reporting images as missing when they were not.
@@ -428,6 +438,12 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.9.2 =
+Fixes the backup behind the Restore button going out of date when a conversion
+was refused, and leaves it repaired the next time such a page is converted.
+Nothing needs reconverting because of this release, and backups of pages you
+have already converted are unaffected.
 
 = 2.9.1 =
 Fixes a false alarm in 2.9.0's new conversion check: a page using the same photo

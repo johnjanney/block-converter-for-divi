@@ -254,6 +254,50 @@ foreach ( $scan_ids as $scan_id ) {
     wp_delete_post( $scan_id, true );
 }
 
+// ------------------------------------------------------- a stale snapshot --
+//
+// The write-once rule stops a second conversion replacing the original with
+// converted output. It also, until 2.9.2, kept a snapshot that had gone stale
+// while the page was still Divi — which is what a refused attempt plus an
+// importer still rewriting URLs produces. The page in front of us is Divi and
+// is what the author has now, so it is what a restore should give back.
+
+$stale_id = d2g_make_post( '[et_pb_text]<p>Current Divi content</p>[/et_pb_text]', 'zz stale backup' );
+update_post_meta( $stale_id, '_d2g_divi_backup', wp_slash( '[et_pb_text]<p>Older Divi content</p>[/et_pb_text]' ) );
+update_post_meta( $stale_id, '_d2g_backup_date', '2020-01-01 00:00:00' );
+
+$stale_result = d2g_call( 'd2g_convert_page', [
+    'post_id' => $stale_id, 'source_hash' => md5( get_post( $stale_id )->post_content ),
+] );
+
+d2g_ok( 'the page still converted', ! empty( $stale_result['success'] ),
+    'response: ' . wp_json_encode( $stale_result ) );
+d2g_ok( 'a snapshot that had gone stale is refreshed to what was converted',
+    false !== strpos( (string) get_post_meta( $stale_id, '_d2g_divi_backup', true ), 'Current Divi content' ) );
+
+wp_delete_post( $stale_id, true );
+
+// And the rule it must not break: a snapshot is never replaced by converted
+// output. This is the loss write-once was introduced to prevent.
+$guard_id = d2g_make_post( '[et_pb_text]<p>The true original</p>[/et_pb_text]', 'zz snapshot guard' );
+$guard_hash = md5( get_post( $guard_id )->post_content );
+d2g_call( 'd2g_convert_page', [ 'post_id' => $guard_id, 'source_hash' => $guard_hash ] );
+
+$after_first = (string) get_post_meta( $guard_id, '_d2g_divi_backup', true );
+d2g_ok( 'the first conversion snapshotted the original',
+    false !== strpos( $after_first, 'The true original' ) );
+
+// Now the post holds blocks. A second conversion is refused outright, and the
+// snapshot must survive that untouched.
+d2g_call( 'd2g_convert_page', [
+    'post_id' => $guard_id, 'source_hash' => md5( get_post( $guard_id )->post_content ),
+] );
+
+d2g_ok( 'a converted page cannot overwrite its own snapshot',
+    (string) get_post_meta( $guard_id, '_d2g_divi_backup', true ) === $after_first );
+
+wp_delete_post( $guard_id, true );
+
 // ------------------------------------------ converting a conversion again --
 //
 // A conversion that leaves a shortcode behind leaves the row convertible, so
@@ -463,6 +507,33 @@ d2g_ok( 'the refusal names what would have been removed',
     'message: ' . ( $refused['data'] ?? '(none)' ) );
 
 d2g_ok( 'the page is left exactly as it was', get_post( $id )->post_content === $before );
+
+// A refusal must not leave its snapshot behind. The snapshot is write-once, so
+// one left here would still be here at the next attempt, describing content that
+// has since moved on — which is what happened on a real site when the WordPress
+// importer renamed an image between one conversion attempt and the next.
+d2g_ok( 'a refused conversion leaves no backup behind',
+    '' === (string) get_post_meta( $id, '_d2g_divi_backup', true ),
+    'backup meta: ' . var_export( get_post_meta( $id, '_d2g_divi_backup', true ), true ) );
+
+d2g_ok( 'and leaves no orphaned backup date or builder meta',
+    '' === (string) get_post_meta( $id, '_d2g_backup_date', true )
+    && '' === (string) get_post_meta( $id, '_d2g_builder_meta', true ) );
+
+// The other half of the rule: a snapshot somebody else's conversion made is not
+// this attempt's to delete.
+$kept_id = d2g_make_post( $dangerous, 'kses: pre-existing backup' );
+update_post_meta( $kept_id, '_d2g_divi_backup', wp_slash( '[et_pb_text]<p>An earlier original</p>[/et_pb_text]' ) );
+update_post_meta( $kept_id, '_d2g_backup_date', '2020-01-01 00:00:00' );
+
+d2g_call( 'd2g_convert_page', [
+    'post_id' => $kept_id, 'source_hash' => md5( get_post( $kept_id )->post_content ),
+] );
+
+d2g_ok( 'a refusal does not delete a backup it did not create',
+    false !== strpos( (string) get_post_meta( $kept_id, '_d2g_divi_backup', true ), 'An earlier original' ) );
+
+wp_delete_post( $kept_id, true );
 
 // An ordinary page must still convert: refusing everything on multisite would
 // be its own kind of broken.

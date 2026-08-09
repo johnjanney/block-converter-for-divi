@@ -100,6 +100,46 @@ _Nothing yet._
 
 ---
 
+## [2.9.2] — 2026-08-09
+
+### Fixed
+
+- A conversion that was refused left its backup snapshot behind, and the
+  snapshot is write-once, so it stayed. The next conversion of that page was
+  then backed by a copy of content that had moved on — which is worse than no
+  backup, because it looks like one. On a real site a page ended up with a
+  rollback target holding an image URL the WordPress importer had since
+  renamed, so restoring it would have put back an address that no longer
+  resolved.
+
+  Three things can refuse the write after the snapshot has been taken: a
+  conversion that produces nothing, a KSES refusal, and the concurrency check
+  in `guarded_update()`. `write_backup()` now returns a record of every key it
+  touched as it found it, and each of those three puts that record back.
+
+  The first version of this deleted a snapshot it had *created*, which is not
+  the same thing and the live suite said so. The refresh below can replace a
+  snapshot that was already there, and "delete what we added" cannot give that
+  back. Restoring what was found is the only version that holds in both cases,
+  and the two only look alike when there was nothing there to begin with.
+
+- A snapshot that had gone stale is refreshed rather than kept. When a stored
+  snapshot differs from the page in front of it and that page is still Divi,
+  the snapshot is replaced — which repairs the backups this left behind on
+  sites that already ran into it.
+
+  The write-once rule is intact, and now checked rather than assumed. Its
+  purpose was to stop a second conversion replacing the original with converted
+  output, and that still cannot happen: the only content that can replace a
+  snapshot is Divi content, and a page holding a previous conversion never
+  overwrites its own. Both directions are asserted.
+
+  The live suite is 43 checks, up from 36. It is the only place any of this can
+  be tested — it is endpoint and post-meta behaviour, and nothing offline
+  reaches it.
+
+---
+
 ## [2.9.1] — 2026-08-09
 
 ### Fixed

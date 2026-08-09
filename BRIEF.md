@@ -1,13 +1,13 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.9.1` — released. Runs against real WordPress
+**Status:** `2.9.2` — released. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
 checked by WordPress's own block validator against the block library **each**
 supported release actually ships (`bin/block-library-matrix.sh`) and the admin
 screen driven in a browser. `Requires at least` and `Tested up to` are both
 measurements now, not estimates. 2.3.0 also fixes the upgrade from the
 pre-rename plugin, which had failed with a fatal error since 2.0.0.
-**The corpus is now a repeatable measurement, and it has driven two releases.**
+**The corpus is now a repeatable measurement, and it has driven every release since 2.7.0.**
 It is 247 Divi pages from a live site, converted and read back out of the
 database. The first run, against 2.6.0, found that content storing its shortcode
 attribute quotes as `&quot;` parsed as no attributes at all, so every module
