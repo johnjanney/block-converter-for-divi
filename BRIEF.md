@@ -1,31 +1,39 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.7.0` — released. Runs against real WordPress
+**Status:** `2.8.0` — released. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
 checked by WordPress's own block validator against the block library **each**
 supported release actually ships (`bin/block-library-matrix.sh`) and the admin
 screen driven in a browser. `Requires at least` and `Tested up to` are both
 measurements now, not estimates. 2.3.0 also fixes the upgrade from the
 pre-rename plugin, which had failed with a fatal error since 2.0.0.
-**2.7.0 is the first version measured against a real corpus** — 247 Divi pages
-from a live site, converted and read back out of the database — and the
-measurement was worth having: it found that content storing its shortcode
+**The corpus is now a repeatable measurement, and it has driven two releases.**
+It is 247 Divi pages from a live site, converted and read back out of the
+database. The first run, against 2.6.0, found that content storing its shortcode
 attribute quotes as `&quot;` parsed as no attributes at all, so every module
-setting on 246 of the 247 pages had been discarded in silence. Every fixture in
-the suite had been written with canonical `"` delimiters, so 189 passing tests
-and 58/58 module coverage could not see it. All 247 pages now validate against
-core's own parser (8,020 blocks), word loss across the corpus is zero, and all
-1,189 source URLs survive.
+setting on 246 of the 247 pages had been discarded in silence — 189 passing
+tests, 58/58 module coverage and byte-exact snapshots could not see it, because
+every fixture had been written with canonical `"` delimiters. That was 2.7.0.
+The second run, against 2.7.0, confirmed the repair held: 285 of 285 converted
+pages valid against core's own parser, 100% of content words preserved, 1,427 of
+1,428 source URLs, no residual shortcodes. It also found what 2.8.0 fixes — 718
+spacing settings still reported as lost rather than carried, 247 of those
+reports wrong, and one page that had been converted from a previous conversion
+instead of from Divi. After 2.8.0 the corpus converts to 8,287 valid blocks with
+spacing loss at zero and warnings down from 5.0 to 2.7 a page.
 **Remaining caveat:** the corpus is real but narrow — 13 of the 58 supported
 modules. It is section, row, column, text, image, button and gallery, with a
 little video, divider, signup and audio. **Tabs, accordions, toggles, pricing
 tables, forms, blurbs, sliders, testimonials, counters, maps, code and blog
 modules remain unexercised on real content**, and those are where the
 conversion has the least to work with. What the corpus proved is the common
-path and one class of input the fixtures had never modelled; it did not prove
-the hard modules. It is still best described as an assisted migration tool that
-produces a first block draft for review. WordPress.org submission is a separate
-decision, not yet made.
+path and two classes of input the fixtures had never modelled; it did not prove
+the hard modules. Galleries are the standing environmental caveat: 207 of 250
+came out empty because only 11 of 2,699 attachment IDs survived the move
+between sites, which is now reported loudly and cannot be repaired — a Divi
+gallery stores IDs and no URLs. It is still best described as an assisted
+migration tool that produces a first block draft for review. WordPress.org
+submission is a separate decision, not yet made.
 **Repository:** https://github.com/johnjanney/block-converter-for-divi
 **Owner:** John Janney
 **License:** GPL-2.0-or-later

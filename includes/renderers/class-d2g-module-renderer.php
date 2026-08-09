@@ -95,4 +95,62 @@ abstract class D2G_Module_Renderer {
     protected function warn( string $module, string $message ) {
         $this->context->add_warning( $module, $message );
     }
+
+    /**
+     * A content module's own padding and margin, as core would serialize them.
+     *
+     * 2.4.0 mapped spacing onto section, row and column — the containers. It
+     * stopped there, and on a real corpus that left 835 spacing values on the
+     * modules *inside* those containers reported as lost: a Text module's
+     * padding, a Gallery's margin. Core supports spacing on every block those
+     * become, so there was nothing to stop it beyond nobody having measured it.
+     *
+     * Built through the same wrapper_styles() the layout renderer uses, with no
+     * background and no border, so the declaration order matches what core
+     * writes: margin before padding, sides omitted rather than zeroed.
+     *
+     * @return array{attrs: array, classes: string[], css: string[]}
+     */
+    protected function spacing_styles( array $attrs ): array {
+        return D2G_Block_Builder::wrapper_styles(
+            '',
+            D2G_Block_Builder::spacing_box( $attrs['custom_margin'] ?? '' ),
+            D2G_Block_Builder::spacing_box( $attrs['custom_padding'] ?? '' )
+        );
+    }
+
+    /**
+     * The spacing attribute names spacing_styles() consumes.
+     *
+     * Merged into a renderer's mapped_style_attrs() so the loss reporter stops
+     * naming them. Exact names: the `_tablet`, `_phone` and `__hover` variants
+     * are still lost and still say so.
+     *
+     * @return string[]
+     */
+    protected static function spacing_attrs(): array {
+        return [ 'custom_padding', 'custom_margin' ];
+    }
+
+    /**
+     * Fold a style bundle into a block's attributes and its inline CSS.
+     *
+     * @param array    $block_attrs Block attributes, modified in place.
+     * @param array    $styles      From spacing_styles().
+     * @return string  The style attribute's value, or '' when there is none.
+     */
+    protected static function apply_styles( array &$block_attrs, array $styles ): string {
+        if ( ! empty( $styles['attrs']['style'] ) ) {
+            // Merged one level down, not assigned. `style` is a bag shared with
+            // colour and typography, and a plain array_merge() here would drop
+            // whatever a renderer had already put in it — silently, and only on
+            // the modules that set both.
+            $block_attrs['style'] = array_merge(
+                isset( $block_attrs['style'] ) && is_array( $block_attrs['style'] ) ? $block_attrs['style'] : [],
+                $styles['attrs']['style']
+            );
+        }
+
+        return empty( $styles['css'] ) ? '' : implode( ';', $styles['css'] );
+    }
 }

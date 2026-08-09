@@ -1,0 +1,3 @@
+<!-- wp:separator {"style":{"spacing":{"margin":{"top":"30px","bottom":"30px"}}}} -->
+<hr class="wp-block-separator has-alpha-channel-opacity" style="margin-top:30px;margin-bottom:30px"/>
+<!-- /wp:separator -->

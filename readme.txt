@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.7.0
+Stable tag: 2.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -71,14 +71,17 @@ global modules are not converted.
 
 = What styling carries over =
 
-Design *intent*, not a pixel copy. Specifically, these are preserved: text
-alignment, section and call-to-action background colours, button background and
-text colours, column widths, divider colours, and heading levels.
+Design *intent*, not a pixel copy. These are preserved, as native block settings
+you can go on editing in the sidebar: text alignment; padding and margin, on
+sections, rows and columns and on the text, image, gallery, button, divider,
+video and audio modules inside them; background colours; text colour, font size,
+line height and letter spacing; borders, and a corner radius where all four
+corners match; column widths; divider colours; and heading levels.
 
-These are **not** preserved: padding and margin, max-width and min-height,
-borders and border radii, box and text shadows, fonts, font sizes, line heights,
-letter spacing, background gradients and parallax, module-level custom CSS,
-module IDs and classes, hover states, animations and filters, positioning and
+These are **not** preserved: a corner radius that differs per corner, border
+widths set per side, font family and weight, max-width and min-height, box and
+text shadows, background gradients and parallax, module-level custom CSS, module
+IDs and classes, hover states, animations and filters, positioning and
 transforms, per-device visibility, and per-breakpoint responsive overrides. Divi
 renders most of these from its own stylesheet, which stops applying when you
 leave the theme, so budget time for theme-side styling after migrating.
@@ -171,6 +174,22 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.8.0 =
+* Padding and margin set on a text block, gallery, image, button, divider, video
+  or audio module are now carried over. Until now only sections, rows and columns
+  kept theirs, and everything inside them was reported as lost. On a 247-page
+  test site this took the number of spacing settings reported as lost from 718
+  to none, and roughly doubled the design settings that survive a conversion.
+* Fixed two reasons a page claimed it had lost spacing it had actually kept —
+  247 wrong reports on the same test site. Divi writes an empty `|||` for
+  padding that was never set, and a hover override was being read as if it were
+  the padding itself.
+* Converting a page that already holds converted blocks is now refused, with an
+  explanation, instead of converting the previous conversion. That mangles the
+  page: it loses buttons and images and prints block markup as visible text.
+  Restore the page first, then convert it. A page carrying a Divi 5 marker
+  comment, or one with a stray block comment inside a module, still converts.
 
 = 2.7.0 =
 * Fixed the defect this release exists for: Divi stores a shortcode attribute's
@@ -390,6 +409,16 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.8.0 =
+Padding and margin on text, image, gallery, button, divider, video and audio
+modules now survive conversion; before this only sections, rows and columns kept
+theirs. Pages you already converted do not gain it by upgrading — restore one
+from its backup and convert it again to pick it up, which needs a backup to
+exist and replaces any block editor work done since. Convert one page and
+compare it with the original before deciding for the rest. Converting a page
+that already holds blocks is now refused rather than allowed to damage it, so if
+a page was ever converted twice, restore it and convert once.
 
 = 2.7.0 =
 Fixes a defect that silently discarded every module setting on sites whose Divi

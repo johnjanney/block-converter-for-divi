@@ -36,10 +36,13 @@ class D2G_Renderer_Text extends D2G_Module_Renderer {
      */
     public static function mapped_style_attrs(): array {
         return [
-            'et_pb_text' => [
-                'body_text_color', 'body_font_size', 'body_line_height', 'body_letter_spacing',
-                'header_text_color', 'header_font_size', 'header_line_height', 'header_letter_spacing',
-            ],
+            'et_pb_text' => array_merge(
+                [
+                    'body_text_color', 'body_font_size', 'body_line_height', 'body_letter_spacing',
+                    'header_text_color', 'header_font_size', 'header_line_height', 'header_letter_spacing',
+                ],
+                self::spacing_attrs()
+            ),
         ];
     }
 
@@ -54,7 +57,30 @@ class D2G_Renderer_Text extends D2G_Module_Renderer {
     protected function text_module( array $node ): string {
         // Divi lets other modules sit inside a Text module. Rendering the whole
         // inner span keeps them; reading only the loose text dropped them.
-        return $this->context->render_inner_blocks( $node, $node['attrs'] );
+        $inner = $this->context->render_inner_blocks( $node, $node['attrs'] );
+
+        if ( '' === trim( $inner ) ) {
+            return $inner;
+        }
+
+        // A Text module becomes several sibling blocks, so unlike an image or a
+        // gallery it has no single block of its own to carry its padding. The
+        // box Divi drew around those paragraphs *is* a group, and a group is
+        // already what the section around it converts to, so wrapping is the
+        // honest mapping rather than a workaround.
+        //
+        // Only when there is spacing to carry. A page whose Text modules set no
+        // padding — which is most of them — gains no wrappers at all, and the
+        // markup stays as flat as it was before this existed.
+        $group_attrs = [];
+        $css         = self::apply_styles( $group_attrs, $this->spacing_styles( $node['attrs'] ) );
+
+        if ( '' === $css ) {
+            return $inner;
+        }
+
+        $html = '<div class="wp-block-group" style="' . esc_attr( $css ) . '">' . "\n" . $inner . "\n" . '</div>';
+        return D2G_Block_Builder::block( 'group', $group_attrs, $html, true );
     }
 
     protected function code( array $node ): string {

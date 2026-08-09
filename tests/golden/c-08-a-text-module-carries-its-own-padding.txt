@@ -1,0 +1,8 @@
+<!-- wp:group {"style":{"spacing":{"padding":{"top":"10px"}}}} -->
+<div class="wp-block-group" style="padding-top:10px">
+<!-- wp:paragraph -->
+<p>Hi</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:group -->

@@ -1,0 +1,8 @@
+<!-- wp:gallery {"columns":3,"linkTo":"media","imageCrop":true,"style":{"spacing":{"padding":{"top":"10px"}}}} -->
+<figure class="wp-block-gallery has-nested-images columns-3 is-cropped" style="padding-top:10px">
+<!-- wp:image {"id":11,"sizeSlug":"large","linkDestination":"media","url":"https://example.com/uploads/attachment-11.jpg","alt":""} -->
+<figure class="wp-block-image size-large"><img src="https://example.com/uploads/attachment-11.jpg" alt="" class="wp-image-11"/></figure>
+<!-- /wp:image -->
+
+</figure>
+<!-- /wp:gallery -->

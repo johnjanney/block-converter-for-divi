@@ -1,0 +1,8 @@
+<!-- wp:buttons {"style":{"spacing":{"margin":{"top":"20px"}}}} -->
+<div class="wp-block-buttons" style="margin-top:20px">
+<!-- wp:button -->
+<div class="wp-block-button"><a class="wp-block-button__link wp-element-button" href="https://example.com">Go</a></div>
+<!-- /wp:button -->
+
+</div>
+<!-- /wp:buttons -->

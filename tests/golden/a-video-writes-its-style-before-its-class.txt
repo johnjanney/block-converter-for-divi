@@ -1,0 +1,3 @@
+<!-- wp:video {"src":"https://example.com/v.mp4","style":{"spacing":{"margin":{"top":"20px"}}}} -->
+<figure style="margin-top:20px" class="wp-block-video"><video controls src="https://example.com/v.mp4"></video></figure>
+<!-- /wp:video -->

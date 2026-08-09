@@ -31,13 +31,17 @@ class D2G_Renderer_Content extends D2G_Module_Renderer {
      * @return array<string, string[]>
      */
     public static function mapped_style_attrs(): array {
-        $body = [ 'body_text_color', 'body_font_size', 'body_line_height', 'body_letter_spacing' ];
+        $body    = [ 'body_text_color', 'body_font_size', 'body_line_height', 'body_letter_spacing' ];
+        $spacing = self::spacing_attrs();
         return [
             'et_pb_cta' => $body,
             'et_pb_blurb' => $body,
             'et_pb_testimonial' => $body,
             'et_pb_team_member' => $body,
             'et_pb_fullwidth_header' => $body,
+            // Spacing only: these two have a single wrapper to carry it.
+            'et_pb_button' => $spacing,
+            'et_pb_divider' => $spacing,
         ];
     }
 
@@ -106,7 +110,12 @@ class D2G_Renderer_Content extends D2G_Module_Renderer {
 
         $inner_block = D2G_Block_Builder::block( 'button', $btn_attrs, '<div class="wp-block-button"><a class="' . $link_class . '"' . $link_style . ' href="' . esc_url( $url ) . '"' . $target . '>' . D2G_Block_Builder::text( $text ) . '</a></div>' );
 
-        $html = '<div class="' . esc_attr( $wrapper_class ) . '">' . "\n" . $inner_block . "\n" . '</div>';
+        // The module's own spacing goes on core/buttons, the wrapper, because
+        // that is the element Divi's padding surrounded.
+        $spacing_css  = self::apply_styles( $buttons_attrs, $this->spacing_styles( $attrs ) );
+        $spacing_attr = '' === $spacing_css ? '' : ' style="' . esc_attr( $spacing_css ) . '"';
+
+        $html = '<div class="' . esc_attr( $wrapper_class ) . '"' . $spacing_attr . '>' . "\n" . $inner_block . "\n" . '</div>';
         return D2G_Block_Builder::block( 'buttons', $buttons_attrs, $html, true );
     }
 
@@ -193,11 +202,18 @@ class D2G_Renderer_Content extends D2G_Module_Renderer {
         $attrs = $node['attrs'];
         $color = D2G_Block_Builder::css_color( $attrs['color'] ?? '' );
 
+        // A divider is spacing more often than it is a line — Divi's default
+        // has no colour at all and exists to push things apart — so its margin
+        // is the setting most worth carrying, not the least.
+        $sep_attrs   = [];
+        $spacing_css = self::apply_styles( $sep_attrs, $this->spacing_styles( $attrs ) );
+
         if ( '' === $color ) {
+            $style_attr = '' === $spacing_css ? '' : ' style="' . esc_attr( $spacing_css ) . '"';
             return D2G_Block_Builder::block(
                 'separator',
-                [],
-                '<hr class="wp-block-separator has-alpha-channel-opacity"/>'
+                $sep_attrs,
+                '<hr class="wp-block-separator has-alpha-channel-opacity"' . $style_attr . '/>'
             );
         }
 
@@ -207,11 +223,26 @@ class D2G_Renderer_Content extends D2G_Module_Renderer {
         // from style.color.background; emitting a subset meant every coloured
         // divider failed validation. Confirmed against core's own serializer —
         // see tests/js/canonical.mjs.
+        // Declaration order is per-block, not global: on core/separator spacing
+        // is emitted *before* the colour declarations, which is the reverse of
+        // the order wrapper_styles() produces for a group. Measured with
+        // tests/js/canonical.mjs; guessing here is what made every coloured
+        // divider invalid once before.
+        $declarations = array_merge(
+            $spacing_css ? explode( ';', $spacing_css ) : [],
+            [ 'background-color:' . $color, 'color:' . $color ]
+        );
+
+        $style = [ 'color' => [ 'background' => $color ] ];
+        if ( isset( $sep_attrs['style']['spacing'] ) ) {
+            $style['spacing'] = $sep_attrs['style']['spacing'];
+        }
+
         return D2G_Block_Builder::block(
             'separator',
-            [ 'style' => [ 'color' => [ 'background' => $color ] ] ],
+            [ 'style' => $style ],
             '<hr class="wp-block-separator has-text-color has-alpha-channel-opacity has-background"'
-                . ' style="background-color:' . esc_attr( $color ) . ';color:' . esc_attr( $color ) . '"/>'
+                . ' style="' . esc_attr( implode( ';', $declarations ) ) . '"/>'
         );
     }
 

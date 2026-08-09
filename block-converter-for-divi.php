@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.7.0
+ * Version:     2.8.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -141,7 +141,7 @@ if ( bcfd_legacy_plugin_present() ) {
  * error" that upgrading from 1.x produced. Nothing outside this file reads
  * these, and no stored data is keyed on them, so the prefix is free to change.
  */
-define( 'BCFD_VERSION', '2.7.0' );
+define( 'BCFD_VERSION', '2.8.0' );
 define( 'BCFD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BCFD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -468,6 +468,12 @@ Backups are the only way to restore a converted page. Once the plugin is removed
                 GROUP BY p.ID
                 ORDER BY {$order_sql}";
 
+        // No "already converted" column here on purpose. Whether a page holds a
+        // previous conversion or merely a block comment inside a Divi module is
+        // a question about document structure, and SQL can only ask whether a
+        // substring is present — which would grey out the second kind of page
+        // and take away a conversion that works. holds_converted_blocks() gets
+        // it right, and the write path is where the answer has to be right.
         $args = array_merge( [ $like ], $where_args );
 
         $sql   .= ' LIMIT %d OFFSET %d';
@@ -509,6 +515,47 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             'shown'        => count( $pages ),
             'divi5_count'  => $divi5_count,
         ] );
+    }
+
+    /**
+     * Is this content the *output* of an earlier conversion rather than Divi?
+     *
+     * Two things have to be told apart, and only one of them is a problem:
+     *
+     *  - Block markup at the top level, holding the document together. That is
+     *    a page this plugin already converted, and converting it again reads
+     *    its own output back as plain HTML.
+     *  - A block-delimiter comment *inside* a Divi module — pasted into a Text
+     *    or Code module by an author. The converter has stripped and reported
+     *    that since 2.2.0 (fixture N-03) and must go on doing so; refusing the
+     *    page instead would take away a conversion that worked.
+     *
+     * A substring test cannot separate those, so the cheap pattern only decides
+     * whether the question is worth asking. When it matches, the parser answers
+     * it: a delimiter in a top-level text node is the document's own structure,
+     * one inside a module is the module's content.
+     *
+     * `wp:divi/…` is not block markup for this purpose. Divi 5 marks ordinary
+     * *shortcode* pages with a `<!-- wp:divi/placeholder -->` comment, and 142
+     * of 247 pages in a real corpus carried one.
+     */
+    private static function holds_converted_blocks( $content ) {
+        $content = (string) $content;
+        $pattern = '#<!--\s+wp:(?!divi/)#';
+
+        if ( 1 !== preg_match( $pattern, $content ) ) {
+            return false;
+        }
+
+        $parser = new D2G_Parser();
+
+        foreach ( $parser->parse( $content ) as $node ) {
+            if ( '__text__' === $node['tag'] && preg_match( $pattern, (string) $node['content'] ) ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -869,6 +916,25 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         if ( ! $post || ! hash_equals( md5( $post->post_content ), $expected_hash ) ) {
             self::release_lock( $post_id, $lock );
             wp_send_json_error( __( 'This post changed since it was scanned. Scan again and re-check the preview before converting.', 'block-converter-for-divi' ) );
+        }
+
+        // Refuse to convert something this plugin already converted.
+        //
+        // A conversion that leaves any `[et_pb_` behind — 2.6.0 did, on pages
+        // whose shortcodes it could not tokenize — leaves the row looking
+        // convertible, because has_divi is computed from the content. Converting
+        // again then feeds the previous *output* back through the converter:
+        // the block delimiters are stripped as stray comments, their markup is
+        // re-read as plain HTML, and a page that was 95% correct comes out
+        // worse. It happened to a real page, which lost its donation button
+        // that way and gained the words "wp:paragraph" as visible text.
+        //
+        // The backup is what recovers from this, so the refusal points at it.
+        if ( self::holds_converted_blocks( $post->post_content ) ) {
+            self::release_lock( $post_id, $lock );
+            wp_send_json_error(
+                __( 'This page already contains block markup, so converting it would convert the previous conversion rather than the original Divi content. Restore it from its backup first, then convert.', 'block-converter-for-divi' )
+            );
         }
 
         // wp_send_json_*() ends the request, so the lock has to be dropped

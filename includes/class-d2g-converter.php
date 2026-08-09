@@ -218,6 +218,14 @@ class D2G_Converter {
         // understates what survived and sends the user to rebuild something
         // that is already there.
         '/_(tablet|phone)$/'                           => 'tablet and phone overrides',
+        // Before the spacing pattern, for the same reason and with the same
+        // consequence. `custom_padding__hover` is a hover override, not base
+        // spacing, but the spacing pattern matches it first and the module then
+        // reports that its padding was not carried over — while its padding is
+        // sitting in the block attributes. On a real 247-page corpus that was
+        // every one of 247 column warnings, all of them wrong, and it hid the
+        // spacing that genuinely was lost elsewhere on the page.
+        '/(^hover_enabled$|__hover$)/'                 => 'hover styling',
         '/^custom_(padding|margin)/'                  => 'spacing (padding or margin)',
         '/^(max_width|min_height|width|height)($|_)/'  => 'explicit sizing',
         '/^border_/'                                   => 'borders',
@@ -234,9 +242,37 @@ class D2G_Converter {
         '/^module_(id|class)$/'                        => 'custom IDs and classes',
         '/^(transform_|sticky_|z_index|positioning)/'  => 'positioning and transforms',
         '/^disabled_on$/'                              => 'per-device visibility',
-        '/(^hover_enabled$|__hover$)/'                 => 'hover styling',
         '/^(header_|body_)?text_color$/'               => 'text colour',
     ];
+
+    /**
+     * Divi settings that are present but carry nothing to carry over.
+     *
+     * `custom_padding="|||"` is what Divi writes for a module whose padding was
+     * never set: four empty sides and no value anywhere. Reporting it as a loss
+     * tells the user to go and rebuild padding that does not exist, and it is
+     * common enough — a quarter of every spacing attribute in a real corpus —
+     * to drown the reports that mean something.
+     *
+     * Only spacing is checked here because only spacing has a shape that can be
+     * present and empty at once. A colour is either a colour or an empty string,
+     * which the caller already skips.
+     */
+    private static function carries_no_value( string $name, string $value ): bool {
+        if ( ! preg_match( '/^custom_(padding|margin)/', $name ) ) {
+            return false;
+        }
+
+        // Divi's own separator, and the trailing `true|false` flags it appends.
+        foreach ( explode( '|', $value ) as $side ) {
+            $side = trim( $side );
+            if ( '' !== $side && 'true' !== $side && 'false' !== $side ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /**
      * Report the styling a module carried that this conversion cannot express.
@@ -250,6 +286,10 @@ class D2G_Converter {
 
         foreach ( $attrs as $name => $value ) {
             if ( '' === trim( (string) $value ) ) {
+                continue;
+            }
+
+            if ( self::carries_no_value( $name, (string) $value ) ) {
                 continue;
             }
 

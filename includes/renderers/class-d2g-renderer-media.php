@@ -36,6 +36,22 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
         ];
     }
 
+    /**
+     * The modules above that now carry their own padding and margin.
+     *
+     * Not every tag this renderer claims: a map becomes a paragraph, which is
+     * not the thing the author put padding on, so it still reports the loss.
+     *
+     * @return array<string, string[]>
+     */
+    public static function mapped_style_attrs(): array {
+        $out = [];
+        foreach ( [ 'et_pb_image', 'et_pb_fullwidth_image', 'et_pb_gallery', 'et_pb_video', 'et_pb_audio', 'et_pb_video_slider' ] as $tag ) {
+            $out[ $tag ] = self::spacing_attrs();
+        }
+        return $out;
+    }
+
     protected function image( array $node ): string {
         $attrs = $node['attrs'];
 
@@ -108,7 +124,13 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
         $caption = $this->context->get_inner_content( $node );
         $caption = trim( strip_tags( $caption, '<a><em><strong><br>' ) );
 
-        $figure = '<figure class="' . esc_attr( $figure_class ) . '">' . $img;
+        // core writes the style attribute after the class on core/image; the
+        // order is not cosmetic, the validator compares the saved markup with
+        // what save() produces. Measured with tests/js/canonical.mjs.
+        $spacing_css = self::apply_styles( $block_attrs, $this->spacing_styles( $attrs ) );
+        $style_attr  = '' === $spacing_css ? '' : ' style="' . esc_attr( $spacing_css ) . '"';
+
+        $figure = '<figure class="' . esc_attr( $figure_class ) . '"' . $style_attr . '>' . $img;
         if ( $caption ) {
             $figure .= '<figcaption class="wp-element-caption">' . $caption . '</figcaption>';
         }
@@ -160,8 +182,14 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
         }
 
         // Self-hosted video.
-        $html = '<figure class="wp-block-video"><video controls src="' . esc_url( $src ) . '"></video></figure>';
-        return D2G_Block_Builder::block( 'video', [ 'src' => $src ], $html );
+        // core/video is the odd one out: it writes style *before* class, where
+        // image, gallery and separator write it after. Measured, not assumed.
+        $block_attrs = [ 'src' => $src ];
+        $spacing_css = self::apply_styles( $block_attrs, $this->spacing_styles( $attrs ) );
+        $style_attr  = '' === $spacing_css ? '' : ' style="' . esc_attr( $spacing_css ) . '"';
+
+        $html = '<figure' . $style_attr . ' class="wp-block-video"><video controls src="' . esc_url( $src ) . '"></video></figure>';
+        return D2G_Block_Builder::block( 'video', $block_attrs, $html );
     }
 
     protected function video_slider( array $node ): string {
@@ -195,8 +223,14 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
             return '';
         }
 
-        $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
-        return D2G_Block_Builder::block( 'group', [], $html, true );
+        // The slider's own spacing goes on the group that replaces it — the one
+        // wrapper the stack of videos has.
+        $group_attrs = [];
+        $group_css   = self::apply_styles( $group_attrs, $this->spacing_styles( $node['attrs'] ) );
+        $group_attr  = '' === $group_css ? '' : ' style="' . esc_attr( $group_css ) . '"';
+
+        $html = '<div class="wp-block-group"' . $group_attr . '>' . "\n" . $inner . "\n" . '</div>';
+        return D2G_Block_Builder::block( 'group', $group_attrs, $html, true );
     }
 
     protected function audio( array $node ): string {
@@ -221,11 +255,25 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
             $inner .= D2G_Block_Builder::block( 'paragraph', [], '<p>' . D2G_Block_Builder::text( $artist ) . '</p>' );
         }
 
-        $inner .= D2G_Block_Builder::block( 'audio', [ 'src' => $src ], '<figure class="wp-block-audio"><audio controls src="' . esc_url( $src ) . '"></audio></figure>' );
+        // The module's spacing belongs on whatever ends up outermost, so it is
+        // applied once, below, rather than to the audio figure unconditionally.
+        $wrapped     = ( $title || $artist || $image );
+        $audio_attrs = [ 'src' => $src ];
+        $styles      = $this->spacing_styles( $attrs );
 
-        if ( $title || $artist || $image ) {
-            $html = '<div class="wp-block-group">' . "\n" . $inner . "\n" . '</div>';
-            return D2G_Block_Builder::block( 'group', [], $html, true );
+        // core/audio writes style before class; core/group writes it after.
+        $audio_css  = $wrapped ? '' : self::apply_styles( $audio_attrs, $styles );
+        $audio_attr = '' === $audio_css ? '' : ' style="' . esc_attr( $audio_css ) . '"';
+
+        $inner .= D2G_Block_Builder::block( 'audio', $audio_attrs, '<figure' . $audio_attr . ' class="wp-block-audio"><audio controls src="' . esc_url( $src ) . '"></audio></figure>' );
+
+        if ( $wrapped ) {
+            $group_attrs = [];
+            $group_css   = self::apply_styles( $group_attrs, $styles );
+            $group_attr  = '' === $group_css ? '' : ' style="' . esc_attr( $group_css ) . '"';
+
+            $html = '<div class="wp-block-group"' . $group_attr . '>' . "\n" . $inner . "\n" . '</div>';
+            return D2G_Block_Builder::block( 'group', $group_attrs, $html, true );
         }
 
         return $inner;
@@ -344,7 +392,10 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
         if ( $is_carousel ) {
             $gallery_classes .= ' d2g-gallery-slider';
         }
-        $gallery_html    = '<figure class="' . esc_attr( $gallery_classes ) . '">' . "\n" . $images_markup . '</figure>';
+        $spacing_css  = self::apply_styles( $gallery_attrs, $this->spacing_styles( $attrs ) );
+        $style_attr   = '' === $spacing_css ? '' : ' style="' . esc_attr( $spacing_css ) . '"';
+
+        $gallery_html = '<figure class="' . esc_attr( $gallery_classes ) . '"' . $style_attr . '>' . "\n" . $images_markup . '</figure>';
         return D2G_Block_Builder::block( 'gallery', $gallery_attrs, $gallery_html, true );
     }
 

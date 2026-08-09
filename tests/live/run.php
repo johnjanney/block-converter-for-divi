@@ -254,6 +254,54 @@ foreach ( $scan_ids as $scan_id ) {
     wp_delete_post( $scan_id, true );
 }
 
+// ------------------------------------------ converting a conversion again --
+//
+// A conversion that leaves a shortcode behind leaves the row convertible, so
+// the next click feeds the previous *output* back through the converter. On a
+// real corpus one page went through that and lost its donation button. The
+// write is refused; restore is the way back.
+
+$again = d2g_make_post(
+    "<!-- wp:paragraph -->\n<p>Already converted</p>\n<!-- /wp:paragraph -->\n"
+    . '[et_pb_text]<p>a shortcode the previous conversion could not read</p>[/et_pb_text]',
+    'zz already converted'
+);
+
+$again_before = get_post( $again )->post_content;
+$again_result = d2g_call( 'd2g_convert_page', [
+    'post_id' => $again, 'source_hash' => md5( $again_before ),
+] );
+
+d2g_ok( 'converting a page that already holds block markup is refused',
+    isset( $again_result['success'] ) && false === $again_result['success'] );
+d2g_ok( 'the refusal says to restore first',
+    isset( $again_result['data'] ) && false !== stripos( (string) $again_result['data'], 'restore' ),
+    (string) ( $again_result['data'] ?? '' ) );
+d2g_ok( 'the page is left exactly as it was',
+    get_post( $again )->post_content === $again_before );
+d2g_ok( 'the refusal did not write a backup over the original',
+    '' === (string) get_post_meta( $again, '_d2g_divi_backup', true ) );
+
+wp_delete_post( $again, true );
+
+// A Divi 5 placeholder comment is block markup too, and 142 of 247 pages in a
+// real corpus carried one on otherwise ordinary shortcode content. Refusing
+// those would be a worse bug than the one the guard exists to prevent.
+$placeholder = d2g_make_post(
+    '<!-- wp:divi/placeholder --><!-- /wp:divi/placeholder -->[et_pb_text]<p>Convert me</p>[/et_pb_text]',
+    'zz divi5 placeholder'
+);
+$placeholder_result = d2g_call( 'd2g_convert_page', [
+    'post_id' => $placeholder, 'source_hash' => md5( get_post( $placeholder )->post_content ),
+] );
+d2g_ok( 'a Divi 5 placeholder comment does not block a real conversion',
+    ! empty( $placeholder_result['success'] ),
+    isset( $placeholder_result['data'] ) && is_string( $placeholder_result['data'] ) ? $placeholder_result['data'] : '' );
+d2g_ok( 'and that conversion produced blocks',
+    false !== strpos( get_post( $placeholder )->post_content, '<!-- wp:paragraph' ) );
+
+wp_delete_post( $placeholder, true );
+
 // ------------------------------------------- an edit that lands mid-conversion --
 //
 // The lock stops two *conversions* overlapping. It cannot stop an ordinary

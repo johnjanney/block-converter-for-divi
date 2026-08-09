@@ -100,6 +100,84 @@ _Nothing yet._
 
 ---
 
+## [2.8.0] — 2026-08-09
+
+The corpus from 2.7.0 was run a second time, against 2.7.0, and read again. That
+is what this release is: the same 247 pages, the same measurements, and the
+three things the numbers said next.
+
+The second run confirmed the first one held — 285 of 285 converted pages valid
+against core's own parser, every content word preserved, 1,427 of 1,428 source
+URLs, no residual shortcodes. What it also showed was that 718 spacing settings
+were still being reported as lost, that 247 of those reports were wrong, and
+that one page had been converted from a previous conversion rather than from
+Divi.
+
+### Fixed
+
+- A page that already holds this plugin's own output is refused rather than
+  converted again. One page in the 2.7.0 run went through that: it was converted
+  from 2.6.0's *output* instead of its restored Divi — reproduced byte for byte
+  — and came out having lost its donation button and an image, with the words
+  `wp:paragraph` printed on the page. It was reachable because a conversion that
+  leaves a shortcode behind leaves the row looking convertible.
+
+  The obvious test — does the content contain `<!-- wp:` — is wrong twice over,
+  and the corpus caught both. It would refuse the 142 pages carrying Divi 5's
+  `<!-- wp:divi/placeholder -->` marker, which convert perfectly. And it would
+  refuse a page with a block comment *inside* a Divi module, which the converter
+  has stripped and reported since 2.2.0. So the question asked is structural: a
+  cheap pattern decides whether it is worth asking, then the parser decides
+  whether the delimiter sits in a top-level text node — the document's own
+  structure, so a previous conversion — or inside a module, where it is an
+  author's stray comment. Measured on the corpus: none of the 247 restored Divi
+  pages are refused, and all 247 previous outputs are.
+
+  No equivalent flag was added to the scan. SQL can only ask whether a substring
+  is present, so a scan-level test would grey out the second kind of page and
+  take away a conversion that works. The write path is where the answer has to
+  be right, and it is the only place that can be.
+
+- Two reasons a module reported spacing it had not lost, together every one of
+  247 wrong reports on the corpus. `custom_padding__hover` matched the spacing
+  pattern before the hover pattern did, so a column whose padding *had* been
+  carried still said it was lost. And Divi writes `custom_padding="|||"` for
+  padding that was never set — a quarter of every spacing attribute in the
+  corpus — which sent people to rebuild padding that had never existed.
+
+### Added
+
+- Spacing is carried on content modules, not just on the containers around them.
+  2.4.0 mapped `custom_padding` and `custom_margin` onto section, row and column
+  and stopped there; the corpus had 835 usable spacing values sitting on the
+  modules *inside* those containers. Text, gallery, image, button, divider,
+  video, audio and video slider now carry their own.
+
+  Each block's markup was measured with `tests/js/canonical.mjs` rather than
+  assumed, which is the only reason this validates. Three things it caught:
+  `core/video` and `core/audio` write the style attribute *before* the class,
+  where image, gallery and separator write it after. `core/separator` emits
+  spacing *before* its colour declarations, the reverse of the order a group
+  uses. And a Text module becomes several sibling blocks, so it has no block of
+  its own to hold padding — it gains a `core/group` wrapper, and only when there
+  is spacing to carry, so a page whose text modules set no padding gains no
+  wrappers at all.
+
+  Measured over the corpus: blocks carrying mapped design 550 → 1,051, spacing
+  reported lost 718 → 0, warnings 1,243 → 668 (5.0 to 2.7 a page), pages
+  reporting any design loss 247 → 182. What is left is hover styling and
+  positioning — 259 and 235 — which core has no way to express, so they are
+  reported and should be.
+
+### Changed
+
+- The offline suite is 207 tests, up from 197, and the live suite is 36, up from
+  30. No existing golden snapshot changed: every diff this release produces is
+  an addition, which is the evidence that the spacing work only touches content
+  that carries spacing.
+
+---
+
 ## [2.7.0] — 2026-08-09
 
 The first release driven by a real corpus rather than by fixtures: 247 Divi

@@ -501,10 +501,101 @@ return [
         'warns'  => [ 'et_pb_image' ],
     ],
 
-    'C-08 a text module still reports the padding it loses' => [
-        'divi'   => '[et_pb_text custom_padding="10px|||"]<p>Hi</p>[/et_pb_text]',
-        'warns'  => [ 'et_pb_text' ],
-        'reject' => [ 'padding-top' ],
+    // Was "C-08 a text module still reports the padding it loses", and it did:
+    // 2.4.0 mapped spacing onto containers only, so a Text module's own padding
+    // was reported rather than carried. It is carried now, and the fixture
+    // guards the opposite — that the padding arrives *and* that the module
+    // stops claiming it was lost.
+    'C-08 a text module carries its own padding' => [
+        'divi'           => '[et_pb_text custom_padding="10px|||"]<p>Hi</p>[/et_pb_text]',
+        'expect'         => [
+            '<!-- wp:group {"style":{"spacing":{"padding":{"top":"10px"}}}} -->',
+            '<div class="wp-block-group" style="padding-top:10px">',
+            '<p>Hi</p>',
+        ],
+        'rejectWarnings' => [ 'et_pb_text' ],
+    ],
+
+    // The wrapper is the cost of carrying it, so it is only paid where there is
+    // something to carry.
+    'a text module with no spacing gains no wrapper' => [
+        'divi'   => '[et_pb_text]<p>Hi</p>[/et_pb_text]',
+        'expect' => [ '<p>Hi</p>' ],
+        'reject' => [ 'wp-block-group' ],
+    ],
+
+    // ------------------------------------------- content-module spacing --
+    //
+    // 2.4.0 mapped spacing onto section, row and column and stopped. On a real
+    // 247-page corpus that left 835 spacing values on the modules *inside* the
+    // containers reported as lost. Every block below supports spacing in core;
+    // the markup each one expects was measured with tests/js/canonical.mjs,
+    // because the style attribute's position and the declaration order are
+    // per-block and getting either wrong fails validation.
+
+    'an image carries its own margin' => [
+        'divi'           => '[et_pb_image src="https://example.com/a.jpg" custom_margin="20px|||" /]',
+        'expect'         => [ '"spacing":{"margin":{"top":"20px"}}', '<figure class="wp-block-image size-large" style="margin-top:20px">' ],
+        'rejectWarnings' => [ 'et_pb_image' ],
+    ],
+
+    'a gallery carries its own padding' => [
+        'divi'   => '[et_pb_gallery gallery_ids="11" custom_padding="10px|||" /]',
+        'expect' => [ '"spacing":{"padding":{"top":"10px"}}', 'style="padding-top:10px"' ],
+    ],
+
+    'a button carries its spacing on the buttons wrapper' => [
+        'divi'           => '[et_pb_button button_url="https://example.com" button_text="Go" custom_margin="20px|||" /]',
+        'expect'         => [ '<!-- wp:buttons {"style":{"spacing":{"margin":{"top":"20px"}}}} -->', '<div class="wp-block-buttons" style="margin-top:20px">' ],
+        'rejectWarnings' => [ 'et_pb_button' ],
+    ],
+
+    'a divider carries its margin' => [
+        'divi'   => '[et_pb_divider custom_margin="30px||30px|" /]',
+        'expect' => [ '"spacing":{"margin":{"top":"30px","bottom":"30px"}}', 'style="margin-top:30px;margin-bottom:30px"' ],
+    ],
+
+    // core emits spacing *before* the colour declarations on a separator, which
+    // is the reverse of the order a group uses. Measured, not assumed.
+    'a coloured divider orders spacing before its colour' => [
+        'divi'   => '[et_pb_divider color="#ff0000" custom_margin="30px|||" /]',
+        'expect' => [ 'style="margin-top:30px;background-color:#ff0000;color:#ff0000"' ],
+    ],
+
+    // core/video and core/audio write style before class; image and gallery
+    // write it after. Same support, different serializer.
+    'a video writes its style before its class' => [
+        'divi'   => '[et_pb_video src="https://example.com/v.mp4" custom_margin="20px|||" /]',
+        'expect' => [ '<figure style="margin-top:20px" class="wp-block-video">' ],
+    ],
+
+    // ---------------------------------------------- spacing that is not lost --
+    //
+    // `custom_padding__hover` is a hover override, but the spacing pattern
+    // matched it before the hover one did, so a column whose padding had been
+    // carried still reported that its spacing was lost. On the live corpus that
+    // was all 247 column warnings, every one of them wrong.
+    'a hover padding override is reported as hover, not as spacing' => [
+        'divi'   => '[et_pb_section][et_pb_row][et_pb_column type="4_4" custom_padding="10px|||" custom_padding__hover="20px|||"]'
+            . '[et_pb_text]<p>x</p>[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]',
+        'expect' => [ 'padding-top:10px' ],
+        'warns'  => [ 'et_pb_column' ],
+        'reject' => [ 'spacing (padding or margin)' ],
+    ],
+
+    // Divi writes `|||` for a module whose padding was never set. A quarter of
+    // every spacing attribute in the live corpus looked like this, and each one
+    // sent the user off to rebuild padding that had never existed.
+    'a spacing value with no sides set is not reported as lost' => [
+        'divi'           => '[et_pb_section][et_pb_row][et_pb_column type="4_4" custom_padding="|||" custom_padding__hover="|||"]'
+            . '[et_pb_text]<p>x</p>[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]',
+        'rejectWarnings' => [ 'et_pb_column' ],
+    ],
+
+    'a spacing value that is only Divi\'s trailing flags is not a value' => [
+        'divi'           => '[et_pb_image src="https://example.com/a.jpg" custom_margin="||||true|false" /]',
+        'rejectWarnings' => [ 'et_pb_image' ],
+        'reject'         => [ 'margin-top' ],
     ],
 
     'N-05 lost tab behaviour is reported' => [
