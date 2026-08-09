@@ -211,6 +211,13 @@ class D2G_Converter {
      * never produces a warning.
      */
     private static $unmapped_style_patterns = [
+        // First, because the first match wins and a device override is what
+        // this attribute *is*. It matters more since spacing became mappable:
+        // a section that kept its padding and lost only its tablet override
+        // would otherwise report "spacing was not carried over", which
+        // understates what survived and sends the user to rebuild something
+        // that is already there.
+        '/_(tablet|phone)$/'                           => 'tablet and phone overrides',
         '/^custom_(padding|margin)/'                  => 'spacing (padding or margin)',
         '/^(max_width|min_height|width|height)($|_)/'  => 'explicit sizing',
         '/^border_/'                                   => 'borders',
@@ -229,7 +236,6 @@ class D2G_Converter {
         '/^disabled_on$/'                              => 'per-device visibility',
         '/(^hover_enabled$|__hover$)/'                 => 'hover styling',
         '/^(header_|body_)?text_color$/'               => 'text colour',
-        '/_(tablet|phone)$/'                           => 'tablet and phone overrides',
     ];
 
     /**

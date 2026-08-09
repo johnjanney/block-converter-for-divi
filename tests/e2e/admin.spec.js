@@ -73,8 +73,12 @@ test( 'preview shows the conversion and names what will be lost', async ( { page
     await expect( page.locator( '#d2g-preview-converted' ) ).toContainText( '<!-- wp:heading' );
 
     // The lossy setting on this page must be reported rather than dropped.
+    // Asserted on the animation, not on spacing: spacing is now mapped onto
+    // core's block supports, and pinning this to whichever category happens to
+    // be unmappable today means the test breaks every time the converter gets
+    // better at its job.
     await expect( page.locator( '#d2g-preview-warnings' ) ).toBeVisible();
-    await expect( page.locator( '#d2g-preview-warnings' ) ).toContainText( /spacing/i );
+    await expect( page.locator( '#d2g-preview-warnings' ) ).toContainText( /animation/i );
 
     // Nothing has been written yet: preview does not convert.
     await page.locator( '.d2g-modal-close' ).click();
@@ -121,7 +125,7 @@ test( 'converting one page reports success and disables the row', async ( { page
     // be returned by the server and dropped by the browser.
     const warnings = page.locator( '#d2g-warnings' );
     await expect( warnings ).toBeVisible();
-    await expect( warnings ).toContainText( /spacing/i );
+    await expect( warnings ).toContainText( /animation/i );
     await expect( warnings ).toContainText( 'et_pb_section' );
 } );
 

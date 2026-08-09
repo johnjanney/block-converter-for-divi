@@ -360,7 +360,10 @@ return [
         'reject' => [ 'position:fixed', 'padding-top', 'auto' ],
     ],
 
-    'C-08 a per-device override is still reported as lost' => [
+    // The label matters as much as the warning. A section that kept its padding
+    // and lost only the tablet override must not say "spacing was not carried
+    // over" — that sends the user to rebuild something already there.
+    'C-08 a per-device override is reported as an override, not as lost spacing' => [
         'divi'   => '[et_pb_section custom_padding="10px|||" custom_padding_tablet="5px|||"][et_pb_row]'
             . '[et_pb_column type="4_4"][et_pb_text]<p>Hi</p>[/et_pb_text][/et_pb_column]'
             . '[/et_pb_row][/et_pb_section]',
