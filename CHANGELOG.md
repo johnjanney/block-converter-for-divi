@@ -94,7 +94,30 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- Divi borders on sections, rows and columns are carried over.
+  `border_width_all`, `border_color_all` and `border_style_all` become core's
+  `style.border.*`, and `border_radii` becomes `style.border.radius` when all
+  four corners carry the same value.
+
+  A radius that differs per corner is **not** guessed at. Core keys its corners
+  topLeft/topRight/bottomLeft/bottomRight, CSS shorthand runs
+  top-left/top-right/bottom-right/bottom-left, and Divi's order is documented
+  nowhere. Rounding the wrong corner of somebody's box on the strength of a
+  guess is worse than saying it was not carried over, so the renderer raises a
+  warning naming that specific case — more use than the generic "borders" line
+  it replaces. Three corners set and one empty is treated the same way.
+
+  Per-side border widths are still reported as lost.
+
+### Fixed
+
+- The declaration order comment on `wrapper_styles()` said the order was
+  alphabetical. It is not: measured with border, background and spacing
+  together, core emits border before background, which alphabetically follows
+  it. The earlier phases got away with the wrong explanation because nothing
+  they emitted could tell the difference.
 
 ---
 

@@ -371,6 +371,85 @@ return [
         'warns'  => [ 'et_pb_section' ],
     ],
 
+    // ---------------------------------------------------------------- C-10 --
+    //
+    // Borders onto core's border support. The declaration order here disproved
+    // the "alphabetical" guess the earlier phases got away with: core emits
+    // border before background, which alphabetically follows it.
+
+    'C-10 a section carries a uniform border and radius' => [
+        'divi'   => '[et_pb_section border_width_all="2px" border_color_all="#333333"'
+            . ' border_style_all="solid" border_radii="on|8px|8px|8px|8px"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [
+            'style="border-color:#333333;border-style:solid;border-width:2px;border-radius:8px"',
+            'class="wp-block-group has-border-color"',
+        ],
+        'rejectWarnings' => [ 'et_pb_section' ],
+    ],
+
+    'C-10 border sorts before background and spacing, as core serializes it' => [
+        'divi'   => '[et_pb_section border_width_all="2px" border_color_all="#333333"'
+            . ' background_color="#f5f5f5" custom_padding="10px|||"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [
+            'style="border-color:#333333;border-width:2px;background-color:#f5f5f5;padding-top:10px"',
+            'class="wp-block-group has-border-color has-background"',
+        ],
+    ],
+
+    // Divi's corner order is not documented and CSS shorthand order is a guess,
+    // so a per-corner radius is named rather than rounded onto the wrong side.
+    'C-10 a per-corner radius is reported, not guessed at' => [
+        'divi'   => '[et_pb_section border_radii="on|4px|8px|12px|16px"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'reject' => [ 'border-radius' ],
+        'warns'  => [ 'et_pb_section' ],
+    ],
+
+    'C-10 three corners set and one empty is still ambiguous' => [
+        'divi'   => '[et_pb_section border_radii="on|5px|5px|5px|"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'reject' => [ 'border-radius' ],
+        'warns'  => [ 'et_pb_section' ],
+    ],
+
+    'C-10 a radius switched off is not applied and not reported' => [
+        'divi'   => '[et_pb_section border_radii="off|5px|5px|5px|5px"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'reject' => [ 'border-radius' ],
+        'rejectWarnings' => [ 'et_pb_section' ],
+    ],
+
+    'C-10 a border style that is not a keyword is dropped' => [
+        'divi'   => '[et_pb_section border_style_all="solid;position:fixed" border_width_all="1px"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [ 'border-width:1px' ],
+        'reject' => [ 'position:fixed', 'border-style' ],
+    ],
+
+    'C-10 a column carries a border with flex-basis still last' => [
+        'divi'   => '[et_pb_section][et_pb_row][et_pb_column type="1_2" border_width_all="1px" border_color_all="#cccccc"]'
+            . '[et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[et_pb_column type="1_2"][et_pb_text]<p>C</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'expect' => [ 'style="border-color:#cccccc;border-width:1px;flex-basis:50%"' ],
+    ],
+
+    'C-10 per-side border widths are still reported as lost' => [
+        'divi'   => '[et_pb_section border_width_top="4px"][et_pb_row]'
+            . '[et_pb_column type="4_4"][et_pb_text]<p>B</p>[/et_pb_text][/et_pb_column]'
+            . '[/et_pb_row][/et_pb_section]',
+        'reject' => [ 'border-width' ],
+        'warns'  => [ 'et_pb_section' ],
+    ],
+
     // ---------------------------------------------------------------- C-09 --
     //
     // Typography onto core's text block supports. Core serializes these
