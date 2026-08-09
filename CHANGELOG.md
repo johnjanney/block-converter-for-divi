@@ -94,6 +94,16 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [2.6.0] — 2026-08-09
+
+The third and last of the block-supports phases. Spacing (2.4.0), typography
+(2.5.0) and now borders are carried onto core's own block supports rather than
+reported as lost.
+
 ### Added
 
 - Divi borders on sections, rows and columns are carried over.
@@ -941,7 +951,8 @@ Initial implementation of the plugin.
 - Hover states, animations, and responsive per-breakpoint styling are not
   mapped.
 
-[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/johnjanney/block-converter-for-divi/compare/v2.3.0...v2.3.1
