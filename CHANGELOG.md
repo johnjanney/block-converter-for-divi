@@ -100,6 +100,46 @@ _Nothing yet._
 
 ---
 
+## [2.9.3] — 2026-08-09
+
+### Changed
+
+- A page whose source token has gone stale is no longer a dead end inside a
+  batch. Every conversion request names the version of the page it means to
+  convert, and the server refuses when that version is no longer there — which
+  is right, and stops a write landing on content nobody read. But in a batch of
+  fifty the only way forward for that row was to abandon the batch and scan
+  again. On a real site it cost one page in 247, and the cause was a WordPress
+  importer still rewriting image URLs, which settles in seconds.
+
+  The refusal stands and still writes nothing. What is new is that it hands back
+  the page's current token, so the caller has somewhere to go. The browser comes
+  back exactly once with that token, and has to name the version it gave up on.
+  Once, because a page whose content keeps moving is genuinely unstable and
+  retrying in a loop would hide that.
+
+  When the version named is not the version converted, the conversion says so:
+  the page was edited between being scanned and being converted, what was
+  converted is not quite what the preview showed, compare it before relying on
+  it, and the backup holds the same version that was written.
+
+  A blind re-read on the server would also have cleared the dead end, and would
+  have made the token decorative — the server picking which version to convert
+  is the exact thing the token exists to prevent. It still means what it always
+  meant: the caller states which version it is converting, and the server never
+  chooses for it.
+
+  One test had to change, and the way it changed is worth recording. *"A batch
+  with one failure reports the failure separately"* failed on the first run,
+  correctly: it manufactured its failure with a stale token, and a stale token
+  is no longer a failure. That test is the regression guard for the 2.0.0 defect
+  where the batch runner counted failed pages as successes, so weakening it to
+  fit was not an option. It was given a failure that stays refused instead — a
+  page already holding a previous conversion — and a second test now covers the
+  stale-token path end to end, including that the warning reaches the screen.
+
+---
+
 ## [2.9.2] — 2026-08-09
 
 ### Fixed

@@ -46,11 +46,19 @@ $pages = [
     'e2e: batch one'   => sprintf( $section, '[et_pb_text]<p>One</p>[/et_pb_text]' ),
     'e2e: batch two'   => sprintf( $section, '[et_pb_text]<p>Two</p>[/et_pb_text]' ),
 
-    // This one is edited behind the browser's back after the scan, so its
-    // source token goes stale and the endpoint refuses it. That is how the
-    // batch runner gets a real failure to report — the behaviour that was
-    // broken in 2.0.0, where failures were counted as successes.
+    // Edited behind the browser's back after the scan, so its source token goes
+    // stale. Since 2.9.3 that is no longer a failure: the row comes back once
+    // with the token the server hands it, converts the version that is actually
+    // there, and reports that the page moved. This page is what proves that.
     'e2e: batch stale' => sprintf( $section, '[et_pb_text]<p>Stale</p>[/et_pb_text]' ),
+
+    // Already holds a previous conversion, with one shortcode left over — so
+    // the scan lists it and the write refuses it, permanently. That is what the
+    // batch runner needs in order to have a real failure to report, which is
+    // the behaviour that was broken in 2.0.0 where failures were counted as
+    // successes. A stale token used to serve that purpose and no longer can.
+    'e2e: batch converted' => "<!-- wp:paragraph -->\n<p>Already converted</p>\n<!-- /wp:paragraph -->\n"
+        . '[et_pb_text]<p>A shortcode the previous conversion could not read</p>[/et_pb_text]',
 ];
 
 $ids = [];

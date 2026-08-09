@@ -565,7 +565,9 @@
         convertPage(postId, $(this));
     });
 
-    function convertPage(postId, $btn) {
+    // supersededHash is set only on the one retry a stale token earns, and is
+    // what stops that retry being silent — see the server side.
+    function convertPage(postId, $btn, supersededHash) {
         var $row = rowFor(postId);
 
         setRowBusy(postId, true);
@@ -573,20 +575,45 @@
             $btn.text(t('converting'));
         }
 
-        return $.post(d2g.ajax_url, {
+        var request = {
             action: 'd2g_convert_page',
             nonce: d2g.nonce,
             post_id: postId,
             source_hash: sourceHash[postId] || ''
-        }).then(function (res) {
+        };
+
+        // Set on a retry, naming the version this attempt gave up on. The
+        // server turns it into a warning on the conversion, so a page that
+        // moved between the preview and the write says so rather than passing
+        // silently.
+        if (supersededHash) {
+            request.superseded_hash = supersededHash;
+        }
+
+        return $.post(d2g.ajax_url, request).then(function (res) {
             setRowBusy(postId, false);
 
             if (!res.success) {
+                var data = res.data;
+                var detail = (data && typeof data === 'object') ? data.message : data;
+
+                // The page moved after it was scanned. The server refused and
+                // handed back the current token; come back once with it rather
+                // than making this row a dead end in a batch of fifty. Once —
+                // a page whose content keeps changing under us is genuinely
+                // unstable, and retrying forever would hide that.
+                if (data && typeof data === 'object' && data.stale_token &&
+                    data.source_hash && !supersededHash) {
+                    var superseded = sourceHash[postId] || '';
+                    sourceHash[postId] = data.source_hash;
+                    return convertPage(postId, $btn, superseded);
+                }
+
                 if ($btn) {
                     $btn.text(t('convert'));
                 }
                 $row.addClass('d2g-row-error');
-                var message = fmt(t('convertError'), postId, res.data || t('unknownError'));
+                var message = fmt(t('convertError'), postId, detail || t('unknownError'));
                 showStatus(message, 'error');
                 // Rejecting with the message lets the batch runner record which
                 // page failed and why, instead of counting it as a success.

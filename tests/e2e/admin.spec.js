@@ -151,19 +151,22 @@ test( 'restoring puts the page back and makes it convertible again', async ( { p
  * two converted and one failed — and must name the page that failed. In 2.0.0
  * it would have reported three converted.
  */
-test( 'a batch with one failure reports the failure separately', async ( { page, request } ) => {
+test( 'a batch with one failure reports the failure separately', async ( { page } ) => {
     page.on( 'dialog', ( d ) => d.accept() );
 
     await page.click( '#d2g-scan' );
 
-    for ( const title of [ 'e2e: batch one', 'e2e: batch two', 'e2e: batch stale' ] ) {
+    for ( const title of [ 'e2e: batch one', 'e2e: batch two', 'e2e: batch converted' ] ) {
         await rowFor( page, title ).locator( 'input.d2g-select' ).check();
     }
 
-    // Make one page's token stale, the way a colleague saving an edit would.
-    const staleRow = rowFor( page, 'e2e: batch stale' );
-    const staleId = await staleRow.getAttribute( 'data-id' );
-    await request.post( 'http://localhost:8888/?d2g-e2e-touch=' + staleId );
+    // The failure is a page that already holds a conversion, which the server
+    // refuses permanently. It used to be a page whose token had gone stale, and
+    // that is no longer a failure — the row re-reads and converts. This test is
+    // about the batch runner naming its failures, which was the 2.0.0 defect,
+    // so it needs a refusal that stays refused.
+    const refusedRow = rowFor( page, 'e2e: batch converted' );
+    const refusedId = await refusedRow.getAttribute( 'data-id' );
 
     await page.click( '#d2g-convert-selected' );
 
@@ -173,12 +176,42 @@ test( 'a batch with one failure reports the failure separately', async ( { page,
     await expect( status ).toContainText( /1 failed|, 1/ );
 
     // The user has to be able to tell *which* page failed.
-    await expect( status ).toContainText( String( staleId ) );
+    await expect( status ).toContainText( String( refusedId ) );
 
     // The two that worked are done; the one that failed is still convertible.
     await expect( rowFor( page, 'e2e: batch one' ).locator( '.d2g-convert-btn' ) ).toBeDisabled();
     await expect( rowFor( page, 'e2e: batch two' ).locator( '.d2g-convert-btn' ) ).toBeDisabled();
-    await expect( staleRow ).toHaveClass( /d2g-row-error/ );
+    await expect( refusedRow ).toHaveClass( /d2g-row-error/ );
+} );
+
+test( 'a page edited after the scan is re-read, converted, and says so', async ( { page, request } ) => {
+    page.on( 'dialog', ( d ) => d.accept() );
+
+    await page.click( '#d2g-scan' );
+
+    const row = rowFor( page, 'e2e: batch stale' );
+    const id = await row.getAttribute( 'data-id' );
+    await row.locator( 'input.d2g-select' ).check();
+
+    // Edited behind the browser's back, the way a colleague saving in another
+    // tab — or an importer still rewriting URLs — would do it.
+    await request.post( 'http://localhost:8888/?d2g-e2e-touch=' + id );
+
+    await page.click( '#d2g-convert-selected' );
+
+    // No longer a dead end: the row comes back once with the token the server
+    // handed it and converts what is actually there.
+    const status = page.locator( '#d2g-status' );
+    await expect( status ).toContainText( /converted/i, { timeout: 30000 } );
+    await expect( status ).not.toContainText( /finished with errors/i );
+    await expect( row.locator( '.d2g-convert-btn' ) ).toBeDisabled();
+    await expect( row ).not.toHaveClass( /d2g-row-error/ );
+
+    // And it is not silent about it. The page that was scanned and previewed is
+    // not the page that was converted, which the user has to be told.
+    const warnings = page.locator( '#d2g-warnings' );
+    await expect( warnings ).toBeVisible();
+    await expect( warnings ).toContainText( /edited between being scanned and being converted/i );
 } );
 
 test( 'the data-retention setting persists', async ( { page } ) => {

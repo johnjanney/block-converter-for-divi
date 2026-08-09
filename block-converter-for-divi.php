@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.9.2
+ * Version:     2.9.3
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -141,7 +141,7 @@ if ( bcfd_legacy_plugin_present() ) {
  * error" that upgrading from 1.x produced. Nothing outside this file reads
  * these, and no stored data is keyed on them, so the prefix is free to change.
  */
-define( 'BCFD_VERSION', '2.9.2' );
+define( 'BCFD_VERSION', '2.9.3' );
 define( 'BCFD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BCFD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -913,9 +913,33 @@ Backups are the only way to restore a converted page. Once the plugin is removed
         // Re-read under the lock. Everything checked above was read before the
         // lock existed, so a concurrent save could have landed in between.
         $post = get_post( $post_id );
-        if ( ! $post || ! hash_equals( md5( $post->post_content ), $expected_hash ) ) {
+
+        if ( ! $post ) {
             self::release_lock( $post_id, $lock );
-            wp_send_json_error( __( 'This post changed since it was scanned. Scan again and re-check the preview before converting.', 'block-converter-for-divi' ) );
+            wp_send_json_error( __( 'That page no longer exists.', 'block-converter-for-divi' ) );
+        }
+
+        if ( ! hash_equals( md5( $post->post_content ), $expected_hash ) ) {
+            self::release_lock( $post_id, $lock );
+
+            // Still a refusal — this request asked to convert a version of the
+            // page that is no longer there, and guessing what it meant is the
+            // thing the token exists to prevent.
+            //
+            // What is new is the current token in the reply. Refusing without
+            // one made a batch of fifty a dead end for that row: the only way
+            // forward was to abandon the batch and scan again, and on a real
+            // site the cause was a WordPress importer still rewriting image
+            // URLs, which settles in seconds. The caller may come back once
+            // with this token, and must say what it superseded when it does —
+            // see $superseded below. That keeps the token meaning what it has
+            // always meant: the caller states which version it is converting,
+            // and the server never picks for it.
+            wp_send_json_error( [
+                'message'     => __( 'This page changed after it was scanned, so it was not converted. Nothing was written.', 'block-converter-for-divi' ),
+                'stale_token' => true,
+                'source_hash' => md5( $post->post_content ),
+            ] );
         }
 
         // Refuse to convert something this plugin already converted.
@@ -961,6 +985,26 @@ Backups are the only way to restore a converted page. Once the plugin is removed
 
         $converter = new D2G_Converter();
         $converted = $converter->convert( $post->post_content );
+
+        // A retry after the page moved under the first attempt. The caller
+        // names the version it gave up on, which is what stops this becoming a
+        // silent re-read: the page that was scanned, previewed and approved is
+        // not the page that has just been converted, and the only honest thing
+        // to do is convert the current one and say so.
+        //
+        // Deliberately a warning rather than a refusal. Refusing is what made a
+        // batch dead-end in the first place, and the change is usually
+        // mechanical — an importer finishing its URL rewriting. When it is not,
+        // the page's own backup holds whatever was there, so this is recoverable
+        // as well as reported.
+        $superseded = isset( $_POST['superseded_hash'] ) ? sanitize_key( wp_unslash( $_POST['superseded_hash'] ) ) : '';
+
+        if ( '' !== $superseded && ! hash_equals( $superseded, $expected_hash ) ) {
+            $converter->add_warning(
+                'page-changed',
+                __( 'This page was edited between being scanned and being converted, so what was converted is not quite what the preview showed. It was re-read first, and the version converted is the one that was on the site — compare it with the original before relying on it. The backup holds that same version.', 'block-converter-for-divi' )
+            );
+        }
 
         if ( '' === trim( $converted ) ) {
             self::abandon_conversion( $post_id, $lock, $backup_undo );

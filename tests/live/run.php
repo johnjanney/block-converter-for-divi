@@ -171,6 +171,58 @@ $stale = d2g_call( 'd2g_convert_page', [
 d2g_ok( 'conversion with a stale source token is refused',
     isset( $stale['success'] ) && false === $stale['success'] );
 
+// A stale token is still a refusal, and still writes nothing — but the reply now
+// carries the current token, so a batch row is not a dead end. Refusing without
+// one meant the only way forward was to abandon the batch and scan again, on a
+// page whose content had settled seconds earlier.
+$moved_id = d2g_make_post( '[et_pb_text]<p>First</p>[/et_pb_text]', 'zz moved under us' );
+$moved_first = md5( get_post( $moved_id )->post_content );
+
+wp_update_post( [ 'ID' => $moved_id, 'post_content' => wp_slash( '[et_pb_text]<p>Second</p>[/et_pb_text]' ) ] );
+$moved_now = md5( get_post( $moved_id )->post_content );
+
+$moved = d2g_call( 'd2g_convert_page', [ 'post_id' => $moved_id, 'source_hash' => $moved_first ] );
+
+d2g_ok( 'a stale token is refused', isset( $moved['success'] ) && false === $moved['success'] );
+d2g_ok( 'and the refusal wrote nothing',
+    false !== strpos( get_post( $moved_id )->post_content, '[et_pb_text]' ) );
+d2g_ok( 'the refusal hands back the current token so a batch row can continue',
+    ! empty( $moved['data']['stale_token'] ) && ( $moved['data']['source_hash'] ?? '' ) === $moved_now,
+    'reply: ' . wp_json_encode( $moved['data'] ?? null ) );
+
+// Coming back with that token converts — and says the page moved, because the
+// page that was previewed is not the page that just got converted.
+$retried = d2g_call( 'd2g_convert_page', [
+    'post_id'         => $moved_id,
+    'source_hash'     => $moved_now,
+    'superseded_hash' => $moved_first,
+] );
+
+d2g_ok( 'the retry converts', ! empty( $retried['success'] ),
+    'reply: ' . wp_json_encode( $retried ) );
+d2g_ok( 'it converted the version that was actually there',
+    false !== strpos( get_post( $moved_id )->post_content, '<p>Second</p>' ) );
+
+$moved_warnings = wp_json_encode( $retried['data']['warnings'] ?? [] );
+d2g_ok( 'and the conversion says the page changed after it was scanned',
+    false !== strpos( $moved_warnings, 'page-changed' ), $moved_warnings );
+
+wp_delete_post( $moved_id, true );
+
+// A retry that supersedes nothing is an ordinary conversion, and must not be
+// labelled as one that moved.
+$quiet_id = d2g_make_post( '[et_pb_text]<p>Steady</p>[/et_pb_text]', 'zz not moved' );
+$quiet_hash = md5( get_post( $quiet_id )->post_content );
+$quiet = d2g_call( 'd2g_convert_page', [
+    'post_id'         => $quiet_id,
+    'source_hash'     => $quiet_hash,
+    'superseded_hash' => $quiet_hash,
+] );
+d2g_ok( 'a page that did not move is not reported as having moved',
+    ! empty( $quiet['success'] )
+    && false === strpos( wp_json_encode( $quiet['data']['warnings'] ?? [] ), 'page-changed' ) );
+wp_delete_post( $quiet_id, true );
+
 $missing = d2g_call( 'd2g_convert_page', [
     'post_id' => 999999, 'source_hash' => md5( '' ),
 ] );

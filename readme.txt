@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.9.2
+Stable tag: 2.9.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,8 +137,9 @@ raw shortcode text without it.
 Yes. Every conversion keeps a copy of the page's original Divi content, and the
 scan results show a **Restore** button for it, which puts the original content
 back and re-enables the Divi Builder for that page. The copy is written before
-anything is overwritten and is never replaced by a later conversion, so the
-original is always what comes back.
+anything is overwritten, and a conversion never replaces it with converted
+content — so what comes back is always the Divi version of the page, never a
+copy of the blocks it became.
 
 = Will my pages look identical afterwards? =
 
@@ -174,6 +175,16 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.9.3 =
+* A page that was edited between being scanned and being converted no longer
+  stops a batch. It used to be refused with nothing to do about it but abandon
+  the batch and scan again, which was painful when the edit was something like
+  an import finishing its work seconds earlier.
+* Such a page is now re-read and converted once, and the conversion tells you it
+  happened: what was converted is not quite what the preview showed, so compare
+  it with the original before relying on it. Its backup holds the same version
+  that was written.
 
 = 2.9.2 =
 * Fixed the backup a page keeps for its Restore button going out of date. If a
@@ -438,6 +449,11 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.9.3 =
+A page edited between being scanned and being converted no longer stops a batch:
+it is re-read, converted once, and reported as having changed so you can check
+it. Nothing needs reconverting because of this release.
 
 = 2.9.2 =
 Fixes the backup behind the Restore button going out of date when a conversion
