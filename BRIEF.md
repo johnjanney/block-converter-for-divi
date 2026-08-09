@@ -236,6 +236,8 @@ What conversion actually preserves:
 | `custom_padding`, `custom_margin` (section, row, column) | `style.spacing.padding` / `.margin` on `core/group`, `core/columns`, `core/column` |
 | `body_text_color`, `body_font_size`, `body_line_height`, `body_letter_spacing` | `style.color.text` + `style.typography.*` on the paragraphs a module's body produces |
 | `header_*` equivalents (Text module only) | the same, on the headings it produces |
+| `border_width_all`, `border_color_all`, `border_style_all` (section, row, column) | `style.border.width` / `.color` / `.style` |
+| `border_radii`, when all four corners match | `style.border.radius` |
 | `button_bg_color`, `button_text_color` | `core/button` `style.color.*` |
 | `type` (column) | `core/column` `width` |
 | `color` (divider) | `core/separator` `style.color.background` |
@@ -248,7 +250,10 @@ transform into one pipe-delimited value whose grammar this project has not seen
 enough real examples of to encode — guessing would put the wrong weight on
 somebody's page, which is worse than reporting the loss; `header_*` typography
 on any module except Text, because every other module builds its headings in its
-own renderer from an attribute and never sees the setting; explicit sizing (`max_width`, `min_height`), borders and `border_radii`, box and text shadows,
+own renderer from an attribute and never sees the setting; a border radius that
+differs per corner, because Divi's corner order is not documented and rounding
+the wrong corner is worse than saying so; per-side border widths; explicit
+sizing (`max_width`, `min_height`), borders and `border_radii`, box and text shadows,
 fonts, font sizes, line heights, letter spacing, background gradients and
 parallax, `custom_css_main_element`, module IDs and classes, hover states,
 animations and filters, positioning and transforms, per-device visibility

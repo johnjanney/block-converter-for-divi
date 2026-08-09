@@ -39,14 +39,33 @@ class D2G_Renderer_Layout extends D2G_Module_Renderer {
      *
      * @return array{attrs: array, classes: string[], css: string[]}
      */
-    private function wrapper_styles_for( array $attrs ): array {
+    private function wrapper_styles_for( array $attrs, string $tag = '' ): array {
         $enabled  = ( $attrs['background_enable_color'] ?? 'on' ) !== 'off';
         $bg_color = $enabled ? D2G_Block_Builder::css_color( $attrs['background_color'] ?? '' ) : '';
+
+        $radius = D2G_Block_Builder::border_radius( $attrs['border_radii'] ?? '' );
+
+        // Four different corner radii cannot be mapped without knowing Divi's
+        // corner order, which is not documented. Rather than guess and round
+        // the wrong corner, say so — this is more use than the generic
+        // "borders" line the reporter would otherwise print.
+        if ( $radius['mixed'] && '' !== $tag ) {
+            $this->warn(
+                $tag,
+                __( 'A border radius that differs per corner was not carried over. Corners with the same radius are; set the four corners individually with the block\'s border controls to restore it.', 'block-converter-for-divi' )
+            );
+        }
 
         return D2G_Block_Builder::wrapper_styles(
             $bg_color,
             D2G_Block_Builder::spacing_box( $attrs['custom_margin'] ?? '' ),
-            D2G_Block_Builder::spacing_box( $attrs['custom_padding'] ?? '' )
+            D2G_Block_Builder::spacing_box( $attrs['custom_padding'] ?? '' ),
+            [
+                'color'  => D2G_Block_Builder::css_color( $attrs['border_color_all'] ?? '' ),
+                'style'  => D2G_Block_Builder::css_border_style( $attrs['border_style_all'] ?? '' ),
+                'width'  => D2G_Block_Builder::css_length( $attrs['border_width_all'] ?? '' ),
+                'radius' => $radius['radius'],
+            ]
         );
     }
 
@@ -64,7 +83,13 @@ class D2G_Renderer_Layout extends D2G_Module_Renderer {
      * @return array<string, string[]>
      */
     public static function mapped_style_attrs(): array {
-        $mapped = [ 'custom_padding', 'custom_margin', 'background_color' ];
+        $mapped = [
+            'custom_padding', 'custom_margin', 'background_color',
+            // border_radii is declared mapped even though a per-corner value is
+            // not carried: the renderer raises a specific warning for that case,
+            // which beats the generic "borders" line the reporter would print.
+            'border_width_all', 'border_color_all', 'border_style_all', 'border_radii',
+        ];
         $out    = [];
         foreach ( array_keys( self::tags() ) as $tag ) {
             $out[ $tag ] = $mapped;
@@ -80,7 +105,7 @@ class D2G_Renderer_Layout extends D2G_Module_Renderer {
 
         $layout = $is_fullwidth ? 'full' : 'constrained';
 
-        $styles      = $this->wrapper_styles_for( $attrs );
+        $styles      = $this->wrapper_styles_for( $attrs, $node['tag'] );
         $block_attrs = $styles['attrs'] + [ 'layout' => [ 'type' => $layout ] ];
 
         $classes     = array_merge( [ 'wp-block-group' ], $styles['classes'] );
@@ -120,7 +145,7 @@ class D2G_Renderer_Layout extends D2G_Module_Renderer {
         // Divi rows commonly have a single column (type 4_4), so we still
         // need a columns wrapper to avoid Gutenberg block validation errors.
         if ( $col_count >= 1 ) {
-            $styles    = $this->wrapper_styles_for( $attrs );
+            $styles    = $this->wrapper_styles_for( $attrs, $node['tag'] );
             $classes   = implode( ' ', array_merge( [ 'wp-block-columns' ], $styles['classes'] ) );
             $style_str = $styles['css'] ? ' style="' . esc_attr( implode( ';', $styles['css'] ) ) . '"' : '';
 
@@ -139,7 +164,7 @@ class D2G_Renderer_Layout extends D2G_Module_Renderer {
         $type  = $attrs['type'] ?? '';
         $width = D2G_Block_Builder::column_width( $type );
 
-        $styles      = $this->wrapper_styles_for( $attrs );
+        $styles      = $this->wrapper_styles_for( $attrs, $node['tag'] );
         $block_attrs = [];
         $declarations = $styles['css'];
 

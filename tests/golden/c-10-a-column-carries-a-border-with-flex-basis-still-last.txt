@@ -1,0 +1,27 @@
+<!-- wp:group {"layout":{"type":"constrained"}} -->
+<div class="wp-block-group">
+<!-- wp:columns -->
+<div class="wp-block-columns">
+<!-- wp:column {"width":"50%","style":{"border":{"color":"#cccccc","width":"1px"}}} -->
+<div class="wp-block-column has-border-color" style="border-color:#cccccc;border-width:1px;flex-basis:50%">
+<!-- wp:paragraph -->
+<p>B</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:column -->
+
+<!-- wp:column {"width":"50%"} -->
+<div class="wp-block-column" style="flex-basis:50%">
+<!-- wp:paragraph -->
+<p>C</p>
+<!-- /wp:paragraph -->
+
+</div>
+<!-- /wp:column -->
+
+</div>
+<!-- /wp:columns -->
+
+</div>
+<!-- /wp:group -->

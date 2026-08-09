@@ -372,6 +372,66 @@ class D2G_Block_Builder {
     }
 
     /**
+     * A border style keyword core can regenerate.
+     */
+    public static function css_border_style( $value ): string {
+        $value = strtolower( trim( (string) $value ) );
+        return in_array( $value, [ 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset', 'none' ], true )
+            ? $value
+            : '';
+    }
+
+    /**
+     * Divi's border_radii value, mapped only where it is unambiguous.
+     *
+     * Divi writes `on|5px|5px|5px|5px` — an enable flag and four corners. Core
+     * models a radius either as one value for all corners or as an object keyed
+     * topLeft/topRight/bottomLeft/bottomRight.
+     *
+     * When the four are equal the mapping is exact and corner order does not
+     * matter. When they differ it does, and Divi's order is not documented:
+     * CSS shorthand runs top-left, top-right, bottom-right, bottom-left, and
+     * assuming Divi matches it would put a rounded corner on the wrong side of
+     * somebody's box on nothing better than a guess. So the mixed case is
+     * reported instead, which the caller does with a warning naming it.
+     *
+     * @return array{radius: string, mixed: bool}
+     */
+    public static function border_radius( $value ): array {
+        $parts = explode( '|', (string) $value );
+
+        if ( 'on' !== strtolower( trim( $parts[0] ?? '' ) ) ) {
+            return [ 'radius' => '', 'mixed' => false ];
+        }
+
+        $corners = [];
+        for ( $i = 1; $i <= 4; $i++ ) {
+            $corners[] = self::css_length( $parts[ $i ] ?? '' );
+        }
+
+        $set = array_values( array_unique( array_filter( $corners, static function ( $c ) {
+            return '' !== $c;
+        } ) ) );
+
+        if ( ! $set ) {
+            return [ 'radius' => '', 'mixed' => false ];
+        }
+        if ( count( $set ) > 1 ) {
+            return [ 'radius' => '', 'mixed' => true ];
+        }
+
+        // One distinct value, but it has to cover all four corners to be a
+        // uniform radius — three set and one empty is still ambiguous.
+        $filled = count( array_filter( $corners, static function ( $c ) {
+            return '' !== $c;
+        } ) );
+
+        return 4 === $filled
+            ? [ 'radius' => $set[0], 'mixed' => false ]
+            : [ 'radius' => '', 'mixed' => true ];
+    }
+
+    /**
      * The block attributes, classes and CSS declarations for a styled wrapper.
      *
      * One function because the declaration *order* is load-bearing and every
@@ -385,15 +445,42 @@ class D2G_Block_Builder {
      * `flex-basis` is not handled here — it belongs to core/column alone and
      * core emits it after everything else, so the column renderer appends it.
      *
+     * The order is *not* alphabetical, which an earlier version of this comment
+     * assumed from a smaller sample. Measured with border, background and
+     * spacing together, core emits:
+     *
+     *     border-color, border-style, border-width, border-radius,
+     *     background-color, margin-*, padding-*
+     *
+     * so a border sorts before a background it alphabetically follows.
+     *
      * @param string $bg_color Already through css_color(), or ''.
      * @param array  $margin   Already through spacing_box().
      * @param array  $padding  Already through spacing_box().
+     * @param array  $border   color/style/width/radius, each already validated.
      * @return array{attrs: array, classes: string[], css: string[]}
      */
-    public static function wrapper_styles( string $bg_color, array $margin = [], array $padding = [] ): array {
+    public static function wrapper_styles( string $bg_color, array $margin = [], array $padding = [], array $border = [] ): array {
         $style   = [];
         $classes = [];
         $css     = [];
+
+        $border = array_filter( array_map( 'strval', $border ), static function ( $v ) {
+            return '' !== $v;
+        } );
+
+        if ( $border ) {
+            $style['border'] = [];
+            foreach ( [ 'color', 'style', 'width', 'radius' ] as $key ) {
+                if ( isset( $border[ $key ] ) ) {
+                    $style['border'][ $key ] = $border[ $key ];
+                    $css[]                   = 'border-' . $key . ':' . $border[ $key ];
+                }
+            }
+            if ( isset( $border['color'] ) ) {
+                $classes[] = 'has-border-color';
+            }
+        }
 
         if ( '' !== $bg_color ) {
             $style['color'] = [ 'background' => $bg_color ];
