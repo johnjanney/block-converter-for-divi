@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.3.1
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -172,6 +172,19 @@ the most useful thing to hear about.
 
 == Changelog ==
 
+= 2.4.0 =
+* Section, row and column spacing and background colour are now carried over
+  instead of being reported as lost. Divi's padding and margin become the block
+  editor's own spacing settings, so they show up in the sidebar and stay
+  editable rather than being frozen into markup.
+* Values that are not a valid CSS length are dropped rather than written out,
+  and a background colour switched off in Divi is no longer painted.
+* A setting that only applies on tablet or phone is now reported as a per-device
+  override rather than as lost spacing, because the desktop spacing is kept.
+* Everything else is unchanged, including which settings cannot be carried over
+  at all: hover states, transforms, parallax, animations, per-device overrides
+  and module custom CSS. WordPress has no block equivalent for those.
+
 = 2.3.1 =
 * Documentation only; no code changes. The installation instructions shipped
   inside the plugin did not mention that the older "Divi to Gutenberg Converter"
@@ -336,6 +349,14 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.4.0 =
+Section, row and column spacing and background colour now survive conversion.
+Pages you converted with an earlier version did not keep that spacing, and this
+release does not go back and fix them. If you want it, restore such a page from
+its backup and convert it again — but only if it has a backup, and only if you
+are willing to lose any block editor work done since, because restoring replaces
+the current content.
 
 = 2.3.1 =
 Documentation only. Worth taking if you install from the ZIP, because the
