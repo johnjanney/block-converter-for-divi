@@ -63,6 +63,42 @@ IMAGE="mcr.microsoft.com/playwright:v${PW_VERSION}-noble"
 echo
 echo "== Browser tests (Playwright ${PW_VERSION}) =="
 
+# `docker run` pulls the image if it is missing, which is convenient right up
+# until the registry is unreachable — then the pull failure comes back as a
+# non-zero exit from the same command that runs the tests, and the job reports
+# that the admin screen is broken. It said exactly that on the 2.9.2 release
+# commit, on a TLS handshake timeout to mcr.microsoft.com, having run no test at
+# all. A green suite that goes red for reasons unrelated to the code teaches
+# people to disregard it, which costs more than the flake does.
+#
+# So the pull is done here instead: retried, because a transient network fault
+# deserves a second try, and reported as its own kind of failure with its own
+# exit code, because "the registry was unreachable" and "the screen is broken"
+# are not the same news.
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "Pulling ${IMAGE}…"
+
+    PULLED=0
+    for attempt in 1 2 3; do
+        if docker pull --quiet "$IMAGE" >/dev/null 2>&1; then
+            PULLED=1
+            break
+        fi
+        if [[ "$attempt" -lt 3 ]]; then
+            echo "  attempt ${attempt} failed; retrying in $(( attempt * 10 ))s" >&2
+            sleep "$(( attempt * 10 ))"
+        fi
+    done
+
+    if [[ "$PULLED" -ne 1 ]]; then
+        echo >&2
+        echo "error: could not pull ${IMAGE} after 3 attempts." >&2
+        echo "       The container registry is unreachable. No browser test has" >&2
+        echo "       run, so this says nothing about the plugin — retry the job." >&2
+        exit 2
+    fi
+fi
+
 # --ipc=host: Chromium's default shared-memory allocation inside a container is
 # too small and shows up as tabs crashing mid-test.
 # `set -e` would exit here on a browser failure, before the debug log below is
