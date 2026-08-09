@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.4.0
+Stable tag: 2.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -171,6 +171,18 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.5.0 =
+* Text colour, font size, line height and letter spacing are now carried over
+  for a module's body text, and for headings in the Text module. They become the
+  block editor's own typography settings, so they show up in the sidebar and
+  stay editable.
+* Headings in other modules still report their typography as lost, because
+  those modules build their headings differently and never receive the setting.
+* Font family and weight are still not carried over. Divi stores them in a
+  single packed value whose format is undocumented, and guessing at it would put
+  the wrong font on your page — so it is reported instead.
+* Values that are not valid CSS are dropped rather than written out.
 
 = 2.4.0 =
 * Section, row and column spacing and background colour are now carried over
@@ -349,6 +361,15 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.5.0 =
+Body text colour, font size, line height and letter spacing now survive
+conversion. As with 2.4.0, pages converted with an earlier version are not
+retro-fixed: anything converted before 2.4.0 kept neither spacing nor
+typography. Getting either means restoring that page from its backup and
+converting again, which needs a backup to exist and replaces any block editor
+work done since. If you have a lot of pages already converted, it is worth
+deciding deliberately rather than page by page.
 
 = 2.4.0 =
 Section, row and column spacing and background colour now survive conversion.
