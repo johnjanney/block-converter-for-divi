@@ -598,6 +598,20 @@ return [
         'reject'         => [ 'margin-top' ],
     ],
 
+    // The same photo standalone and inside a gallery on one page. The offline
+    // shim gives every attachment its own URL, so this only appeared against a
+    // real media library: the source counted the image twice — once as a URL,
+    // once as a gallery ID — and the output counted it once, and the census
+    // reported a missing image on every page that did it. Seven on a real site,
+    // all wrong. Attachment 11 is what wp_get_attachment_url() resolves in
+    // tests/bootstrap.php, so the src below is deliberately the same file.
+    'an image used standalone and in a gallery is not a phantom loss' => [
+        'divi'           => '[et_pb_image src="https://example.com/uploads/attachment-11.jpg" /]'
+            . '[et_pb_gallery gallery_ids="11,12,13" /]',
+        'expect'         => [ 'attachment-11.jpg', 'attachment-12.jpg' ],
+        'rejectWarnings' => [ 'content-census' ],
+    ],
+
     // ------------------------------------------------- found by the census --
     //
     // Divi offers a second video source so a browser can pick a format it

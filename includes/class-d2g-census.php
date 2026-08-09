@@ -82,15 +82,34 @@ class D2G_Census {
     public static function of_blocks( string $content ): array {
         $content = self::decode_entities( $content );
 
-        $urls   = self::urls_in_html( $content );
-        $images = self::image_urls( $urls );
+        // Gallery contents are counted, not deduplicated, because that is how
+        // the source side counts them: a Divi gallery is a list of attachment
+        // IDs, and `gallery_ids="11,12,13"` is three whether or not one of them
+        // is also placed on the page on its own.
+        //
+        // Deduplicating one side and counting the other is not a comparison. It
+        // produced a phantom missing image on every page that used the same
+        // photo standalone and in a gallery — seven of them on a real site,
+        // each reported as "1 of N missing", each one wrong. A report that cries
+        // wolf is worse than no report, so the two sides count alike.
+        $in_galleries = 0;
+        $outside      = preg_replace_callback(
+            '#<!-- wp:gallery.*?<!-- /wp:gallery -->#s',
+            static function ( $match ) use ( &$in_galleries ) {
+                $in_galleries += preg_match_all( '#<!--\s+wp:image#', $match[0] );
+                return ' ';
+            },
+            $content
+        );
 
-        // A gallery image that resolved is an <img> inside the gallery; one
-        // that did not was dropped, and the renderer has already said so.
+        // Words and links still come from the whole document: a caption inside
+        // a gallery is text on the page like any other.
+        $urls = self::urls_in_html( $content );
+
         return [
             'words'   => self::words( self::text_of_blocks( $content ) ),
             'links'   => count( self::unique_non_image( $urls ) ),
-            'images'  => count( $images ),
+            'images'  => count( self::image_urls( self::urls_in_html( $outside ) ) ) + $in_galleries,
             'buttons' => preg_match_all( '#<!--\s+wp:button[\s/]#', $content ),
         ];
     }

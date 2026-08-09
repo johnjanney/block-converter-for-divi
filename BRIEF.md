@@ -1,6 +1,6 @@
 # Project Brief — Block Converter for Divi (`block-converter-for-divi`)
 
-**Status:** `2.9.0` — released. Runs against real WordPress
+**Status:** `2.9.1` — released. Runs against real WordPress
 6.1–7.0.2 (`bin/wp-matrix.sh`), on single site and multisite, with output
 checked by WordPress's own block validator against the block library **each**
 supported release actually ships (`bin/block-library-matrix.sh`) and the admin
@@ -29,6 +29,14 @@ the parser on purpose, because a counter built on the parser would have been
 blind to the `&quot;` defect in exactly the way the parser was. It found a real
 loss on its first run over the corpus (a video module carrying two sources kept
 one silently) and two more in the fixture set, and reports none now.
+**A third run, on a freshly imported site rather than a restored one, settled
+where the `&quot;` encoding comes from: the WordPress WXR importer** (Q36). The
+original export holds 20,148 plain `="` pairs and none encoded; the database
+after import held 10,098 encoded. So the defect that voided 246 of 247 pages in
+2.6.0 is what happens to any Divi site moved by WXR import, not a corner case.
+That run also found the census's own miscount, fixed in 2.9.1, and one page the
+concurrency guard refused to convert because the importer was still rewriting
+its image URLs — the guard behaving correctly, and the page left intact.
 **Remaining caveat:** the corpus is real but narrow — 13 of the 58 supported
 modules. It is section, row, column, text, image, button and gallery, with a
 little video, divider, signup and audio. **Tabs, accordions, toggles, pricing

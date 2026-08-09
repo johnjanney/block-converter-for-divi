@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.9.0
+Stable tag: 2.9.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -174,6 +174,13 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.9.1 =
+* Fixed the new conversion check reporting images as missing when they were not.
+  A photo used both on its own and inside a gallery on the same page was counted
+  twice on the way in and once on the way out, so the page was told it had lost
+  one. Nothing was ever actually lost — the warning was wrong, not the
+  conversion.
 
 = 2.9.0 =
 * Every conversion is now counted in and counted out — words, links, images and
@@ -421,6 +428,12 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.9.1 =
+Fixes a false alarm in 2.9.0's new conversion check: a page using the same photo
+standalone and in a gallery was wrongly told it had lost an image. Your pages
+were fine; the warning was not. Nothing else changes, and pages converted with
+2.9.0 do not need reconverting.
 
 = 2.9.0 =
 Nothing changes about pages you have already converted. What this adds is a

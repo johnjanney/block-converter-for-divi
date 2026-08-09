@@ -100,6 +100,30 @@ _Nothing yet._
 
 ---
 
+## [2.9.1] — 2026-08-09
+
+### Fixed
+
+- The content census reported images missing that were not. It counted a page's
+  images two different ways — a set of addresses on the way in, plus the number
+  of attachment IDs each gallery listed, against a single deduplicated set on
+  the way out. A photo used *both* on its own and inside a gallery on the same
+  page therefore counted twice going in and once coming out, and the page was
+  told it had lost an image.
+
+  Seven pages on a real site, each reported as "1 of N missing", every one of
+  them wrong. Both sides now count gallery contents the same way.
+
+  It could not have shown up before it shipped: the offline suite gives every
+  attachment its own address, so the two never collide there. It needed a real
+  media library, which is to say it needed 2.9.0 to be run against one.
+
+  A census that cries wolf is worse than no census, because the whole value of
+  the thing is that a warning from it means something. This is a defect in the
+  release that introduced it, and it is the only one that run found.
+
+---
+
 ## [2.9.0] — 2026-08-09
 
 Both of the last two releases were found by counting a real corpus by hand.
