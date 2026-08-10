@@ -45,10 +45,16 @@
  *
  *   wp eval-file bin/diagnose-encoding.php
  *
- * Without WP-CLI, install it like any other plugin — this file carries a plugin
- * header, so it can sit straight in wp-content/plugins/ or be uploaded as a zip
- * — activate it, and go to Tools -> Divi quote-encoding diagnostic. Delete it
- * when you are done.
+ * Without WP-CLI, zip this file inside a folder and install it through
+ * Plugins -> Add New -> Upload Plugin, then activate it and go to
+ * Tools -> Divi quote-encoding diagnostic. Delete it when you are done.
+ *
+ * Prefer that over copying the file in over SFTP, and not for any reason to do
+ * with the file: the uploader installs to whichever site you are logged into,
+ * and a file copy does not. Someone chasing this spent three rounds on a file
+ * that was never arriving, because it was going to a different site of theirs
+ * and every symptom looked like a bad download. The uploader cannot make that
+ * mistake.
  *
  * The menu item is deliberate. /wp-admin/?bcfd-diagnose=1 also works, but that
  * is the dashboard's own address, so a file that never loaded and a file that
