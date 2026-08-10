@@ -150,7 +150,18 @@ function bcfd_diagnose_encoding() {
 
     $found = [];
 
-    foreach ( [ 'content_save_pre', 'wp_insert_post_data', 'pre_post_content' ] as $hook ) {
+    // The last two are the importer's own, and they are the reason this list
+    // grew: on the site this was written for, an ordinary save stored the
+    // content unchanged while an import did not. Whatever is responsible only
+    // runs during an import, and these are the two places a plugin can reach in
+    // and alter a post on its way through one.
+    foreach ( [
+        'content_save_pre',
+        'wp_insert_post_data',
+        'pre_post_content',
+        'wp_import_post_data_raw',
+        'wp_import_post_data_processed',
+    ] as $hook ) {
         if ( empty( $wp_filter[ $hook ] ) ) {
             printf( "%s — no callbacks\n", $hook );
             continue;
@@ -168,8 +179,16 @@ function bcfd_diagnose_encoding() {
                 // rather than everything downstream of it.
                 $after = $probe;
                 try {
-                    if ( 'wp_insert_post_data' === $hook ) {
-                        $data  = [ 'post_content' => $probe, 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'probe' ];
+                    // These three hand round a post array rather than a string.
+                    if ( in_array( $hook, [ 'wp_insert_post_data', 'wp_import_post_data_raw', 'wp_import_post_data_processed' ], true ) ) {
+                        $data = [
+                            'post_content' => $probe,
+                            'post_type'    => 'post',
+                            'post_status'  => 'publish',
+                            'post_title'   => 'probe',
+                            'post_name'    => 'probe',
+                            'post_author'  => get_current_user_id(),
+                        ];
                         $out   = call_user_func_array( $callback, array_slice( [ $data, $data, $data, true ], 0, max( 1, (int) $entry['accepted_args'] ) ) );
                         $after = is_array( $out ) && isset( $out['post_content'] ) ? $out['post_content'] : $probe;
                     } else {
