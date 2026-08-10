@@ -1,5 +1,11 @@
 <?php
 /**
+ * Plugin Name: Divi quote-encoding diagnostic
+ * Description: One-off diagnostic. Activate, then visit Tools → Divi quote-encoding diagnostic. Delete when finished. Does nothing until an administrator asks it to.
+ * Version:     1.0.0
+ * Author:      John Janney
+ * License:     GPL-2.0-or-later
+ *
  * Find what turns a Divi shortcode's attribute quotes into `&quot;` (Q43).
  *
  * Some sites store `[et_pb_section fb_built=&quot;1&quot;]` where the export
@@ -51,8 +57,36 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
-    // Loaded as a plugin rather than run as a script. Do nothing until an
-    // administrator asks, and then print where they will see it.
+    // Loaded as a plugin rather than run as a script. Nothing happens until an
+    // administrator asks for it.
+    //
+    // There is a menu item as well as a URL because a URL cannot tell you
+    // whether the file loaded: /wp-admin/?bcfd-diagnose=1 is the dashboard's own
+    // address, so a plugin that never loaded and a plugin that ignored you look
+    // identical from the browser. If the menu item is under Tools, it loaded.
+    add_action( 'admin_menu', function () {
+        add_management_page(
+            __( 'Divi quote-encoding diagnostic', 'block-converter-for-divi' ),
+            __( 'Divi quote-encoding diagnostic', 'block-converter-for-divi' ),
+            'manage_options',
+            'bcfd-diagnose',
+            function () {
+                ob_start();
+                bcfd_diagnose_encoding();
+                $report = ob_get_clean();
+
+                echo '<div class="wrap">';
+                echo '<h1>' . esc_html__( 'Divi quote-encoding diagnostic', 'block-converter-for-divi' ) . '</h1>';
+                echo '<p>' . esc_html__( 'Each row is a callback that runs when a post is saved, with the plugin it came from. A row marked MATCH encodes a shortcode attribute while leaving real HTML alone, which is the behaviour being hunted. Copy all of this and send it on. Nothing here changes your site — delete this plugin when you are done with it.', 'block-converter-for-divi' ) . '</p>';
+                echo '<textarea readonly rows="28" style="width:100%;font-family:monospace;font-size:12px;" onclick="this.select()">';
+                echo esc_textarea( $report );
+                echo '</textarea>';
+                echo '</div>';
+            }
+        );
+    } );
+
+    // The plain-text URL still works, for anyone who would rather curl it.
     add_action( 'admin_init', function () {
         if ( ! isset( $_GET['bcfd-diagnose'] ) || ! current_user_can( 'manage_options' ) ) {
             return;
