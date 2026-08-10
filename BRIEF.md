@@ -29,14 +29,25 @@ the parser on purpose, because a counter built on the parser would have been
 blind to the `&quot;` defect in exactly the way the parser was. It found a real
 loss on its first run over the corpus (a video module carrying two sources kept
 one silently) and two more in the fixture set, and reports none now.
-**A third run, on a freshly imported site rather than a restored one, settled
-where the `&quot;` encoding comes from: the WordPress WXR importer** (Q36). The
-original export holds 20,148 plain `="` pairs and none encoded; the database
-after import held 10,098 encoded. So the defect that voided 246 of 247 pages in
-2.6.0 is what happens to any Divi site moved by WXR import, not a corner case.
-That run also found the census's own miscount, fixed in 2.9.1, and one page the
-concurrency guard refused to convert because the importer was still rewriting
-its image URLs — the guard behaving correctly, and the page left intact.
+**A third run, on a freshly imported site rather than a restored one**, found the
+census's own miscount, fixed in 2.9.1, and one page the concurrency guard refused
+to convert because the importer was still rewriting its image URLs — the guard
+behaving correctly, and the page left intact. It also appeared to settle where
+the `&quot;` encoding comes from, and that conclusion was wrong: see below.
+**A fourth run — the corpus converted end to end against wp-env rather than a
+live site, by `tests/live/corpus-run.php`** — is the cleanest so far. All 247
+pages converted with no failures, every content word and all 1,428 source URLs
+preserved, 286 of 286 converted pages valid against core's own parser, and no
+page left holding a shortcode.
+It also disproved the answer the third run had suggested. The `&quot;` encoding
+was attributed to the WordPress WXR importer; importing the same export into a
+clean WordPress with only this plugin and the importer active produces **none**,
+and KSES, the `content_save_pre` chain and a save without `unfiltered_html` all
+leave the quotes alone. Something on that particular site does it — Divi is the
+obvious suspect — and until that is established the honest position is that the
+parser tolerates the encoding wherever it comes from, which it has since 2.7.0.
+The wrong conclusion is recorded rather than quietly removed: Q36 carries the
+correction, and Q43 is the question that replaces it.
 **Remaining caveat:** the corpus is real but narrow — 13 of the 58 supported
 modules. It is section, row, column, text, image, button and gallery, with a
 little video, divider, signup and audio. **Tabs, accordions, toggles, pricing

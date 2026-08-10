@@ -268,6 +268,20 @@ wp_delete_post( $post_id, true );
 // shortcodes, so `LIKE '%[et_pb_%'` cannot see one: those pages were listed
 // nowhere, converted never, and left needing Divi with nothing said about it.
 
+// Measured before anything is seeded, and asserted as a delta afterwards.
+// These used to be absolute — "one Divi 5 page exists" — which held only on an
+// empty site and failed the moment the environment had real content in it:
+// importing a 247-page corpus to convert it turned five of these red at once,
+// none of them for a reason anyone would want to hear about. A check that only
+// passes on a pristine database is a check that will be ignored on a real one.
+$scan_baseline = [];
+foreach ( [ 'all', 'post' ] as $scan_filter ) {
+    delete_transient( 'd2g_divi5_count_' . md5( wp_json_encode( [ $scan_filter ] ) ) );
+    delete_transient( 'd2g_scan_count_' . md5( wp_json_encode( [ $scan_filter ] ) ) );
+    $before = d2g_call( 'd2g_scan_pages', [ 'per_page' => '1', 'paged' => 1, 'post_type' => $scan_filter ] );
+    $scan_baseline[ $scan_filter ] = (int) ( $before['data']['divi5_count'] ?? 0 );
+}
+
 $scan_ids = [
     'shortcode' => d2g_make_post( '[et_pb_text]<p>Shortcode</p>[/et_pb_text]', 'zz scan shortcode' ),
     // A shortcode page carrying a Divi 5 placeholder comment. Convertible, and
@@ -281,7 +295,14 @@ foreach ( [ 'all', 'post' ] as $scan_filter ) {
     delete_transient( 'd2g_scan_count_' . md5( wp_json_encode( [ $scan_filter ] ) ) );
 }
 
-$scan = d2g_call( 'd2g_scan_pages', [ 'per_page' => '100', 'paged' => 1, 'post_type' => 'all' ] );
+// Newest first, so the pages just seeded are on the first page of results
+// whatever else the site holds. Ordered by title — the default — they sort
+// under "zz" and land on the last page of a site with any real content, which
+// is exactly how these came to fail.
+$scan = d2g_call( 'd2g_scan_pages', [
+    'per_page' => '100', 'paged' => 1, 'post_type' => 'all',
+    'orderby'  => 'date', 'order' => 'desc',
+] );
 d2g_ok( 'the scan endpoint answers', ! empty( $scan['success'] ) );
 
 $scan_titles = array_column( $scan['data']['pages'] ?? [], 'title' );
@@ -291,16 +312,18 @@ d2g_ok( 'a page holding both shortcodes and Divi 5 blocks is listed',
 d2g_ok( 'a Divi 5 page is not listed as convertible',
     ! in_array( 'zz scan divi5', $scan_titles, true ) );
 d2g_ok( 'a Divi 5 page is counted and reported rather than passed over silently',
-    1 === (int) ( $scan['data']['divi5_count'] ?? -1 ),
-    sprintf( 'divi5_count=%s', var_export( $scan['data']['divi5_count'] ?? null, true ) ) );
+    (int) ( $scan['data']['divi5_count'] ?? -1 ) === $scan_baseline['all'] + 1,
+    sprintf( 'divi5_count=%s, baseline=%d',
+        var_export( $scan['data']['divi5_count'] ?? null, true ), $scan_baseline['all'] ) );
 
 $scan_page2 = d2g_call( 'd2g_scan_pages', [ 'per_page' => '1', 'paged' => 2, 'post_type' => 'all' ] );
 d2g_ok( 'the Divi 5 count survives paging on its cache',
-    1 === (int) ( $scan_page2['data']['divi5_count'] ?? -1 ) );
+    (int) ( $scan_page2['data']['divi5_count'] ?? -1 ) === $scan_baseline['all'] + 1 );
 
+// The seeded Divi 5 page is a `page`, so filtering to `post` must not see it.
 $scan_posts = d2g_call( 'd2g_scan_pages', [ 'per_page' => '100', 'paged' => 1, 'post_type' => 'post' ] );
 d2g_ok( 'the post-type filter narrows the Divi 5 count too',
-    0 === (int) ( $scan_posts['data']['divi5_count'] ?? -1 ) );
+    (int) ( $scan_posts['data']['divi5_count'] ?? -1 ) === $scan_baseline['post'] );
 
 foreach ( $scan_ids as $scan_id ) {
     wp_delete_post( $scan_id, true );
