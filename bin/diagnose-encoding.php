@@ -27,9 +27,21 @@
  *
  * Read-only. It creates nothing, saves nothing, and changes no option.
  *
- * Usage, on the site where the encoding happens:
+ * Two ways to run it, on the site where the encoding happens.
+ *
+ * With WP-CLI, which is the tidy one — nothing is installed and nothing is left
+ * behind:
  *
  *   wp eval-file bin/diagnose-encoding.php
+ *
+ * Without WP-CLI, drop this file into wp-content/mu-plugins/ and load
+ *
+ *   https://your-site/wp-admin/?bcfd-diagnose=1
+ *
+ * as an administrator, then delete the file. It reports in the admin footer.
+ * The guard below is why that is safe to do on a live site: loaded as a plugin
+ * this file runs nothing at all unless an administrator asks for it by hand, so
+ * a copy left in mu-plugins by accident costs a visitor nothing.
  *
  * @package block-converter-for-divi
  */
@@ -38,13 +50,23 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Shortcode attributes in text, plus real HTML with attributes of its own. The
-// two have to be told apart: the reported behaviour encodes the first and leaves
-// the second alone.
-$probe = '[et_pb_section fb_built="1" custom_padding="0px|||||"]'
-    . '[et_pb_text _builder_version="4.16"]<p><a href="https://example.com/a">link</a></p>'
-    . '<p style="text-align: center;">middle</p>[/et_pb_text]'
-    . '[et_pb_button button_url="https://example.com/go" button_text="Go" /][/et_pb_section]';
+if ( ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+    // Loaded as a plugin rather than run as a script. Do nothing until an
+    // administrator asks, and then print where they will see it.
+    add_action( 'admin_init', function () {
+        if ( ! isset( $_GET['bcfd-diagnose'] ) || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        header( 'Content-Type: text/plain; charset=utf-8' );
+        bcfd_diagnose_encoding();
+        exit;
+    } );
+
+    return;
+}
+
+bcfd_diagnose_encoding();
 
 /**
  * Does this look like the encoding being hunted?
@@ -105,68 +127,81 @@ function bcfd_diag_name( $callback ) {
     return '(callable)';
 }
 
-global $wp_filter;
+/**
+ * The whole report. A function so the file can be either a script or a plugin.
+ */
+function bcfd_diagnose_encoding() {
+    // Shortcode attributes in text, plus real HTML with attributes of its own. The
+    // two have to be told apart: the reported behaviour encodes the first and leaves
+    // the second alone.
+    $probe = '[et_pb_section fb_built="1" custom_padding="0px|||||"]'
+        . '[et_pb_text _builder_version="4.16"]<p><a href="https://example.com/a">link</a></p>'
+        . '<p style="text-align: center;">middle</p>[/et_pb_text]'
+        . '[et_pb_button button_url="https://example.com/go" button_text="Go" /][/et_pb_section]';
 
-printf( "WordPress %s, PHP %s\n", get_bloginfo( 'version' ), PHP_VERSION );
-printf( "active plugins: %d\n\n", count( (array) get_option( 'active_plugins', [] ) ) );
+    global $wp_filter;
 
-$found = [];
+    printf( "WordPress %s, PHP %s\n", get_bloginfo( 'version' ), PHP_VERSION );
+    printf( "active plugins: %d\n\n", count( (array) get_option( 'active_plugins', [] ) ) );
 
-foreach ( [ 'content_save_pre', 'wp_insert_post_data', 'pre_post_content' ] as $hook ) {
-    if ( empty( $wp_filter[ $hook ] ) ) {
-        printf( "%s — no callbacks\n", $hook );
-        continue;
-    }
+    $found = [];
 
-    printf( "%s\n", $hook );
+    foreach ( [ 'content_save_pre', 'wp_insert_post_data', 'pre_post_content' ] as $hook ) {
+        if ( empty( $wp_filter[ $hook ] ) ) {
+            printf( "%s — no callbacks\n", $hook );
+            continue;
+        }
 
-    foreach ( $wp_filter[ $hook ]->callbacks as $priority => $callbacks ) {
-        foreach ( $callbacks as $entry ) {
-            $callback = $entry['function'];
-            $name     = bcfd_diag_name( $callback );
-            $where    = bcfd_diag_source( $callback );
+        printf( "%s\n", $hook );
 
-            // Applied to the probe on its own, so a match names one callback
-            // rather than everything downstream of it.
-            $after = $probe;
-            try {
-                if ( 'wp_insert_post_data' === $hook ) {
-                    $data  = [ 'post_content' => $probe, 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'probe' ];
-                    $out   = call_user_func_array( $callback, array_slice( [ $data, $data, $data, true ], 0, max( 1, (int) $entry['accepted_args'] ) ) );
-                    $after = is_array( $out ) && isset( $out['post_content'] ) ? $out['post_content'] : $probe;
-                } else {
-                    $after = call_user_func( $callback, $probe );
+        foreach ( $wp_filter[ $hook ]->callbacks as $priority => $callbacks ) {
+            foreach ( $callbacks as $entry ) {
+                $callback = $entry['function'];
+                $name     = bcfd_diag_name( $callback );
+                $where    = bcfd_diag_source( $callback );
+
+                // Applied to the probe on its own, so a match names one callback
+                // rather than everything downstream of it.
+                $after = $probe;
+                try {
+                    if ( 'wp_insert_post_data' === $hook ) {
+                        $data  = [ 'post_content' => $probe, 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'probe' ];
+                        $out   = call_user_func_array( $callback, array_slice( [ $data, $data, $data, true ], 0, max( 1, (int) $entry['accepted_args'] ) ) );
+                        $after = is_array( $out ) && isset( $out['post_content'] ) ? $out['post_content'] : $probe;
+                    } else {
+                        $after = call_user_func( $callback, $probe );
+                    }
+                } catch ( Throwable $e ) {
+                    printf( "  %3d  %-46s %s\n", $priority, $name, '(threw: ' . $e->getMessage() . ')' );
+                    continue;
                 }
-            } catch ( Throwable $e ) {
-                printf( "  %3d  %-46s %s\n", $priority, $name, '(threw: ' . $e->getMessage() . ')' );
-                continue;
-            }
 
-            $verdict = is_string( $after ) ? bcfd_diag_fingerprint( $probe, $after ) : '';
-            printf( "  %3d  %-46s %s\n", $priority, substr( $name, 0, 46 ), $where );
+                $verdict = is_string( $after ) ? bcfd_diag_fingerprint( $probe, $after ) : '';
+                printf( "  %3d  %-46s %s\n", $priority, substr( $name, 0, 46 ), $where );
 
-            if ( '' !== $verdict ) {
-                printf( "       ^^ %s\n", $verdict );
-                $found[] = $name . ' — ' . $where . ' — ' . $verdict;
+                if ( '' !== $verdict ) {
+                    printf( "       ^^ %s\n", $verdict );
+                    $found[] = $name . ' — ' . $where . ' — ' . $verdict;
+                }
             }
         }
+        echo "\n";
     }
-    echo "\n";
-}
 
-echo str_repeat( '-', 72 ), "\n";
+    echo str_repeat( '-', 72 ), "\n";
 
-if ( $found ) {
-    echo "Candidates:\n";
-    foreach ( $found as $line ) {
-        echo "  $line\n";
+    if ( $found ) {
+        echo "Candidates:\n";
+        foreach ( $found as $line ) {
+            echo "  $line\n";
+        }
+    } else {
+        echo "No single save filter reproduced it.\n\n";
+        echo "That leaves the encoding happening somewhere this script cannot reach by\n";
+        echo "calling filters one at a time — inside the importer's own write, in an\n";
+        echo "action rather than a filter, or in a code path that only runs during an\n";
+        echo "admin request. The next step is to import two or three posts with the\n";
+        echo "browser importer and check post_content immediately afterwards, then\n";
+        echo "repeat with plugins deactivated in halves.\n";
     }
-} else {
-    echo "No single save filter reproduced it.\n\n";
-    echo "That leaves the encoding happening somewhere this script cannot reach by\n";
-    echo "calling filters one at a time — inside the importer's own write, in an\n";
-    echo "action rather than a filter, or in a code path that only runs during an\n";
-    echo "admin request. The next step is to import two or three posts with the\n";
-    echo "browser importer and check post_content immediately afterwards, then\n";
-    echo "repeat with plugins deactivated in halves.\n";
 }
