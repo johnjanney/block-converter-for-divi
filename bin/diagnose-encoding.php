@@ -285,11 +285,165 @@ function bcfd_diagnose_encoding() {
         return;
     }
 
-    echo "\n  An ordinary save stores the content unchanged, so whatever encodes it\n";
-    echo "  does not run on a normal write. That points at the import itself.\n";
-    echo "  Next: import two or three posts with the browser importer, then look at\n";
-    echo "  post_content immediately afterwards. If it is encoded there, deactivate\n";
-    echo "  plugins in halves and re-import between each pass.\n";
+    // ---- an actual import ------------------------------------------------
+    //
+    // Everything above has come back clean on the affected site: no save
+    // filter, no import filter, no parser, and an ordinary save that stores the
+    // content untouched. Yet importing that site's own export produces 10,098
+    // encoded delimiters, every time, to the byte.
+    //
+    // So run the importer. Not a filter of it, not a parse of it — the real
+    // thing, on a two-post file built here, with the row read back out of the
+    // database afterwards. If this comes back encoded, the difference lives in
+    // the import run and a plugin bisect will find it in a few passes. If it
+    // comes back clean, the difference is in the file being imported rather
+    // than in the site, and that is worth knowing too.
+    echo "\n";
+    echo "Running a real import of a two-post file:\n";
+
+    if ( ! class_exists( 'WP_Import' ) ) {
+        // The importer plugin returns immediately unless WP_LOAD_IMPORTERS is
+        // defined, which normally only happens on Tools → Import. Defining it
+        // here is what the import screen does, and is why requiring the plugin
+        // file directly does nothing without it.
+        if ( ! defined( 'WP_LOAD_IMPORTERS' ) ) {
+            define( 'WP_LOAD_IMPORTERS', true );
+        }
+
+        // Only the classes, never the plugin's main file. That file declares
+        // wordpress_importer_init() and registers the importer, so pulling it
+        // in a second time is a redeclaration fatal — and requiring it *once*
+        // does nothing when WordPress has already included it. Loading the
+        // pieces directly avoids both, and is the same set the main file loads.
+        $dir = WP_PLUGIN_DIR . '/wordpress-importer';
+
+        if ( is_dir( $dir ) ) {
+            require_once ABSPATH . 'wp-admin/includes/import.php';
+
+            if ( ! class_exists( 'WP_Importer' ) && file_exists( ABSPATH . 'wp-admin/includes/class-wp-importer.php' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/class-wp-importer.php';
+            }
+            if ( file_exists( $dir . '/compat.php' ) ) {
+                require_once $dir . '/compat.php';
+            }
+            if ( ! class_exists( 'WordPress\XML\XMLProcessor' ) && file_exists( $dir . '/php-toolkit/load.php' ) ) {
+                require_once $dir . '/php-toolkit/load.php';
+            }
+            foreach ( [
+                'class-wxr-parser',
+                'class-wxr-parser-simplexml',
+                'class-wxr-parser-xml',
+                'class-wxr-parser-regex',
+                'class-wxr-parser-xml-processor',
+            ] as $parser_file ) {
+                if ( file_exists( $dir . '/parsers/' . $parser_file . '.php' ) ) {
+                    require_once $dir . '/parsers/' . $parser_file . '.php';
+                }
+            }
+            if ( file_exists( $dir . '/parsers.php' ) && ! class_exists( 'WXR_Parser' ) ) {
+                require_once $dir . '/parsers.php';
+            }
+            if ( file_exists( $dir . '/class-wp-import.php' ) ) {
+                require_once $dir . '/class-wp-import.php';
+            }
+        }
+    }
+
+    if ( ! class_exists( 'WP_Import' ) ) {
+        echo "  the WordPress Importer plugin is not installed, so this step was skipped.\n";
+        echo "  Install and activate it, then run this page again.\n";
+        return;
+    }
+
+    $author = wp_get_current_user()->user_login;
+    $item   = function ( $id, $slug ) use ( $probe, $author ) {
+        return '<item><title>bcfd import probe ' . $id . '</title>'
+            . '<link>http://example.com/' . $slug . '</link>'
+            . '<dc:creator><![CDATA[' . $author . ']]></dc:creator>'
+            . '<content:encoded><![CDATA[' . $probe . ']]></content:encoded>'
+            . '<excerpt:encoded><![CDATA[]]></excerpt:encoded>'
+            . '<wp:post_id>' . ( 990000 + $id ) . '</wp:post_id>'
+            . '<wp:post_date>2026-01-01 00:00:00</wp:post_date>'
+            . '<wp:post_name>' . $slug . '</wp:post_name>'
+            . '<wp:status>publish</wp:status><wp:post_type>post</wp:post_type>'
+            . '<wp:postmeta><wp:meta_key>_et_pb_use_builder</wp:meta_key><wp:meta_value><![CDATA[on]]></wp:meta_value></wp:postmeta>'
+            . '</item>';
+    };
+
+    $wxr = '<?xml version="1.0" encoding="UTF-8" ?>' . "\n"
+        . '<rss version="2.0"'
+        . ' xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"'
+        . ' xmlns:content="http://purl.org/rss/1.0/modules/content/"'
+        . ' xmlns:wfw="http://wellformedweb.org/CommentAPI/"'
+        . ' xmlns:dc="http://purl.org/dc/elements/1.1/"'
+        . ' xmlns:wp="http://wordpress.org/export/1.2/">'
+        . '<channel><title>probe</title><link>http://example.com</link>'
+        . '<wp:wxr_version>1.2</wp:wxr_version>'
+        . '<wp:base_site_url>http://example.com</wp:base_site_url>'
+        . '<wp:base_blog_url>http://example.com</wp:base_blog_url>'
+        . $item( 1, 'bcfd-import-probe-1' )
+        . $item( 2, 'bcfd-import-probe-2' )
+        . '</channel></rss>';
+
+    $wxr_file = wp_tempnam( 'bcfd-import-probe.xml' );
+    file_put_contents( $wxr_file, $wxr );
+
+    $importer                    = new WP_Import();
+    $importer->fetch_attachments = false;
+
+    ob_start();
+    try {
+        $importer->import( $wxr_file );
+    } catch ( Throwable $e ) {
+        ob_end_clean();
+        @unlink( $wxr_file );
+        echo '  the import threw: ' . $e->getMessage() . "\n";
+        return;
+    }
+    ob_end_clean();
+    @unlink( $wxr_file );
+
+    $imported = $wpdb->get_col(
+        "SELECT ID FROM {$wpdb->posts} WHERE post_name IN ('bcfd-import-probe-1','bcfd-import-probe-2')"
+    );
+
+    if ( ! $imported ) {
+        echo "  the import created nothing, so this step proved nothing.\n";
+        return;
+    }
+
+    $import_encoded = false;
+    $import_html    = true;
+    foreach ( $imported as $id ) {
+        $row = (string) $wpdb->get_var( $wpdb->prepare( "SELECT post_content FROM {$wpdb->posts} WHERE ID = %d", $id ) );
+        if ( false !== strpos( $row, 'fb_built=&quot;' ) ) {
+            $import_encoded = true;
+        }
+        if ( false === strpos( $row, 'href="https://example.com/a"' ) ) {
+            $import_html = false;
+        }
+        wp_delete_post( $id, true );
+    }
+
+    printf( "  imported %d post(s), then deleted them\n", count( $imported ) );
+    printf( "  shortcode attributes encoded after import : %s\n", $import_encoded ? 'YES' : 'no' );
+    printf( "  real HTML attributes left alone           : %s\n", $import_html ? 'yes' : 'NO' );
+
+    if ( $import_encoded ) {
+        echo "\n  Reproduced. The import encodes and an ordinary save does not, on this\n";
+        echo "  site, with a file built here that definitely went in with plain quotes.\n";
+        echo "  Deactivate half the plugins, run this page again, and repeat on\n";
+        echo "  whichever half still reproduces. Five or six passes will name it.\n";
+        return;
+    }
+
+    echo "\n  Not reproduced. A real import of a file that definitely contained plain\n";
+    echo "  quotes stored plain quotes. That points away from this site's plugins and\n";
+    echo "  towards the file being imported — worth checking the raw bytes of the\n";
+    echo "  export for &quot; inside its CDATA sections rather than trusting a parser's\n";
+    echo "  view of it.\n";
+    return;
+
 }
 endif;
 
