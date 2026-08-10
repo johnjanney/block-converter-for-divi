@@ -31,7 +31,12 @@
  * inside real HTML tags are not, so whatever does it is HTML-aware. That is the
  * fingerprint this script looks for.
  *
- * Read-only. It creates nothing, saves nothing, and changes no option.
+ * Almost read-only, and the exception is stated because it matters: it saves
+ * one draft post called "bcfd diagnostic probe" and force-deletes it again a
+ * line later. That is the whole point of the second half — walking filters only
+ * finds things that are filters, and a plugin that re-saves on save_post, or
+ * writes with $wpdb, is invisible to that. Nothing else is touched: no option,
+ * no existing post, no setting.
  *
  * Two ways to run it, on the site where the encoding happens.
  *
@@ -190,19 +195,82 @@ function bcfd_diagnose_encoding() {
     echo str_repeat( '-', 72 ), "\n";
 
     if ( $found ) {
-        echo "Candidates:\n";
+        echo "Candidates from the filter walk:\n";
         foreach ( $found as $line ) {
             echo "  $line\n";
         }
     } else {
-        echo "No single save filter reproduced it.\n\n";
-        echo "That leaves the encoding happening somewhere this script cannot reach by\n";
-        echo "calling filters one at a time — inside the importer's own write, in an\n";
-        echo "action rather than a filter, or in a code path that only runs during an\n";
-        echo "admin request. The next step is to import two or three posts with the\n";
-        echo "browser importer and check post_content immediately afterwards, then\n";
-        echo "repeat with plugins deactivated in halves.\n";
+        echo "No single save filter reproduced it.\n";
     }
+
+    // ---- the write itself -------------------------------------------------
+    //
+    // Walking filters one at a time only sees things that *are* filters. A
+    // plugin that hooks save_post and calls wp_update_post again, or writes with
+    // $wpdb directly, is invisible to it — and on the site this was written for,
+    // the walk came back with nothing but core.
+    //
+    // So do the actual thing: save a post the way the importer does, then read
+    // the row straight out of the database rather than through get_post(), which
+    // would hand back a cached copy of what we just passed in. Whatever the
+    // stored bytes are, that is the answer.
+    echo "\n";
+    echo "Saving a probe post and reading the row back:\n";
+
+    $probe_id = wp_insert_post( [
+        'post_title'   => 'bcfd diagnostic probe (safe to delete)',
+        'post_content' => wp_slash( $probe ),
+        'post_status'  => 'draft',
+        'post_type'    => 'post',
+    ], true );
+
+    if ( is_wp_error( $probe_id ) || ! $probe_id ) {
+        echo "  could not create a probe post: "
+            . ( is_wp_error( $probe_id ) ? $probe_id->get_error_message() : 'unknown' ) . "\n";
+        return;
+    }
+
+    global $wpdb;
+    $stored = $wpdb->get_var( $wpdb->prepare( "SELECT post_content FROM {$wpdb->posts} WHERE ID = %d", $probe_id ) );
+
+    wp_delete_post( $probe_id, true );
+
+    $stored_encoded = ( false !== strpos( (string) $stored, 'fb_built=&quot;' ) );
+    $stored_html    = ( false !== strpos( (string) $stored, 'href="https://example.com/a"' ) );
+
+    printf( "  shortcode attributes encoded in the database : %s\n", $stored_encoded ? 'YES' : 'no' );
+    printf( "  real HTML attributes left alone              : %s\n", $stored_html ? 'yes' : 'NO' );
+
+    if ( $stored_encoded && $stored_html ) {
+        echo "\n  This is it. An ordinary save reproduces the encoding, so it is not the\n";
+        echo "  importer — it is something on this site that runs on every write. The\n";
+        echo "  hooks below are where to look, and deactivating those plugins in halves\n";
+        echo "  while re-running this page will name it in a few passes.\n\n";
+
+        foreach ( [ 'save_post', 'wp_insert_post', 'wp_after_insert_post', 'edit_post' ] as $hook ) {
+            if ( empty( $wp_filter[ $hook ] ) ) {
+                continue;
+            }
+            printf( "  %s\n", $hook );
+            foreach ( $wp_filter[ $hook ]->callbacks as $priority => $callbacks ) {
+                foreach ( $callbacks as $entry ) {
+                    $where = bcfd_diag_source( $entry['function'] );
+                    // Core is not what is being hunted; a plugin is.
+                    if ( 0 === strpos( $where, 'wp-includes' ) || 0 === strpos( $where, 'wp-admin' ) ) {
+                        continue;
+                    }
+                    printf( "    %3d  %-40s %s\n", $priority, substr( bcfd_diag_name( $entry['function'] ), 0, 40 ), $where );
+                }
+            }
+        }
+        return;
+    }
+
+    echo "\n  An ordinary save stores the content unchanged, so whatever encodes it\n";
+    echo "  does not run on a normal write. That points at the import itself.\n";
+    echo "  Next: import two or three posts with the browser importer, then look at\n";
+    echo "  post_content immediately afterwards. If it is encoded there, deactivate\n";
+    echo "  plugins in halves and re-import between each pass.\n";
 }
 endif;
 
@@ -255,7 +323,7 @@ if ( $bcfd_diag_is_plugin || ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 
                 echo '<div class="wrap">';
                 echo '<h1>' . esc_html__( 'Divi quote-encoding diagnostic', 'block-converter-for-divi' ) . '</h1>';
-                echo '<p>' . esc_html__( 'Each row is a callback that runs when a post is saved, with the plugin it came from. A row marked MATCH encodes a shortcode attribute while leaving real HTML alone, which is the behaviour being hunted. Copy all of this and send it on. Nothing here changes your site — delete this plugin when you are done with it.', 'block-converter-for-divi' ) . '</p>';
+                echo '<p>' . esc_html__( 'Each row is a callback that runs when a post is saved, with the plugin it came from. A row marked MATCH encodes a shortcode attribute while leaving real HTML alone, which is the behaviour being hunted. Copy all of this and send it on. This saves one draft post and deletes it again; nothing else on your site is touched. Delete this plugin when you are done with it.', 'block-converter-for-divi' ) . '</p>';
                 echo '<textarea readonly rows="28" style="width:100%;font-family:monospace;font-size:12px;" onclick="this.select()">';
                 echo esc_textarea( $report );
                 echo '</textarea>';
