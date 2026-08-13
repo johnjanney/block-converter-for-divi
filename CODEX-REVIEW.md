@@ -1,619 +1,531 @@
 # Codex Repository Review
 
-**Review date:** 2026-08-05
+**Review date:** 2026-08-12
 
-**Reviewed local revision:** `86106f6` (`docs/ci-guarantees`)
+**Reviewed revision:** `b751615f5b261322e58951be0ff5a60c0f02b39f` (`main`)
 
-**Equivalent remote `main` revision:** `7dca2f1`
+**Reviewed tree:** `98ac284fa70e67ffd86e112f881ec0719b6576a8`
 
-**Reviewed tree:** `123940f4d73c17474c176e51ac10fa84be586d1a`
+**Reviewed release:** `2.9.3`
 
-**Reviewed release:** `v2.2.0`
-
-**Response under review:** `CODEX-REVIEW-RESPONSE.md`
-
-The local revision and remote `main` have the same Git tree. Thus, this review
-applies to the current remote `main` source even though the local branch has the
-pull-request commit rather than the merge commit.
+**Primary change records:** [`CODEX-REVIEW-RESPONSE.md`](CODEX-REVIEW-RESPONSE.md) and [`CHANGELOG.md`](CHANGELOG.md)
 
 ## Executive assessment
 
-Version 2.2.0 is a large improvement over version 2.1.0. The response fixed the
-specific N-01 through N-05 and N-09 through N-12 probes. Later commits also
-added the live WordPress, browser, multisite, and version-floor tests that the
-response says were still missing. The current source has good separation of
-responsibilities, strong endpoint authorization, a useful layered converter
-suite, an atomic plugin lock, source-version checks, exact builder-meta
-snapshots, and a KSES refusal path.
+The project is a well-structured, admin-only migration tool. It scans WordPress
+posts for Divi shortcodes. It previews a conversion. It then replaces the Divi
+source with native WordPress block markup. It makes a mandatory backup and can
+restore that backup. The code does not load on normal front-end requests
+([`block-converter-for-divi.php`, lines 18-37](block-converter-for-divi.php#L18)).
 
-The plugin is not yet a lossless automatic migration tool. A fresh probe found
-that some structural renderers silently discard loose text and unexpected child
-modules. The write path can still overwrite an external edit that occurs after
-its source check. The block-attribute serializer does not use WordPress's safe
-HTML-comment encoding. The scan still performs two leading-wildcard table
-scans. The test scripts also warn, but do not fail, when WordPress writes to its
-debug log.
+The code quality and test depth are high for a small plugin. The fresh offline
+gate passed 212 tests and checked 566 blocks. A fresh live WordPress run passed
+50 tests, stored 193 conversions, validated 557 blocks, and wrote no debug-log
+entry. The code has clear component boundaries, centralized block construction,
+strict AJAX authorization, mandatory backups, a restore path, KSES-loss checks,
+and broad fixture coverage.
 
-The project documents correctly admit the most important product limit: no
-page from a real Divi site is in the test corpus. The fixtures prove the cases
-that the developers wrote. They do not prove that the parser covers the forms
-that Divi has produced across releases, modules, and third-party extensions.
+The plugin must still be described as an assisted migration tool. It is not a
+lossless or pixel-perfect converter. The real-site corpus covers only 13 of the
+58 supported modules. The project documents this limit correctly
+([`BRIEF.md`, lines 51-63](BRIEF.md#L51)).
 
-**Release decision:** Keep 2.2.0 as an assisted migration release. Do not
-describe it as lossless. Do not submit it to WordPress.org until C-01, C-02,
-C-03, and C-04 are fixed and a representative, anonymized Divi corpus is added.
-Users must preview every conversion, keep the backup option on, inspect every
-warning, open the result in the block editor, and compare the published page
-before they remove Divi.
+This fresh review found no Critical issue. It found one High issue, seven Medium
+issues, and two Low issues. The High issue is in the new diagnostic tool, not in
+the release ZIP. The most important shipped-code issues are two remaining
+concurrency windows and two video conversion defects.
 
-## Verified facts, inferences, and unknowns
+## Review of the logged changes
 
 ### Verified facts
 
-- The working tree was clean before this file was changed.
-- The local revision and remote `main` have the same tree.
-- The plugin header, `D2G_VERSION`, `readme.txt` stable tag, release tag, and ZIP
-  all identify version 2.2.0.
-- The local release ZIP is 107,467 bytes and has SHA-256
-  `06b8f1e62fc323782d51f61520a383182fac716416fe4be449390421ac6b75a0`.
-  The [GitHub v2.2.0 release](https://github.com/johnjanney/block-converter-for-divi/releases/tag/v2.2.0)
-  reports the same size and digest.
-- The release is public, final, and not marked as a pre-release.
-- The current required-status-check list has 11 checks. Administrators can
-  bypass it, and the branch is not required to be current with `main` before a
-  merge. The latest [same-tree CI run](https://github.com/johnjanney/block-converter-for-divi/actions/runs/31067632155)
-  passed.
-- The fresh local converter suite passed 154 of 154 checks and sent 396 blocks
-  through `@wordpress/block-library` 10.3.0.
-- The fresh WordPress 7.0.2 live suite passed 16 of 16 checks. It stored all 138
-  conversion fixtures, read them back, and validated 391 stored blocks.
-- The fresh browser suite passed 9 of 9 checks.
-- The fresh multisite suite passed 12 of 12 checks.
-- A fresh floor check confirmed that WordPress 6.0 refuses the plugin as
-  declared and WordPress 6.1 passes the 16 live checks.
-- Both npm audits reported zero known vulnerabilities on the review date.
-- PHP syntax, JavaScript syntax, shell syntax, ZIP integrity, whitespace, and a
-  focused secret-pattern scan passed.
-- WordPress 7.0.2 is a current stable security release on the review date. The
-  official release post says it fixes one critical and one high-severity issue.
-  See the [WordPress 7.0.2 release](https://wordpress.org/news/2026/07/wordpress-7-0-2-release/).
+The round-three response is a historical record for version 2.3.0. It states
+that seven of nine prior findings were fixed and that two were partly fixed
+([`CODEX-REVIEW-RESPONSE.md`, lines 15-36](CODEX-REVIEW-RESPONSE.md#L15)). The
+current release is 2.9.3. The main plugin header, `BCFD_VERSION`, and the stable
+tag agree on that version.
 
-### Inferences
+The change log records these material changes after the prior review:
 
-- C-01 can lose real content if Divi, a third-party module, hand-edited source,
-  or old stored source puts an unexpected child in a structural parent. Whether
-  normal Divi UI output uses these forms is not known.
-- C-02 is a real optimistic-concurrency gap. It needs an external save in a
-  short window, so it is less likely than the old missing-token defect.
-- C-03 can interfere with HTML-comment embedding in consumers that treat raw
-  `post_content` as HTML. WordPress's standard block parser accepted the probe,
-  so a stored cross-site scripting result in the standard WordPress front end
-  was not proved.
-- Scan time will increase with the size of `wp_posts`. The exact increase is not
-  known because no production timing data was supplied.
+- Versions 2.4.0 through 2.6.0 added spacing, border, and typography mappings.
+- Version 2.7.0 added a real imported corpus. It also fixed entity-encoded
+  shortcode attributes, nested lists, gallery-loss reports, and Divi 5 counts.
+- Version 2.8.0 added a server-side double-conversion refusal and more style
+  mappings.
+- Versions 2.9.0 and 2.9.1 added conversion census data and corrected an image
+  count.
+- Versions 2.9.2 and 2.9.3 repaired stale-backup behavior and added one explicit
+  stale-token retry.
 
-### Unknowns
+The current source contains these changes. The new work after the 2.9.3 tag is
+mostly diagnostic and test work for the unresolved quote-encoding question. It
+adds [`bin/diagnose-encoding.php`](bin/diagnose-encoding.php), adds
+[`tests/live/corpus-run.php`](tests/live/corpus-run.php), and extends the live
+corpus checks.
 
-- A real, anonymized Divi page corpus was **not found in documents**.
-- A visual comparison between a Divi page and its converted page was **not
-  found in documents**.
-- Production database timing results were **not found in documents**.
-- A fresh uninstall execution test was **not found in documents** and was not
-  run in this review.
-- Per-version JavaScript `save()` validation for WordPress 6.1 through 6.8 was
-  **not found in documents**. The version matrix checks block registration and
-  database behavior. It does not run each older block library's save contract.
+### Correction to the prior response
 
-## Assessment of `CODEX-REVIEW-RESPONSE.md`
+The prior response says that finding C-02 is fixed and that the source
+comparison is part of the write
+([`CODEX-REVIEW-RESPONSE.md`, lines 171-189](CODEX-REVIEW-RESPONSE.md#L171)).
+That statement is not correct. The current check is close to the write, but it
+is not atomic. Finding R4-03 gives the evidence.
 
-The response is detailed and useful as a record of the work that created
-version 2.2.0. Its code claims must be read as claims about the state when that
-response was written. Later commits made its final “What is not fixed” section
-stale. For example, the current repository now has live WordPress, endpoint,
-database, browser, multisite, and compatibility tests.
+The response correctly says that the leading-wildcard scan remains only partly
+fixed. Finding R4-08 confirms that the residual cost is still present.
 
-### N-finding verification
+### Unresolved provenance question
 
-| ID | Current verdict | Verification and clarification |
-| --- | --- | --- |
-| N-01 | **Specific fix verified** | Image and Button alignment values use fixed allowlists. Active mapped colors use `D2G_Block_Builder::css_color()`. The malicious fixtures pass. See `includes/class-d2g-block-builder.php:134-167`, `includes/renderers/class-d2g-renderer-media.php:49-103`, and `includes/renderers/class-d2g-renderer-content.php:38-90`. C-03 is a different block-comment serialization issue. |
-| N-02 | **Verified fixed** | Fullwidth Header now sends its body through `render_inner_blocks()`. The nested-paragraph fixture passes. See `includes/renderers/class-d2g-renderer-content.php:198-245`. |
-| N-03 | **Six specific paths fixed; broader invariant still fails** | Caption and `colgroup` tables fall back to Custom HTML, comments are handled, Text-module children keep source order, counters strip tags, the tag scanner is quote-aware, and body entities are no longer normalized. See `includes/class-d2g-html-converter.php:101-130`, `216-227`, and `389-453`; `includes/class-d2g-parser.php:117-119` and `250-395`; and `includes/class-d2g-converter.php:366-380`. C-01 shows that other parent renderers still discard content. |
-| N-04 | **Partly fixed** | The plugin lock is now an atomic option-row `INSERT` with an owner token and stale-lock compare-and-swap. A source hash is mandatory, and the post is read again after the lock. This stops concurrent plugin requests. It does not make the final post update conditional on the same source, so an ordinary editor save can still land after the check. See C-02 and `block-converter-for-divi.php:440-535`, `676-733`. |
-| N-05 | **Partly fixed by design** | A name-pattern registry now reports the documented unmapped style categories. Interactive renderers report lost behavior. Browser code now shows warnings even without Preview. The registry can still miss new or unusual attribute names, as Q28 states. See `includes/class-d2g-converter.php:188-254` and `admin/js/admin.js:423-471`, `592-605`. |
-| N-06 | **Substantially fixed after the response** | The converter has fixture, recursive structure, golden, real block-validator, module-coverage, dispatch, determinism, and idempotence checks. Later commits added endpoint, database, restore, browser, multisite, and version-floor suites. Uninstall, older block-library save contracts, real Divi pages, visual fidelity, and some browser paths remain untested. See `tests/README.md`. |
-| N-07 | **Partly fixed** | Front-end requests return before loading the converter. Gallery attachments are cache-primed. The scan is capped and paginated. The two leading-wildcard scans remain. See `block-converter-for-divi.php:35-55`, `203-347`, and `includes/renderers/class-d2g-renderer-media.php:234-296`. |
-| N-08 | **Metadata and core compatibility now verified** | The plugin declares WordPress 6.1+, `readme.txt` says tested through 7.0, and fresh runs passed on WordPress 6.1 and 7.0.2. WordPress 6.0 was refused as declared. The historical matrix also covers 6.2, 6.3, and 6.8. The older JavaScript save-contract gap remains. |
-| N-09 | **Verified fixed** | Builder meta records all values and whether a key existed. Restore deletes both managed keys before adding captured values. The live suite verifies restore byte identity for content. See `block-converter-for-divi.php:775-855`. |
-| N-10 | **Verified fixed** | User-visible converter text is localized, the JavaScript strings come from PHP, and the old converter was split into an orchestrator, block builder, HTML converter, and seven renderer families. See `block-converter-for-divi.php:111-177` and `includes/load.php`. |
-| N-11 | **Original corrections verified; current regression found** | The response corrected its listed document conflicts. The current `BRIEF.md` now says the admin screen was never opened even though the current browser suite exists and Q30 is closed. See D-01. |
-| N-12 | **Verified fixed** | Divi attribute text is decoded once and then escaped for its output context. The three N-12 fixtures pass. See `includes/class-d2g-block-builder.php:169-193`. |
+The repository has not identified the component that encoded the imported Divi
+shortcode quotes. The diagnostic comments and `BRIEF.md` state that ordinary
+WordPress save paths did not reproduce the change. **Not found in documents:**
+verified evidence that identifies the responsible plugin, theme, importer hook,
+or platform component.
 
-### Round-one F-finding verification
+## Findings
 
-| ID | Current verdict | Current state |
-| --- | --- | --- |
-| F-01 | **Fixed** | Backup, conversion, and restore use `wp_slash()`. The live database and restore checks pass. |
-| F-02 | **Core defect fixed; concurrency remains partial** | The first content backup wins and a second conversion is refused. See C-02 for the external-edit race. |
-| F-03 | **Fixed for covered output** | Rich text is split into valid blocks and all current fixtures pass core validation. Older WordPress save contracts are still not tested in JavaScript. |
-| F-04 | **Fixed** | Pricing items and unknown modules no longer remain as raw shortcodes. |
-| F-05 | **Safer degradation, not full conversion** | Forms, menus, portfolios, maps, sidebars, shops, and signup modules use visible fallbacks or warnings where core has no portable equivalent. Manual rebuilding remains necessary. |
-| F-06 | **Partly fixed** | Loss reporting is much better. Most Divi design settings are still not mapped. |
-| F-07 | **Largely fixed** | The declared WordPress floor and current tested version have live evidence. Older block-library serialization remains unproved. |
-| F-08 | **Largely fixed** | The test surface is now broad. Uninstall, real Divi pages, visual fidelity, some browser paths, and older save contracts remain open. |
-| F-09 | **Fixed for the measured core paths** | Meta restoration is exact for current snapshots. KSES-destructive conversion and restore are refused on multisite. Custom content filters from other plugins were not tested. |
-| F-10 | **Endpoint checks fixed; scan scope remains fixed** | Actions check nonce, site and object capability, type, status, revision, and autosave state. The scan UI is still hard-coded to `page` and `post`, while action allowlists are filterable. |
-| F-11 | **Partly fixed** | Pagination and the 500-row “All” cap bound memory. The database search is still non-indexable. |
-| F-12 | **Fixed** | Batch successes and failures are counted separately, and the browser suite checks a stale-row failure. |
-| F-13 | **Fixed for covered syntax** | One quote-aware scanner now backs detection, parsing, closing-tag matching, and stripping. |
-| F-14 | **Fixed** | Admin data is inserted with text nodes or jQuery `text`; no relevant data-driven `.html()` sink remains. |
-| F-15 | **Code and documents fixed; execution untested here** | Multisite uninstall walks sites in batches and uses each site's retention setting. No fresh uninstall run was made. |
-| F-16 | **Much improved** | The converter split, localization, dialog focus, sorting, status, and warnings are better. Pagination, select-all, larger batches, and some accessibility states still lack browser coverage. |
-| F-17 | **Distribution fixed; document accuracy needs work** | The repository and release are public, the ZIP digest matches, and CI is required. D-01 and T-01 still overstate or contradict actual behavior. |
+### R4-01 — High — Diagnostic cleanup can delete unrelated posts
 
-## Fresh findings
+**Scope:** Internal diagnostic tool. It is excluded from the release ZIP, but
+the file tells an administrator to install it as a temporary plugin.
 
-### C-01 — High — Structural renderers can silently discard content
+**Verified facts:**
 
-**Area:** Purpose, correctness
+The import probe creates two published posts with fixed slugs:
+`bcfd-import-probe-1` and `bcfd-import-probe-2`
+([`bin/diagnose-encoding.php`, lines 364-392](bin/diagnose-encoding.php#L364)).
+After the import, the tool selects every post with either slug. It then calls
+`wp_delete_post( $id, true )` for every selected ID
+([`bin/diagnose-encoding.php`, lines 412-434](bin/diagnose-encoding.php#L412)).
+The delete is permanent.
 
-`render_inner_blocks()` fixed content order for general content renderers. Some
-structural parents do not use it. They iterate only the child tags that they
-expect and ignore everything else:
+The query does not prove that an ID was created by this run. If the site already
+has a post with one of these slugs, or if the importer skips a probe as a
+duplicate, the cleanup can delete the pre-existing post. This behavior
+contradicts the tool's statement that it touches no existing post
+([`bin/diagnose-encoding.php`, lines 34-39](bin/diagnose-encoding.php#L34)).
 
-- Tabs keep only `et_pb_tab` children at
-  `includes/renderers/class-d2g-renderer-interactive.php:95-113`.
-- Counters keep only `et_pb_counter` children at
-  `includes/renderers/class-d2g-renderer-interactive.php:168-176`.
-- Pricing Tables keep only `et_pb_pricing_table` children at
-  `includes/renderers/class-d2g-renderer-pricing.php:31-40`.
-- A Pricing Table with at least one pricing item drops its loose text and any
-  other child modules at `includes/renderers/class-d2g-renderer-pricing.php:83-97`.
-- Social Follow keeps only network children at
-  `includes/renderers/class-d2g-renderer-content.php:320-332`.
-- Video Slider skips a child unless it has a `src` attribute, even though the
-  shared Video renderer can read an iframe or URL from the body. See
-  `includes/renderers/class-d2g-renderer-media.php:153-174`.
+**Impact:** The diagnostic can cause permanent content loss on the site that an
+administrator is trying to diagnose.
 
-Fresh input:
+**Required correction:** Create unique slugs with a random run identifier.
+Record each returned import ID before cleanup. Delete only an ID that this run
+created and that still has a matching run marker in post meta. Use drafts, not
+published posts. Do not delete anything if ownership cannot be proved.
 
-```text
-[et_pb_tabs]Before[et_pb_button button_text="Keep" /]After[/et_pb_tabs]
-[et_pb_pricing_table title="Plan"]Before
-[et_pb_pricing_item]Feature[/et_pb_pricing_item]
-After[et_pb_button button_text="Keep too" /][/et_pb_pricing_table]
-```
+### R4-02 — Medium — The diagnostic performs write actions on nonce-free GET requests
 
-The output contained neither `Before`, `After`, `Keep`, nor `Keep too`. No
-warning named that loss. The tabs warning only said that tab behavior changed.
+**Scope:** Internal diagnostic tool.
 
-Whether canonical Divi output uses these shapes was **not found in documents**.
-The plugin also promises content preservation for unknown and third-party
-forms, so it must fail safely when a known parent has an unexpected child.
+**Verified facts:**
 
-**Recommendation:** Give each structural renderer a source-order partition.
-Map expected children normally. Render loose text and other children through
-`render_inner_blocks()` or an equivalent iterator. Add a warning that names an
-unexpected structure. Add one fixture for each filtering parent.
+The Tools page runs the diagnostic when WordPress renders the page. A second
+`admin_init` path runs it when the URL has `bcfd-diagnose=1`. Both paths use GET.
+Both paths can create and permanently delete posts. Neither path checks a nonce
+([`bin/diagnose-encoding.php`, lines 484-523](bin/diagnose-encoding.php#L484)).
+The capability check limits the action to an authenticated administrator, but
+it does not stop a cross-site request.
 
-### C-02 — Medium — The final write is not an atomic source comparison
+The diagnostic also calls registered third-party callbacks directly and in
+isolation. Some callbacks can have side effects
+([`bin/diagnose-encoding.php`, lines 157-215](bin/diagnose-encoding.php#L157)).
+The import probe creates published posts and can trigger normal publish or
+integration hooks. Thus, the statement that nothing else is touched is too
+strong.
 
-**Area:** Data integrity
+WordPress states that nonces help to protect URLs and forms against CSRF. It
+also states that a capability check and a nonce have different purposes
+([WordPress Nonces documentation](https://developer.wordpress.org/apis/security/nonces/)).
 
-The response correctly replaced the check-then-set plugin lock. It also made
-the source token mandatory. The code now:
+**Impact:** A third-party page can cause a signed-in administrator's browser to
+run this state-changing diagnostic. Callback and publish-hook side effects can
+also affect external integrations.
 
-1. Takes the plugin lock.
-2. Reads the post and compares its MD5 at
-   `block-converter-for-divi.php:695-701`.
-3. Writes a backup and converts content.
-4. Calls `wp_update_post()` at `block-converter-for-divi.php:727-733`.
+**Required correction:** Render a read-only explanation first. Run all write
+tests only after a POST form submission that has `manage_options` and a valid
+action-specific nonce. State all possible side effects. Prefer draft probes.
+Do not call arbitrary callbacks directly unless the administrator selects that
+test and the report clearly states the risk.
 
-An ordinary editor does not take the plugin's option-row lock. That editor can
-save after step 2 and before step 4. The conversion then overwrites the newer
-edit. The current live concurrency test proves that two plugin operations do
-not overlap. It does not simulate a normal post save in this window.
+### R4-03 — Medium — The conversion source check is still not atomic
 
-**Recommendation:** Add a test that saves the post from outside the converter
-after the locked comparison and before the final write. Use a final compare and
-swap, or another WordPress-compatible optimistic-write design, so the write can
-only succeed while the stored source is still the source that was converted.
-Do not bypass revisions, hooks, or KSES to implement it.
+**Scope:** Shipped plugin.
 
-### C-03 — Medium — Block attributes are not serialized with WordPress's safe encoder
+**Verified facts:**
 
-**Area:** Security, correctness
+`guarded_update()` installs a `pre_post_update` callback. That callback reads
+`post_content` with a separate `SELECT` and compares its MD5 value. The method
+then lets `wp_update_post()` continue
+([`block-converter-for-divi.php`, lines 1085-1122](block-converter-for-divi.php#L1085)).
 
-`D2G_Block_Builder::block()` inserts plain `wp_json_encode()` output into an
-HTML comment at `includes/class-d2g-block-builder.php:30-53`. Blog and Search
-also build comments directly at
-`includes/renderers/class-d2g-renderer-dynamic.php:43-58` and `159-171`.
+WordPress core calls `pre_post_update` and then executes a separate
+`$wpdb->update()`. The source check is not a condition of that SQL update. The
+official core source shows the two operations in this order
+([WordPress `wp_insert_post()` source](https://developer.wordpress.org/reference/functions/wp_insert_post/)).
 
-Fresh input:
+**Inference:** Another request can update the row after the guard's `SELECT`
+and before core's `UPDATE`. Both requests can pass their checks. The converter
+can then overwrite the other request. The current test injects its competing
+write before the guard runs. That test proves the guard detects that ordering.
+It does not prove that the later window is closed.
+
+**Impact:** A rare concurrent edit can be lost during conversion. The plugin's
+lock prevents a second plugin operation, but it does not lock the normal editor
+or another plugin.
+
+**Required correction:** Do not call this mechanism atomic. Add a concurrency
+test that writes after the guard and before core's database update. Implement a
+real compare-and-swap or a database transaction with an appropriate row lock.
+Preserve WordPress revisions, KSES behavior, and post-save hooks. If that cannot
+be done safely, document the residual window and require an editor quiet period
+for batch conversion.
+
+### R4-04 — Medium — Restore can overwrite an edit that arrives during restore
+
+**Scope:** Shipped plugin.
+
+**Verified facts:**
+
+The restore endpoint checks its nonce and permissions, reads the current post
+and backup, and acquires the plugin lock. It then calls `wp_update_post()` with
+the backup. It does not capture or verify the current content hash
+([`block-converter-for-divi.php`, lines 1328-1380](block-converter-for-divi.php#L1328)).
+The source comments say that restore intentionally does not take a source token
+([`block-converter-for-divi.php`, lines 1374-1377](block-converter-for-divi.php#L1374)).
+
+**Inference:** The user does authorize the removal of content that is visible
+when the Restore action starts. The user does not authorize the removal of a
+new editor save that arrives after that point. The plugin lock does not prevent
+such an editor save.
+
+**Impact:** A concurrent editor save can be lost during restore.
+
+**Required correction:** Capture the content hash when the restore action is
+presented. Verify it at the final write. Refuse the restore if the source has
+changed. Show the user the new state and require a new explicit Restore action.
+Use the same final concurrency control as conversion.
+
+### R4-05 — Medium — The HTML video path stores a rejected URL in block attributes
+
+**Scope:** Shipped plugin.
+
+**Verified facts:**
+
+The HTML converter extracts the `<video src>` value. It escapes the value for
+the rendered HTML, but it writes the original value to the block's `src`
+attribute
+([`includes/class-d2g-html-converter.php`, lines 193-198](includes/class-d2g-html-converter.php#L193)).
+
+A fresh probe used this input:
 
 ```text
-[et_pb_search placeholder="find--><img src=x onerror=alert(1)>" /]
+[et_pb_text]<video src="javascript:alert(1)"></video>[/et_pb_text]
 ```
 
-Observed output:
+The converter produced an empty HTML `src`, but the block comment still held:
 
 ```html
-<!-- wp:search {"placeholder":"find--><img src=x onerror=alert(1)>"} /-->
+<!-- wp:video {"src":"javascript:alert(1)"} -->
 ```
 
-WordPress provides `serialize_block_attributes()` for this exact context. It
-escapes `--`, `<`, `>`, `&`, backslashes, and escaped quotes because those
-characters can interfere with an HTML comment. See the official
-[`serialize_block_attributes()` reference](https://developer.wordpress.org/reference/functions/serialize_block_attributes/).
+Thus, the unsafe scheme remains in stored block data even though `esc_url()`
+rejects it in the initial markup.
 
-The current JavaScript validator accepted this probe. This shows a test gap:
-the validator checks parsed block validity, but it does not require canonical,
-HTML-safe delimiter serialization. Standard WordPress front-end exploitation
-was not proved in this review. A raw HTML consumer can interpret the first
-`-->` as the end of the comment, so the output is not safe for all post-content
-consumers.
+**Impact:** The saved block has conflicting data and markup. A later block edit
+or serialization can consume the unsafe attribute. This review did not prove an
+executable stored-XSS path in WordPress. The verified defect is unsafe data
+retention and invalid conversion output.
 
-The same consistency issue applies to URLs. For example, Image, Video, Audio,
-and Social Link can keep `javascript:` in block attributes while `esc_url()`
-removes it from the paired HTML. WordPress says to use `sanitize_url()` for
-stored URL data and `esc_url()` for displayed URLs. See the official
-[`esc_url()` reference](https://developer.wordpress.org/reference/functions/esc_url/).
+**Required correction:** Pass the URL through `D2G_Block_Builder::url()` before
+both uses. If the result is empty, preserve the original tag in a Custom HTML
+block with a warning, or omit the video with an explicit loss report. Add this
+probe to the offline and live suites.
 
-**Recommendation:** Centralize all block comments in the builder. Use
-`serialize_block_attributes()` in WordPress. Add an exact compatible fallback
-to the standalone test shim. Sanitize URL block attributes before serialization
-and use the same cleaned value in the HTML. Add `-->`, `<`, `&`, unsafe URL,
-and comment/parser round-trip fixtures.
+### R4-06 — Medium — Video provider detection accepts unrelated host names
 
-### C-04 — Medium — A dirty WordPress debug log does not fail CI
+**Scope:** Shipped plugin.
 
-**Area:** Test quality
+**Verified facts:**
 
-The workflow says the live job fails on any notice or deprecation at
-`.github/workflows/tests.yml:122-127`. The test guide also says the debug log
-must be empty at `tests/README.md:235-248`.
+The module renderer detects YouTube and Vimeo with substring regular
+expressions. It does not parse or verify the URL host
+([`includes/renderers/class-d2g-renderer-media.php`, lines 186-198](includes/renderers/class-d2g-renderer-media.php#L186)).
+The text HTML converter uses the same type of substring match
+([`includes/class-d2g-html-converter.php`, lines 170-190](includes/class-d2g-html-converter.php#L170)).
 
-The scripts do not enforce this rule:
+Fresh probes produced these incorrect conversions:
 
-- `bin/live-check.sh:104-112` prints a warning and then reports success.
-- `bin/e2e.sh:72-80` prints a warning and returns only the browser status.
-- `bin/multisite-check.sh:66-74` prints a warning and returns only the suite
-  status.
-- `bin/wp-matrix.sh:135-139` prints log lines but does not change the verdict.
+- `https://notyoutube.com/embed/WRONG` became
+  `https://www.youtube.com/watch?v=WRONG`.
+- `https://notvimeo.com/video/123` became `https://vimeo.com/123`.
 
-The logs were empty in this review. Thus, this did not hide a current runtime
-warning. It can let a future PHP notice, warning, or deprecation pass a required
-check.
+**Impact:** The converter can replace an unrelated embed with content from a
+different provider. This is a content-integrity error and can create a misleading
+link.
 
-**Recommendation:** Set a failure flag when the log is non-empty and exit
-nonzero after diagnostics. In `e2e.sh`, run the browser command inside `if` or
-with a temporary `set +e`; otherwise `set -e` can exit before the debug-log
-diagnostics run on a browser failure.
+**Required correction:** Parse the URL. Compare the normalized host with an
+explicit allowlist. Accept the exact host or a valid subdomain boundary only.
+Cover `youtube.com`, `youtube-nocookie.com`, `youtu.be`, `vimeo.com`, and the
+required official subdomains. Add hostile-host fixtures such as
+`notyoutube.com`, `youtube.com.example.org`, and `notvimeo.com`.
 
-### C-05 — Medium — The scan still performs two full content scans
+### R4-07 — Medium — A High-severity vulnerable development dependency is locked
 
-**Area:** Performance
+**Scope:** Development and CI dependencies. This package does not ship in the
+plugin ZIP.
 
-Each scan runs a count query and a data query with
-`post_content LIKE '%[et_pb_%'` at `block-converter-for-divi.php:257-314`.
-The leading wildcard cannot use a normal B-tree prefix lookup. Pagination and
-the 500-row cap bound the returned data. They do not reduce the work needed to
-find matching rows. Backup joins and `MD5(post_content)` add work to the data
-query.
+**Verified facts:**
 
-Production timing data was **not found in documents**.
+The root `npm audit --json` reported two High findings in one dependency path.
+`@wordpress/env` 10.39.0 depends on `extract-zip` 1.7.0
+([`package-lock.json`, lines 1528-1539](package-lock.json#L1528),
+[`package-lock.json`, lines 2733-2743](package-lock.json#L2733)). The advisory is
+CVE-2026-56876 / GHSA-jmr9-qjv8-65gv. It affects `extract-zip` versions through
+2.0.1 and has no patched `extract-zip` release. The flaw permits a crafted ZIP
+symlink to point outside the extraction directory
+([GitHub Advisory Database](https://github.com/advisories/GHSA-jmr9-qjv8-65gv)).
 
-**Recommendation:** Build a resumable inventory keyed by post ID and modified
-time, or maintain indexed detection meta when a post changes. Keep a repair or
-rebuild command because external database imports can bypass WordPress hooks.
-Until then, document an operational limit and test representative 10k, 100k,
-and 1m-row datasets.
+The separate `tests/js` audit reported zero vulnerability. The release archive
+excludes `node_modules` and the build tools.
 
-### C-06 — Medium — The destructive path still permits conversion without a backup
+**Impact:** A malicious archive that reaches the vulnerable extraction path in
+local development or CI can read or write outside its extraction directory.
+There is no shipped-plugin runtime exposure.
 
-**Area:** Purpose, safety
+**Required correction:** Upgrade `@wordpress/env` to a version that removes the
+vulnerable dependency path, after compatibility tests. If no compatible version
+is available, isolate wp-env, use trusted download sources only, and record the
+temporary exception with an expiry date. Keep `npm audit` as a visible CI gate.
 
-The browser sends `backup=no` when the checkbox is clear at
-`admin/js/admin.js:562-576`. The server then skips `write_backup()` at
-`block-converter-for-divi.php:703-708`, but it still overwrites content and
-deletes the Divi builder meta at `block-converter-for-divi.php:727-745`.
+### R4-08 — Medium — A first scan still performs multiple full content scans
 
-This behavior is documented, but it is not the safest implementation of the
-project's backup and restore objective. WordPress revisions can be disabled or
-pruned. A database backup might not be available to the person who ran the
-conversion.
+**Scope:** Shipped plugin. This is a known residual issue.
 
-**Recommendation:** Make a first conversion backup mandatory. If an advanced
-override is required, put it behind a separate, explicit confirmation and do
-not delete builder meta without a snapshot. Keep the current write-once rule.
+**Verified facts:**
 
-### C-07 — Medium — Older WordPress save contracts are not validated
+On page 1, the scan can execute three leading-wildcard operations over
+`post_content`: the total count, the Divi 5 count, and the result query
+([`block-converter-for-divi.php`, lines 379-405](block-converter-for-divi.php#L379),
+[`block-converter-for-divi.php`, lines 422-445](block-converter-for-divi.php#L422),
+[`block-converter-for-divi.php`, lines 460-483](block-converter-for-divi.php#L460)).
+The result limit controls response size. It does not remove the database work
+needed to inspect content for the count queries.
 
-**Area:** Compatibility, purpose
+The code comments and `BRIEF.md` disclose this limitation. The transient cache
+prevents a full recount on later pages in the same scan session. It does not
+reduce the first-page work.
 
-The version matrix proves that emitted blocks are registered and that endpoint,
-database, restore, and KSES behavior works on the tested WordPress versions.
-The JavaScript validator uses only `@wordpress/block-library` 10.3.0. It does
-not run the save functions from WordPress 6.1, 6.2, 6.3, or 6.8. The test guide
-states this limit at `tests/README.md:283-294`.
+**Impact:** Scan latency and database load grow with the number and size of rows
+in `wp_posts`. This risk is most important on large or busy sites.
 
-The fresh WordPress 6.1 run passed the live checks and registered all 32 emitted
-block types. That is good compatibility evidence. It does not prove that every
-stored static block matches the WordPress 6.1 editor's exact save markup.
+**Required correction:** Build a resumable inventory in small batches. Store a
+scan marker or result table keyed by post ID and content version. Show progress.
+Invalidate a row when the post changes. Keep the current hard response cap.
 
-**Recommendation:** Map each tested WordPress release to the matching block
-library package and validate the stored fixture set with that version. At a
-minimum, test the declared floor, each markup-changing boundary, and the
-`Tested up to` release.
+**Not found in documents:** a production-scale benchmark for scan time and
+database load on a large `wp_posts` table. The change log has converter timing,
+but that measurement does not measure the scan queries.
 
-### D-01 — Low — Current documents contradict current test coverage
+### R4-09 — Low — The default live and browser test start is not reproducible
 
-**Area:** Documentation
+**Scope:** Test and CI reliability.
 
-`BRIEF.md:274-281` says the admin screen has never been opened in a browser and
-that no test covers the scan, preview, batch runner, progress, or error report.
-The current browser suite covers those main paths, and `OPENQUESTIONS.md:46`
-marks Q30 resolved. The fresh 9-test browser run passed.
+**Verified facts:**
 
-`tests/README.md:287-294` points the older save-contract gap to Q18. Q18 is
-already resolved and concerns the measured `Tested up to` value. This remaining
-work needs a new open-question ID or no ID.
+`.wp-env.json` does not pin WordPress core
+([`.wp-env.json`, lines 1-14](.wp-env.json#L1)). During this review, a fresh
+`bin/live-check.sh` start selected `7.0.4` and failed because Git could not find
+that remote ref. A temporary local pin to 7.0.2 allowed the test to run.
 
-`CODEX-REVIEW-RESPONSE.md:810-827` also says there is no live WordPress run, no
-endpoint or database test, and no KSES resolution. That was true at the response
-checkpoint. It is false for current `main`. The response should be marked as a
-historical checkpoint rather than rewritten as if it never made those claims.
+The shared helper has reset-and-retry logic for stale wp-env checkouts
+([`bin/_wp-env.sh`, lines 32-40](bin/_wp-env.sh#L32)). `bin/live-check.sh` and
+`bin/e2e.sh` bypass that helper and call `npx wp-env start` directly
+([`bin/live-check.sh`, lines 54-65](bin/live-check.sh#L54),
+[`bin/e2e.sh`, lines 42-48](bin/e2e.sh#L42)). During this review, the first
+pinned retry also failed on a stale, root-owned wp-env checkout. A reset through
+the shared helper repaired it.
 
-**Recommendation:** Update the BRIEF risk register. Add a short “historical
-response” note to the response header. Give the older save-contract work its
-own tracking item.
+**Impact:** The default live and browser gates can fail because upstream state
+or an old local checkout changed, not because plugin code failed. This reduces
+the value of a fresh test run and can block CI.
 
-### Q-01 — Low — The dead style mapper keeps unsafe code in the release
+**Required correction:** Pin the default WordPress version. Update the pin only
+in a reviewed dependency change. Make the live and browser scripts use
+`d2g_wp_env_start`. Retain the explicit version matrix for compatibility tests.
 
-**Area:** Quality, security debt
+### R4-10 — Low — Project documentation contains stale technical statements
 
-The documents and coverage report say that only
-`D2G_Style_Mapper::text_align_class()` is active. The other functions in
-`includes/class-d2g-style-mapper.php` are dead. Some of that dead code builds
-CSS from raw Divi values and appends `custom_css_main_element` directly at
-lines 15-112.
+**Scope:** Internal documentation and release procedure.
 
-This is not an active vulnerability because the converter does not call it.
-It is a future trap: connecting the helper can restore the same CSS-injection
-class that N-01 fixed in active renderers.
+**Verified facts:**
 
-**Recommendation:** Delete the dead functions. If style mapping is later
-implemented, build a new layer from block-supported attributes, strict value
-grammars, and canonical block serialization.
+- `CHANGELOG.md` correctly names `BCFD_VERSION` in its release requirements, but
+  the build instructions still say that the script checks `D2G_VERSION`
+  ([`CHANGELOG.md`, lines 76-80](CHANGELOG.md#L76)). The script checks
+  `BCFD_VERSION` ([`bin/build-zip.sh`, lines 22-32](bin/build-zip.sh#L22)).
+- `BRIEF.md` calls backup optional in its endpoint table
+  ([`BRIEF.md`, lines 202-210](BRIEF.md#L202)). The production write path says
+  that backup is mandatory
+  ([`block-converter-for-divi.php`, lines 968-984](block-converter-for-divi.php#L968)).
+- `BRIEF.md` says spacing, borders, shadows, fonts, and custom CSS are lost
+  ([`BRIEF.md`, lines 387-391](BRIEF.md#L387)). Versions 2.4.0 through 2.6.0 map
+  parts of spacing, borders, and typography. The document needs a precise
+  partial-support statement.
+- The roadmap still lists completed KSES, JavaScript validator, and CI matrix
+  work as open ([`BRIEF.md`, lines 459-487](BRIEF.md#L459)).
+- The parser comment says `has_divi_content()` requires a known tag. The method
+  accepts any syntactically valid opening `et_pb_*` tag, including an unknown or
+  third-party tag
+  ([`includes/class-d2g-parser.php`, lines 557-578](includes/class-d2g-parser.php#L557)).
 
-## Quality assessment
+**Impact:** Maintainers can make a release or design decision from obsolete
+information. The code behavior is not changed by these errors.
 
-### Strengths
-
-- The refactor has clear boundaries. The parser, HTML conversion, block
-  serialization, orchestration, and module families are separate.
-- Renderer registration detects ownership collisions and has a golden dispatch
-  snapshot.
-- The parser uses one quote-aware scanner and has bounded recursion.
-- The test design combines focused assertions, recursive structure checks,
-  golden output, core block validation, module coverage, dispatch coverage,
-  determinism, and idempotence.
-- The live suite tests the endpoint and database boundary where earlier slash
-  loss occurred.
-- The browser test covers the old false-success batch defect.
-- Comments explain the reason for difficult code, especially locks, KSES,
-  source tokens, and block save contracts.
-- User-visible server and browser text is localized.
-
-### Limits
-
-- The fixtures are implementation-aware and synthetic.
-- Several structural renderers duplicate child-filter loops, which caused C-01.
-- The main plugin file still combines bootstrap, scan SQL, locks, backup state,
-  KSES policy, and all five endpoints in about 950 lines.
-- The block builder does not own all block serialization. Blog and Search bypass
-  it.
-- The dead style mapper increases cognitive and security review cost.
-- Static style and behavior loss is reported but not repaired.
+**Required correction:** Update all five statements. Add a small documentation
+check for old constant names. Keep the support matrix as the single source for
+style fidelity.
 
 ## Security assessment
 
-### Positive controls
+### Verified strengths
 
-- Every AJAX endpoint checks the nonce and `manage_options`.
-- Post actions also check `edit_post`, post type, status, revision, and autosave
-  state.
-- Scan sorting and filters use allowlists, and SQL values use prepared
-  statements.
-- Admin-side data is inserted as text, not executable HTML.
-- Active alignment and color outputs use allowlists or value grammars.
-- The plugin refuses writes that core KSES would damage for users without
-  `unfiltered_html`.
-- The lock has an owner token, an atomic insert, stale-lock handling, and
-  owner-only release.
-- The plugin loads no public route, public script, or front-end filter.
-- The release ZIP excludes tests, Node dependencies, wp-env files, and review
-  documents.
-- The focused present-tree and history secret scan found no credential pattern.
-- npm reported zero known vulnerabilities in both dependency trees.
+- All shipped AJAX actions use the shared nonce and require `manage_options`.
+- Post actions also validate the post ID, allowed post type, status, and the
+  current user's `edit_post` capability.
+- User-selected post type, order field, order direction, and page size values
+  pass through allowlists before SQL construction.
+- SQL values use `$wpdb->prepare()`.
+- Admin output uses text nodes or escaped output for untrusted data. The review
+  did not find an active raw-HTML DOM insertion path in the admin script.
+- The converter checks for content that KSES would remove and refuses a lossy
+  conversion or restore.
+- The uninstall path is opt-in for data removal.
+- GitHub Actions use commit SHAs for actions, which reduces mutable-tag risk.
 
-### Residual security work
+### Residual security risks
 
-- Fix C-03 with WordPress's block-attribute serializer and stored-URL
-  sanitization.
-- Remove the unsafe dead style builder in Q-01.
-- Pin third-party GitHub Actions to reviewed commit SHAs. The current workflow
-  uses mutable major tags at `.github/workflows/tests.yml:22-25`, `33-35`, and
-  similar steps.
-- Keep Custom HTML behavior explicit. Code and iframe preservation is a product
-  requirement, but it also means a user with `unfiltered_html` can preserve
-  active content. The current capability and KSES policy is reasonable.
+R4-02 and R4-05 are the direct security findings. R4-07 affects the development
+toolchain. The diagnostic tool is not part of the release ZIP, but its own
+instructions make installation on a real site an expected use. It must use the
+same safety standard as production migration code.
 
-WordPress's security handbook says to escape for the exact output context and
-to escape late. See [Escaping Data](https://developer.wordpress.org/apis/security/escaping/).
+No evidence of unauthenticated shipped AJAX access, direct SQL injection, or a
+confirmed executable stored-XSS path was found in this review.
 
 ## Performance assessment
 
-### Good decisions
+### Verified strengths
 
-- Front-end requests return before loading the conversion classes.
-- Result size is paginated and “All” is capped.
-- Scan rows do not transfer full post or backup content.
-- Gallery attachment caches are primed in one call.
-- Batch writes run sequentially, which bounds write concurrency.
-- Parser and DOM recursion have explicit limits.
-- Production requests do not load Node packages or test code.
+- Normal front-end requests return before converter and admin classes load.
+- The scan does not return `post_content` or backup bodies to the browser.
+- The `All` page-size choice has a 500-row hard cap.
+- Later scan pages use cached counts.
+- Conversion uses one parser pass and a renderer registry. The current fixture
+  gate completes quickly.
 
-### Main cost
+### Main limit
 
-C-05 is the main performance risk. The count and data queries both search large
-text values with a leading wildcard. The current design is reasonable for a
-small one-time migration. It is not the best design for a large content store.
-No production benchmark was available.
+R4-08 remains the principal performance risk. The cap controls PHP memory and
+response volume. It does not make the initial database content searches cheap.
+There is no production-scale scan benchmark in the project documents.
 
-## Purpose assessment
+## Code quality assessment
 
-The plugin now fulfills the narrower purpose stated in the current brief: it is
-an assisted migration tool that produces a first Gutenberg draft and identifies
-known manual work. It does not fulfill a stronger claim of automatic lossless
-conversion.
+### Verified strengths
 
-Evidence that supports the narrower purpose:
+- The parser, converter, style mapper, block builder, renderers, and admin
+  controller have clear roles.
+- The renderer registry makes module coverage easy to inspect and extend.
+- Block serialization is centralized for nearly all output paths.
+- Comments usually explain data-loss and compatibility decisions.
+- The test design has useful layers: fixture snapshots, consistency checks,
+  canonical JavaScript parsing, live endpoint tests, stored-content validation,
+  multisite tests, browser tests, and a WordPress version matrix.
+- The real imported corpus found defects that synthetic fixtures did not find.
+  This is strong evidence that the test strategy improved.
+- Mandatory, write-once backups and exact builder-meta snapshots support safe
+  rollback.
 
-- All declared module tags have at least one fixture.
-- Current fixture output validates with the current block library.
-- Stored output survives the live WordPress database path.
-- Restore, KSES refusal, direct conversion warnings, and batch failure reporting
-  have live or browser checks.
-- The project states which styles and behaviors do not survive.
+### Remaining quality limits
 
-Evidence that blocks the stronger purpose:
+- Real-site coverage is broad in page count but narrow in module variety.
+- The concurrency comments claim more protection than the implementation gives.
+- Two similar video paths use duplicate provider-detection logic and now have
+  the same hostile-host defect. One shared URL-classification function would
+  reduce this drift.
+- Internal documents have not kept pace with the release changes.
 
-- C-01 proves a remaining silent content-loss family.
-- No real Divi corpus exists in the repository.
-- No visual fidelity comparison exists.
-- Most Divi design settings are not mapped.
-- Some dynamic modules become instructions or placeholders.
-- Gallery carousel behavior is not shipped.
-- Portfolio output depends on a Divi post type unless the site migrates it.
-- Backups remain optional.
+**Not found in documents:** a recorded visual comparison of the 247-page corpus
+before and after conversion. Structural and census tests do not prove visual
+fidelity.
 
-## Recommended implementation order
+**Not found in documents:** a successful live uninstall test that verifies both
+the retain-data and delete-data settings.
 
-### P0 — Prevent silent loss and unsafe serialization
+## Purpose and product-fit assessment
 
-1. Fix every filtering parent in C-01 and add source-order fixtures.
-2. Replace plain JSON block attributes with
-   `serialize_block_attributes()`-compatible output.
-3. Sanitize stored URL attributes and use one cleaned value for attributes and
-   HTML.
-4. Add a final atomic source condition to the conversion write.
+The plugin's purpose is clear. It helps an administrator remove Divi shortcode
+dependence from posts and pages. It converts supported content to native blocks,
+reports known losses, makes a rollback copy, and lets the administrator review
+the result.
 
-### P1 — Make the safety gate match its documentation
+The implementation fits this purpose for supervised work on small and medium
+sites. It is strongest when the source uses common modules such as sections,
+rows, columns, text, images, buttons, and galleries. It is weaker for complex
+interactive modules, third-party modules, environmental IDs, precise visual
+styles, and large-site batch work.
 
-1. Make every non-empty WordPress debug log fail its suite.
-2. Make first-conversion backup mandatory.
-3. Add an uninstall integration test for single site and multisite.
-4. Add per-version block-library validation for the declared floor and tested
-   ceiling.
+The plugin is not ready for an unattended promise such as “convert the whole
+site with no review.” The project itself does not make that promise. The real
+corpus, warnings, preview, backups, and restore function support the correct
+position: produce a first native-block draft, then inspect it.
 
-### P2 — Validate the actual product
+Divi 5 block content is counted but not converted. Custom post types are not a
+general supported target. Portfolio output can still depend on Divi's `project`
+post type. Gallery attachment IDs remain dependent on the destination site's
+media database. These are product limits, not hidden implementation details.
 
-1. Build an anonymized corpus from several Divi versions, common modules,
-   third-party modules, malformed pages, and hand-edited shortcode.
-2. Add semantic assertions for text, links, image references, media embeds,
-   comments, and module order before and after conversion.
-3. Add selected visual comparisons for representative layouts.
-4. Benchmark scan and conversion on realistic database sizes.
+## Fresh verification record
 
-### P3 — Reduce maintenance risk
+| Check | Result | Notes |
+| --- | --- | --- |
+| Git state before review | Pass | `main` and `origin/main` were at `b751615`; worktree was clean. |
+| Offline PHP gate | Pass | 212 passed, 0 failed; 566 blocks checked. |
+| Live WordPress gate | Pass after test-environment repair | 50 passed, 0 failed; 193 stored conversions; 557 blocks validated; debug log empty. WordPress was temporarily pinned to 7.0.2. The temporary override was removed. |
+| PHP syntax | Pass | Every tracked PHP file passed `php -l`. |
+| JavaScript syntax | Pass | Admin, validator, and canonicalizer scripts passed `node --check`. |
+| Shell syntax | Pass | Tracked shell scripts passed `bash -n`. |
+| Patch whitespace | Pass | `git diff --check` passed. |
+| Root dependency audit | Fail | Two High reports in the `@wordpress/env` to `extract-zip` path. See R4-07. |
+| `tests/js` dependency audit | Pass | Zero reported vulnerabilities. |
+| Default live environment start | Fail | Unpinned WordPress ref `7.0.4` was unavailable. See R4-09. |
+| Fresh browser suite | Not run | The default wp-env start was not reproducible. |
+| Fresh multisite suite | Not run | The focused live gate and static review took priority. |
+| Fresh full WordPress matrix | Not run | The focused live gate used WordPress 7.0.2. Existing matrix files were reviewed, but their historical results were not treated as a fresh run. |
 
-1. Delete the dead style mapper code.
-2. Move scan, lock, backup, and endpoint policy out of the main bootstrap class.
-3. Replace repeated structural child loops with one tested traversal utility.
-4. Correct the current document conflicts.
-5. Pin CI actions to commit SHAs.
+## Recommended order of work
 
-## Verification record
+1. Fix R4-01 before anyone installs or runs the diagnostic again.
+2. Add nonce-protected POST execution and reduce diagnostic side effects in
+   R4-02.
+3. Correct the two shipped video paths in R4-05 and R4-06. Add regression
+   fixtures before release.
+4. Correct the concurrency claims and implement final-write protection for
+   conversion and restore in R4-03 and R4-04.
+5. Upgrade or isolate the vulnerable wp-env dependency in R4-07.
+6. Pin the default test environment and use the shared recovery helper in R4-09.
+7. Plan the resumable inventory in R4-08 before large-site promotion.
+8. Repair the stale documentation in R4-10.
 
-### Passed in this review
+## Final verdict
 
-| Check | Result |
-| --- | --- |
-| PHP syntax, all tracked PHP | Pass on PHP 8.1.2 |
-| JavaScript syntax, admin, browser, config, validator | Pass on Node 24.14.0 |
-| Shell syntax, all `bin/*.sh` | Pass |
-| Converter suite with required validator | 154 passed, 0 failed |
-| Current core block validation | 396 blocks checked |
-| Module coverage | 58 of 58 declared tags exercised |
-| Golden snapshots | 140 files present and current |
-| Live WordPress 7.0.2 | 16 passed, 0 failed |
-| Stored conversion fixtures | 138 round trips unchanged |
-| Stored block validation | 391 blocks checked, 0 invalid |
-| Browser suite | 9 passed, 0 failed |
-| Multisite KSES suite | 12 passed, 0 failed |
-| WordPress floor probe | 6.0 refused as declared; 6.1 passed 16 checks |
-| npm audit, root development tools | 0 known vulnerabilities |
-| npm audit, block validator | 0 known vulnerabilities |
-| ZIP integrity | Pass |
-| ZIP/main source identity | Pass |
-| Release ZIP digest and size | Match GitHub release |
-| Focused secret-pattern scan | No match |
-| Final `git diff --check` | Pass |
+Version 2.9.3 is materially stronger than the version in the prior Codex review.
+The response and change log describe many real improvements, and the current
+tests support most of those claims. The project has a sound architecture and a
+serious safety design.
 
-### Fresh probes that found defects
-
-| Probe | Result |
-| --- | --- |
-| Button and text placed directly in Tabs | Content discarded; only empty Group emitted |
-| Loose text and Button beside a Pricing Item | Loose text and Button discarded |
-| Search placeholder containing `-->` and HTML | Raw comment terminator and HTML written into block attributes |
-| `javascript:` media and social URLs | Unsafe value kept in block JSON while removed from paired HTML |
-
-### Not run or not available
-
-- The complete 6.0 through 7.0.2 matrix was not rerun. This review reran 6.0,
-  6.1, and 7.0.2. The same-tree GitHub CI and prior matrix records cover the
-  other versions.
-- PHP 7.4 through 8.4 was not rerun locally. The same-tree required CI jobs
-  passed.
-- Line coverage was not remeasured because Xdebug or PCOV was not installed.
-- Uninstall was not executed.
-- A production-size database benchmark was not run.
-- A real Divi corpus was not available.
-- A visual comparison was not run.
-
-## Sources
-
-### Repository sources
-
-- `BRIEF.md` — objectives, scope, architecture, module and style coverage, and
-  risk register.
-- `CODEX-REVIEW-RESPONSE.md` — claims and fixes under verification.
-- `block-converter-for-divi.php` — endpoints, scanning, locks, KSES, backup,
-  conversion, and restore.
-- `includes/class-d2g-parser.php` — quote-aware shortcode scanner and parser.
-- `includes/class-d2g-converter.php` — traversal, warnings, and inner-content
-  services.
-- `includes/class-d2g-block-builder.php` — block comments, escaping, alignment,
-  colors, and attributes.
-- `includes/class-d2g-html-converter.php` — HTML splitting, comments, lists,
-  quotes, and tables.
-- `includes/renderers/*.php` — module-specific conversions.
-- `admin/js/admin.js` — scan UI, preview, warnings, conversion, restore, and
-  batch status.
-- `.github/workflows/tests.yml`, `bin/*.sh`, and `tests/README.md` — test and CI
-  contracts.
-- `tests/fixtures.php`, `tests/live/*.php`, and `tests/e2e/*.js` — current test
-  coverage.
-- `uninstall.php` — retention and multisite cleanup.
-
-### External primary sources
-
-- [WordPress: `serialize_block_attributes()`](https://developer.wordpress.org/reference/functions/serialize_block_attributes/)
-- [WordPress Security Handbook: Escaping Data](https://developer.wordpress.org/apis/security/escaping/)
-- [WordPress: `esc_url()`](https://developer.wordpress.org/reference/functions/esc_url/)
-- [WordPress 7.0.2 security release](https://wordpress.org/news/2026/07/wordpress-7-0-2-release/)
-- [GitHub: About protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
-- [GitHub v2.2.0 release](https://github.com/johnjanney/block-converter-for-divi/releases/tag/v2.2.0)
-- [GitHub same-tree CI run](https://github.com/johnjanney/block-converter-for-divi/actions/runs/31067632155)
+Do not run the new import diagnostic on a real site until R4-01 is fixed. Do not
+describe the conversion guard as atomic. For supervised migrations, the shipped
+plugin remains useful after the operator understands the documented fidelity
+limits. The video defects and concurrency windows should be corrected before
+the next release.
