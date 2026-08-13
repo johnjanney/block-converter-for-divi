@@ -19,8 +19,14 @@ MAIN="${SLUG}.php"
 
 # ---- Resolve and cross-check the version -----------------------------------
 
-HEADER_VERSION="$(grep -m1 -E '^\s*\*\s*Version:' "$MAIN" | sed -E 's/.*Version:[[:space:]]*//' | tr -d '[:space:]')"
-CONST_VERSION="$(grep -m1 -E "define\(\s*'BCFD_VERSION'" "$MAIN" | sed -E "s/.*'BCFD_VERSION'\s*,\s*'([^']+)'.*/\1/")"
+# `|| true` on both greps so a missing header or constant reaches the checks
+# below. Without it `set -e` takes grep's exit status and kills the script on
+# this line: it still refuses to build, for the right reason, and says nothing
+# whatsoever — which makes the two messages below unreachable. Found by writing
+# the same line in bin/build-diagnostic-zip.sh and testing that it fails
+# usefully.
+HEADER_VERSION="$( { grep -m1 -E '^\s*\*\s*Version:' "$MAIN" || true; } | sed -E 's/.*Version:[[:space:]]*//' | tr -d '[:space:]')"
+CONST_VERSION="$( { grep -m1 -E "define\(\s*'BCFD_VERSION'" "$MAIN" || true; } | sed -E "s/.*'BCFD_VERSION'\s*,\s*'([^']+)'.*/\1/")"
 
 if [[ -z "$HEADER_VERSION" ]]; then
     echo "error: could not read the Version header from ${MAIN}" >&2
