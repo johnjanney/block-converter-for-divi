@@ -31,12 +31,29 @@
  * inside real HTML tags are not, so whatever does it is HTML-aware. That is the
  * fingerprint this script looks for.
  *
- * Almost read-only, and the exception is stated because it matters: it saves
- * one draft post called "bcfd diagnostic probe" and force-deletes it again a
- * line later. That is the whole point of the second half — walking filters only
- * finds things that are filters, and a plugin that re-saves on save_post, or
- * writes with $wpdb, is invisible to that. Nothing else is touched: no option,
- * no existing post, no setting.
+ * It writes, and exactly what it writes is stated here because "diagnostic"
+ * does not mean "harmless". Nothing runs until an administrator presses the
+ * button on the Tools page; that submission is a POST with a nonce, so no other
+ * site can make your browser start it. What it then does:
+ *
+ *   - Calls every callback registered on five save and import filters, one at a
+ *     time, with a sample string. Those callbacks belong to other plugins and
+ *     this file cannot know what they do; one that writes to the database or
+ *     calls out to a service will do so.
+ *   - Saves one draft post and force-deletes it by ID a line later. That is the
+ *     whole point of the second half: walking filters only finds things that
+ *     are filters, and a plugin that re-saves on save_post, or writes with
+ *     $wpdb, is invisible to it.
+ *   - Imports two draft posts through the real WordPress Importer and deletes
+ *     them again. Every hook an ordinary import fires, fires — including any
+ *     integration another plugin has hung on a post being created.
+ *
+ * The deletion is by proven ownership, never by name: each probe carries a
+ * random marker for this one run, and anything without that marker is left
+ * alone and reported. An earlier version selected posts by slug, which would
+ * have permanently deleted a page of yours that happened to be called
+ * `bcfd-import-probe-1`. Nothing else is touched: no option, no existing post,
+ * no setting.
  *
  * Two ways to run it, on the site where the encoding happens.
  *
@@ -56,10 +73,12 @@
  * and every symptom looked like a bad download. The uploader cannot make that
  * mistake.
  *
- * The menu item is deliberate. /wp-admin/?bcfd-diagnose=1 also works, but that
- * is the dashboard's own address, so a file that never loaded and a file that
- * declined to answer look identical from the browser. A menu item that is
- * either there or not is a question with an answer.
+ * The menu item is deliberate. /wp-admin/?bcfd-diagnose=1 still works, with the
+ * token the Tools page hands you, but that is the dashboard's own address — so
+ * a file that never loaded and a file that declined to answer look identical
+ * from the browser. A menu item that is either there or not is a question with
+ * an answer. (The URL never answers with silence either: without a token it
+ * says why it did not run.)
  *
  * Loaded as a plugin it runs nothing at all until an administrator asks, so a
  * copy left behind by accident costs a visitor nothing.
@@ -361,9 +380,18 @@ function bcfd_diagnose_encoding() {
         return;
     }
 
+    // Everything this import creates carries this one run's marker, and the
+    // cleanup below deletes by marker rather than by name. A fixed slug is not
+    // proof of ownership: a site with a page already called
+    // `bcfd-import-probe-1` would have had it permanently deleted by a tool
+    // that promised to touch nothing of yours.
+    $run = 'bcfd-' . strtolower( wp_generate_password( 12, false, false ) );
+
     $author = wp_get_current_user()->user_login;
-    $item   = function ( $id, $slug ) use ( $probe, $author ) {
-        return '<item><title>bcfd import probe ' . $id . '</title>'
+    $item   = function ( $id ) use ( $probe, $author, $run ) {
+        $slug = $run . '-' . $id;
+
+        return '<item><title>bcfd import probe ' . $id . ' (' . $run . ')</title>'
             . '<link>http://example.com/' . $slug . '</link>'
             . '<dc:creator><![CDATA[' . $author . ']]></dc:creator>'
             . '<content:encoded><![CDATA[' . $probe . ']]></content:encoded>'
@@ -371,8 +399,13 @@ function bcfd_diagnose_encoding() {
             . '<wp:post_id>' . ( 990000 + $id ) . '</wp:post_id>'
             . '<wp:post_date>2026-01-01 00:00:00</wp:post_date>'
             . '<wp:post_name>' . $slug . '</wp:post_name>'
-            . '<wp:status>publish</wp:status><wp:post_type>post</wp:post_type>'
+            // Draft, not published. The question this answers is what the
+            // importer stores, and a draft is stored exactly as a published
+            // post is — without appearing on the site, in a feed, or in
+            // whatever another plugin does when something goes live.
+            . '<wp:status>draft</wp:status><wp:post_type>post</wp:post_type>'
             . '<wp:postmeta><wp:meta_key>_et_pb_use_builder</wp:meta_key><wp:meta_value><![CDATA[on]]></wp:meta_value></wp:postmeta>'
+            . '<wp:postmeta><wp:meta_key>_bcfd_probe_run</wp:meta_key><wp:meta_value><![CDATA[' . $run . ']]></wp:meta_value></wp:postmeta>'
             . '</item>';
     };
 
@@ -387,8 +420,8 @@ function bcfd_diagnose_encoding() {
         . '<wp:wxr_version>1.2</wp:wxr_version>'
         . '<wp:base_site_url>http://example.com</wp:base_site_url>'
         . '<wp:base_blog_url>http://example.com</wp:base_blog_url>'
-        . $item( 1, 'bcfd-import-probe-1' )
-        . $item( 2, 'bcfd-import-probe-2' )
+        . $item( 1 )
+        . $item( 2 )
         . '</channel></rss>';
 
     $wxr_file = wp_tempnam( 'bcfd-import-probe.xml' );
@@ -409,8 +442,14 @@ function bcfd_diagnose_encoding() {
     ob_end_clean();
     @unlink( $wxr_file );
 
+    // Only what this run created, proved by the marker each probe carries.
+    // Never "whatever has that slug" — a post this run did not create is
+    // somebody's content, and a permanent delete is not an undoable mistake.
     $imported = $wpdb->get_col(
-        "SELECT ID FROM {$wpdb->posts} WHERE post_name IN ('bcfd-import-probe-1','bcfd-import-probe-2')"
+        $wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_bcfd_probe_run' AND meta_value = %s",
+            $run
+        )
     );
 
     if ( ! $imported ) {
@@ -420,18 +459,39 @@ function bcfd_diagnose_encoding() {
 
     $import_encoded = false;
     $import_html    = true;
+    $deleted        = 0;
+    $kept           = [];
+
     foreach ( $imported as $id ) {
+        $id  = (int) $id;
         $row = (string) $wpdb->get_var( $wpdb->prepare( "SELECT post_content FROM {$wpdb->posts} WHERE ID = %d", $id ) );
+
         if ( false !== strpos( $row, 'fb_built=&quot;' ) ) {
             $import_encoded = true;
         }
         if ( false === strpos( $row, 'href="https://example.com/a"' ) ) {
             $import_html = false;
         }
-        wp_delete_post( $id, true );
+
+        // Re-checked through the meta API immediately before deleting, so the
+        // thing being deleted is the thing that was proved to belong to this
+        // run. Anything else is left where it is and named below.
+        if ( $run === (string) get_post_meta( $id, '_bcfd_probe_run', true ) ) {
+            wp_delete_post( $id, true );
+            $deleted++;
+        } else {
+            $kept[] = $id;
+        }
     }
 
-    printf( "  imported %d post(s), then deleted them\n", count( $imported ) );
+    if ( $kept ) {
+        printf(
+            "  left alone (no marker for this run, so not this run's to delete): %s\n",
+            implode( ', ', $kept )
+        );
+    }
+
+    printf( "  imported %d post(s), then deleted %d of them\n", count( $imported ), $deleted );
     printf( "  shortcode attributes encoded after import : %s\n", $import_encoded ? 'YES' : 'no' );
     printf( "  real HTML attributes left alone           : %s\n", $import_html ? 'yes' : 'NO' );
 
@@ -450,6 +510,75 @@ function bcfd_diagnose_encoding() {
     echo "  view of it.\n";
     return;
 
+}
+endif;
+
+/**
+ * The Tools page: what this will do, then a button that does it.
+ *
+ * The page used to run everything while WordPress was rendering it, on an
+ * ordinary GET. Two things were wrong with that. A capability check says who
+ * you are; it does not say that *you* asked, so a link on another site could
+ * have your browser start a run that creates and deletes posts and calls every
+ * other plugin's save filters. And a page that has already done all that by the
+ * time you read what it does has told you too late.
+ *
+ * So: read it first, then press the button. The submission is a POST carrying
+ * an action-specific nonce, which is the pair WordPress documents for exactly
+ * this — the capability check and the nonce answer different questions.
+ *
+ * @see https://developer.wordpress.org/apis/security/nonces/
+ */
+if ( ! function_exists( 'bcfd_diag_page' ) ) :
+function bcfd_diag_page() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( esc_html__( 'You do not have permission to run this.', 'block-converter-for-divi' ) );
+    }
+
+    $run = isset( $_POST['bcfd_diag_run'] );
+
+    if ( $run ) {
+        check_admin_referer( 'bcfd-diagnose-run' );
+    }
+
+    echo '<div class="wrap">';
+    echo '<h1>' . esc_html__( 'Divi quote-encoding diagnostic', 'block-converter-for-divi' ) . '</h1>';
+
+    if ( ! $run ) {
+        echo '<p>' . esc_html__( 'This looks for whatever turns a Divi shortcode\'s attribute quotes into &quot; on this site. It has not done anything yet. When you press the button it will:', 'block-converter-for-divi' ) . '</p>';
+        echo '<ul style="list-style:disc;margin-left:2em;">';
+        echo '<li>' . esc_html__( 'Call every callback registered on five save and import filters, one at a time, with a sample string. Those callbacks belong to your other plugins, and this cannot know what they do — one that writes to the database or calls out to a service will do so.', 'block-converter-for-divi' ) . '</li>';
+        echo '<li>' . esc_html__( 'Save one draft post and permanently delete it again by ID.', 'block-converter-for-divi' ) . '</li>';
+        echo '<li>' . esc_html__( 'Import two draft posts through the WordPress Importer and delete those too. Every hook an ordinary import fires will fire, including anything another plugin does when a post is created.', 'block-converter-for-divi' ) . '</li>';
+        echo '</ul>';
+        echo '<p>' . esc_html__( 'Everything it creates carries a random marker for that one run, and only posts holding that marker are deleted. Nothing of yours is touched: no option, no existing post, no setting. A run on a busy production site is still best done during a quiet period.', 'block-converter-for-divi' ) . '</p>';
+
+        echo '<form method="post">';
+        wp_nonce_field( 'bcfd-diagnose-run' );
+        submit_button( __( 'Run the diagnostic', 'block-converter-for-divi' ), 'primary', 'bcfd_diag_run' );
+        echo '</form>';
+
+        echo '<p>' . esc_html__( 'Prefer plain text (for curl, or to paste somewhere)? This link runs the same thing:', 'block-converter-for-divi' ) . ' ';
+        $url = wp_nonce_url( admin_url( '?bcfd-diagnose=1' ), 'bcfd-diagnose-run' );
+        echo '<a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a></p>';
+        echo '</div>';
+        return;
+    }
+
+    ob_start();
+    bcfd_diagnose_encoding();
+    $report = ob_get_clean();
+
+    echo '<p>' . esc_html__( 'Each row is a callback that runs when a post is saved, with the plugin it came from. A row marked MATCH encodes a shortcode attribute while leaving real HTML alone, which is the behaviour being hunted. Copy all of this and send it on. Delete this plugin when you are done with it.', 'block-converter-for-divi' ) . '</p>';
+    echo '<textarea readonly rows="28" style="width:100%;font-family:monospace;font-size:12px;" onclick="this.select()">';
+    echo esc_textarea( $report );
+    echo '</textarea>';
+
+    echo '<form method="post">';
+    wp_nonce_field( 'bcfd-diagnose-run' );
+    submit_button( __( 'Run it again', 'block-converter-for-divi' ), 'secondary', 'bcfd_diag_run' );
+    echo '</form>';
+    echo '</div>';
 }
 endif;
 
@@ -495,29 +624,32 @@ if ( $bcfd_diag_is_plugin || ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
             __( 'Divi quote-encoding diagnostic', 'block-converter-for-divi' ),
             'manage_options',
             'bcfd-diagnose',
-            function () {
-                ob_start();
-                bcfd_diagnose_encoding();
-                $report = ob_get_clean();
-
-                echo '<div class="wrap">';
-                echo '<h1>' . esc_html__( 'Divi quote-encoding diagnostic', 'block-converter-for-divi' ) . '</h1>';
-                echo '<p>' . esc_html__( 'Each row is a callback that runs when a post is saved, with the plugin it came from. A row marked MATCH encodes a shortcode attribute while leaving real HTML alone, which is the behaviour being hunted. Copy all of this and send it on. This saves one draft post and deletes it again; nothing else on your site is touched. Delete this plugin when you are done with it.', 'block-converter-for-divi' ) . '</p>';
-                echo '<textarea readonly rows="28" style="width:100%;font-family:monospace;font-size:12px;" onclick="this.select()">';
-                echo esc_textarea( $report );
-                echo '</textarea>';
-                echo '</div>';
-            }
+            'bcfd_diag_page'
         );
     } );
 
-    // The plain-text URL still works, for anyone who would rather curl it.
+    // The plain-text URL still works, for anyone who would rather curl it — but
+    // it carries the same nonce, because it starts the same writes. Visiting it
+    // without one explains itself rather than doing nothing, which is the whole
+    // reason there is a URL as well as a menu item.
     add_action( 'admin_init', function () {
         if ( ! isset( $_GET['bcfd-diagnose'] ) || ! current_user_can( 'manage_options' ) ) {
             return;
         }
 
         header( 'Content-Type: text/plain; charset=utf-8' );
+
+        if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'bcfd-diagnose-run' ) ) {
+            echo "The diagnostic plugin is installed and this request reached it.\n\n"
+                . "It did not run, because running it writes: it calls other plugins' save\n"
+                . "filters, saves and deletes a draft post, and imports and deletes two more.\n"
+                . "A link somebody else can put in front of you must not be able to start\n"
+                . "that, so the run needs a one-time token this address does not carry.\n\n"
+                . "Go to Tools -> Divi quote-encoding diagnostic and press the button. That\n"
+                . "page also holds a ready-made plain-text link with the token in it.\n";
+            exit;
+        }
+
         bcfd_diagnose_encoding();
         exit;
     } );
