@@ -4,7 +4,7 @@ Tags: divi, gutenberg, block editor, migration, converter
 Requires at least: 6.1
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 2.9.3
+Stable tag: 2.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -187,6 +187,26 @@ the most useful thing to hear about.
 3. The data retention setting controlling whether backups survive deletion.
 
 == Changelog ==
+
+= 2.10.0 =
+* Fixed a video embed being replaced with a different site's video. A page whose
+  video came from an address that merely contained "youtube.com" or "vimeo.com"
+  — a host such as notyoutube.com — was converted into a real YouTube or Vimeo
+  embed of whatever identifier happened to be in the address. The host is now
+  checked properly, and an address that is not one of those providers is kept as
+  it was written.
+* Fixed a video source that WordPress will not store, such as a "javascript:"
+  address, being kept inside the Video block's saved data even though it was
+  stripped from the visible markup. Such a tag is now kept exactly as written in
+  a Custom HTML block, and the conversion says so.
+* Restore now checks that the page is still the version you were shown before it
+  replaces it. If somebody saved the page after your last scan, the restore is
+  refused and nothing is written — look at what the page holds now, then press
+  Restore again if that is still what you want.
+* Both conversion and restore make that check at the last moment WordPress
+  allows, immediately before the write. That leaves a gap of microseconds in
+  which a save could still be lost, which is small and is not zero: run batch
+  conversions while nobody is editing.
 
 = 2.9.3 =
 * A page that was edited between being scanned and being converted no longer
@@ -461,6 +481,14 @@ the most useful thing to hear about.
   singly or in batches.
 
 == Upgrade Notice ==
+
+= 2.10.0 =
+Fixes two video conversion faults: an embed from a lookalike host being replaced
+with a different site's video, and an unusable video address being kept in a
+Video block's saved data. Restore now refuses to overwrite a page that was saved
+after your last scan. Pages you have already converted are unaffected — but if
+any of them held a video, it is worth opening it and checking the video is the
+one you meant.
 
 = 2.9.3 =
 A page edited between being scanned and being converted no longer stops a batch:

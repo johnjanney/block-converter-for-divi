@@ -479,8 +479,30 @@ and it is named rather than glossed.
 - **The provenance of the quote encoding is still unknown.** The diagnostic is
   now safe to install and safe to run, which is what R4-01 and R4-02 were about.
   It has not been run on the site that has the problem.
-- **No version bump and no release.** This work sits unreleased on `main` with a
-  `[Unreleased]` section in the change log, as the last few rounds of work have.
+
+---
+
+### Release position
+
+Cut as `2.10.0`, and MINOR rather than PATCH for one reason: restore now
+requires the caller to name the version it is replacing. The bundled admin
+screen sends it, so nothing a user does changes — but that is a documented
+endpoint's contract, and a contract change is not a patch.
+
+`dist/block-converter-for-divi-2.10.0.zip` is built and verified: 159,044 bytes,
+SHA-256
+`22f5e433ac5fc003a69597f9cdf18631beeca76755632f5208a443fd7600fee5`, all 31
+shipped files byte-identical to the source tree, and no test, build or review
+file in the archive. The digest is recorded here rather than in `CHANGELOG.md`,
+because an archive cannot contain its own digest and putting it there would
+break the identity check above.
+
+The review's position on what this plugin is has not changed and should not:
+an assisted migration tool for supervised work. The video defects it found are
+fixed and the concurrency claims are honest now, which is what it asked for
+before the next release. The corpus condition for a WordPress.org submission is
+still unmet, and the two gaps named above — no visual comparison, no live
+uninstall test — are still open.
 
 ---
 

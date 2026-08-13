@@ -3,7 +3,7 @@
  * Plugin Name: Block Converter for Divi
  * Plugin URI:  https://github.com/johnjanney/block-converter-for-divi
  * Description: Converts pages built with the Divi Builder into native Gutenberg blocks, preserving content, images, and design intent.
- * Version:     2.9.3
+ * Version:     2.10.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  * Text Domain: block-converter-for-divi
@@ -141,7 +141,7 @@ if ( bcfd_legacy_plugin_present() ) {
  * error" that upgrading from 1.x produced. Nothing outside this file reads
  * these, and no stored data is keyed on them, so the prefix is free to change.
  */
-define( 'BCFD_VERSION', '2.9.3' );
+define( 'BCFD_VERSION', '2.10.0' );
 define( 'BCFD_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BCFD_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 

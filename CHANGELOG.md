@@ -96,8 +96,21 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [2.10.0] — 2026-08-12
+
 Answers to the fourth Codex review. Each finding, what reproducing it showed and
 what was done is in [`CODEX-REVIEW-RESPONSE.md`](CODEX-REVIEW-RESPONSE.md).
+
+A MINOR release rather than a patch, for one reason: **Restore now requires the
+caller to name the version of the page it is replacing**, and refuses when that
+version is no longer there. That is a change to a documented endpoint's
+contract. The bundled admin screen sends the token, so nothing a user does
+changes; anything else calling `d2g_restore_page` directly must send
+`source_hash` or be refused.
 
 ### Fixed
 
