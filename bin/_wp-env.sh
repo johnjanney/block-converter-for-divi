@@ -10,6 +10,62 @@
 #
 # Any script that destroys and recreates an environment needs this. Both
 # bin/multisite-check.sh and bin/wp-matrix.sh do.
+#
+# Every script that starts an environment should call d2g_wp_env_start rather
+# than `npx wp-env start`, for the same reason: a start that fails on a stale
+# checkout is not a test result, and two of these scripts used to fail that way
+# without recovering.
+#
+# Related, and the reason .wp-env.json pins `core`: with no pin, wp-env asks
+# WordPress.org for the current version and checks that tag out of the
+# WordPress/WordPress git mirror. The mirror can lag the announcement, and a
+# review run died on a ref for 7.0.4 that did not exist yet — a failure with
+# nothing to do with this plugin, on the default gate. The pin is a dependency
+# version like any other: bump it deliberately, and run the matrix when you do.
+# bin/wp-matrix.sh still tests `latest` explicitly.
+#
+# The pin is also why AUTOMATIC_UPDATER_DISABLED is set there: a background
+# updater on a pinned core is a contradiction, and its "Automatic updates
+# starting..." lines land in wp-content/debug.log, which every one of these
+# scripts treats as a failure. A gate that fails for core's own housekeeping
+# teaches people to ignore it.
+
+# Where wp-env keeps this project's WordPress checkouts.
+#
+# `wp-env install-path` used to answer this and was removed in wp-env 11, which
+# is worse than it sounds: the reset below silently became a no-op, because an
+# empty answer skips the removal and reports success. So the path is derived the
+# way wp-env derives it (lib/config/load-config.js): an md5 of the absolute
+# config file path under ~/.wp-env, or ~/wp-env when snap is installed, with a
+# descriptive `wp-env-<dir>-<short hash>` name for anything created since.
+#
+# Prints nothing when there is no checkout to find.
+d2g_wp_env_instance_path() {
+    local config home hash
+    config="${ROOT:-$(pwd)}/.wp-env.json"
+
+    if [[ -n "${WP_ENV_HOME:-}" ]]; then
+        home="$WP_ENV_HOME"
+    elif [[ -d /snap ]]; then
+        home="${HOME}/wp-env"
+    else
+        home="${HOME}/.wp-env"
+    fi
+
+    hash="$(printf '%s' "$config" | md5sum | cut -d' ' -f1)"
+
+    if [[ -d "${home}/${hash}" ]]; then
+        printf '%s\n' "${home}/${hash}"
+        return 0
+    fi
+
+    local descriptive
+    for descriptive in "${home}"/*-"${hash:0:8}"; do
+        [[ -d "$descriptive" ]] && printf '%s\n' "$descriptive" && return 0
+    done
+
+    return 1
+}
 
 # Remove an environment completely, including the checkouts destroy leaves.
 #
@@ -19,7 +75,7 @@ d2g_wp_env_reset() {
     echo "y" | npx wp-env destroy >/dev/null 2>&1 || true
 
     local instance
-    instance="$(npx wp-env install-path 2>/dev/null | tr -d '\r' | tail -1)"
+    instance="$(d2g_wp_env_instance_path || true)"
 
     if [[ -n "$instance" && -d "$instance" ]]; then
         docker run --rm -v "${instance}:/instance" alpine \
@@ -29,6 +85,10 @@ d2g_wp_env_reset() {
 }
 
 # Start an environment, resetting first if a stale checkout blocks it.
+#
+# Returns non-zero when the retry fails too. It used to return whatever the
+# database-upgrade call returned, which is `|| true` — so a start that never
+# came up reported success, and the caller went on to run tests against nothing.
 d2g_wp_env_start() {
     if npx wp-env start >/dev/null 2>&1; then
         d2g_wp_env_update_db
@@ -37,8 +97,13 @@ d2g_wp_env_start() {
 
     echo "  (start failed; clearing leftover checkouts and retrying)"
     d2g_wp_env_reset
-    npx wp-env start >/dev/null 2>&1
+
+    if ! npx wp-env start; then
+        return 1
+    fi
+
     d2g_wp_env_update_db
+    return 0
 }
 
 # Clear a pending database upgrade.

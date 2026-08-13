@@ -2,7 +2,7 @@
   "name": "block-converter-for-divi-dev",
   "private": true,
   "version": "0.0.0",
-  "description": "Development-only tooling. Not shipped in the plugin ZIP \u2014 see bin/build-zip.sh.",
+  "description": "Development-only tooling. Not shipped in the plugin ZIP — see bin/build-zip.sh.",
   "engines": {
     "node": ">=22.22.2"
   },
@@ -17,6 +17,10 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
-    "@wordpress/env": "^10.34.0"
+    "@wordpress/env": "^11.13.0"
+  },
+  "comment:overrides": "wp-env unpacks the WordPress it downloads with a zip library, and both libraries it has used have had an advisory against the version it asked for: extract-zip 1.7.0 (GHSA-jmr9-qjv8-65gv, symlink path traversal, never patched) and now adm-zip <0.6.0 (GHSA-xcpc-8h2w-3j85). 11.13.0 moved to adm-zip and pins ^0.5.9, which cannot take the fixed 0.6.0 on its own. Nothing here ships in the plugin ZIP, but a development machine unpacking archives is still a machine, and `npm audit` is only a gate while it is clean. Drop this when wp-env widens its own range.",
+  "overrides": {
+    "adm-zip": "^0.6.0"
   }
 }

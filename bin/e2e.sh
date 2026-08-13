@@ -39,13 +39,12 @@ if [[ ! -d node_modules/@playwright/test ]]; then
     npm install --no-fund --no-audit
 fi
 
+# Through the shared helper: it clears the leftover checkouts `wp-env destroy`
+# does not remove, retries, and runs the pending database upgrade that
+# bin/wp-matrix.sh leaves behind when it moves the environment between
+# WordPress versions. See bin/_wp-env.sh.
 echo "Starting WordPress..."
-npx wp-env start >/dev/null
-
-# bin/wp-matrix.sh leaves the shared environment on whichever WordPress it last
-# installed, and a version change makes WordPress redirect every admin page to
-# the database-upgrade screen until someone clears it. See bin/_wp-env.sh.
-d2g_wp_env_update_db
+d2g_wp_env_start || { echo "error: could not start wp-env" >&2; exit 1; }
 
 # The seeder deletes anything a previous run left, so a re-run starts from the
 # same state rather than accumulating pages.

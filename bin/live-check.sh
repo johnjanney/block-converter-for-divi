@@ -55,14 +55,15 @@ fi
 #
 # `wp-env start` is idempotent: it is a no-op against an already-running
 # environment, so this does not need to know whether one exists.
+#
+# Through the shared helper, which clears the leftover checkouts `wp-env
+# destroy` does not remove and retries. This script called `npx wp-env start`
+# directly and died on a stale root-owned checkout during a review — a failure
+# the helper beside it already knew how to repair. It also runs the pending
+# database upgrade, which bin/wp-matrix.sh routinely leaves behind.
 
 echo "Starting WordPress (first run pulls images and takes a few minutes)..."
-npx wp-env start >/dev/null
-
-# bin/wp-matrix.sh leaves the shared environment on whichever WordPress it last
-# installed, and a version change makes WordPress redirect every admin page to
-# the database-upgrade screen until someone clears it. See bin/_wp-env.sh.
-d2g_wp_env_update_db
+d2g_wp_env_start || { echo "error: could not start wp-env" >&2; exit 1; }
 
 WP_VERSION="$(npx wp-env run cli wp core version 2>/dev/null | head -1 | tr -d '\r')"
 echo "WordPress ${WP_VERSION} is up."

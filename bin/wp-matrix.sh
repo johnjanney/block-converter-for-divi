@@ -82,7 +82,21 @@ for VERSION in "${VERSIONS[@]}"; do
     echo "============================================================"
 
     if [[ "$VERSION" == "latest" ]]; then
-        rm -f "$OVERRIDE"
+        # .wp-env.json pins a WordPress version so the everyday gates are
+        # reproducible (see bin/_wp-env.sh), which means "latest" has to say so
+        # explicitly rather than by leaving the pin alone. A null core is
+        # wp-env's own "whatever is current".
+        #
+        # This is the one entry here that can fail for a reason that is not the
+        # plugin: wp-env asks WordPress.org for the current version and then
+        # checks that tag out of the WordPress/WordPress mirror, and the mirror
+        # can lag the announcement by hours. A failure naming a missing ref is
+        # that, not a regression.
+        cat > "$OVERRIDE" <<'EOF'
+{
+  "core": null
+}
+EOF
     else
         PHP="${PHP_FOR[$VERSION]:-8.2}"
         cat > "$OVERRIDE" <<EOF
