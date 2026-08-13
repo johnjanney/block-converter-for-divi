@@ -45,6 +45,41 @@ if [[ -f readme.txt ]]; then
     fi
 fi
 
+# ---- Instructions must name constants that still exist ---------------------
+#
+# The release procedure in CHANGELOG.md told maintainers to check `D2G_VERSION`
+# for three releases after the constant became `BCFD_VERSION`, because nothing
+# reads documentation. This does, for the two files that give current
+# instructions: the release procedure at the top of CHANGELOG.md, and BRIEF.md.
+#
+# A line recording the rename itself is allowed to name the old constant, and so
+# is a struck-through roadmap entry — both are history rather than instruction.
+
+# The old spelling of each constant the plugin actually defines, so this tracks
+# the code rather than a hard-coded list. Class names still use the D2G_ prefix
+# and are current, which is why this cannot simply grep for D2G_.
+OLD_NAMES="$(grep -oE "define\(\s*'BCFD_[A-Z_]+'" "$MAIN" \
+    | sed -E "s/.*'BCFD_([A-Z_]+)'/D2G_\1/" | sort -u | paste -sd'|')"
+
+STALE_DOCS=""
+if [[ -n "$OLD_NAMES" ]]; then
+    STALE_DOCS="$(
+        {
+            # Only the preamble: the dated release entries below the first
+            # version heading are a record of what happened and say so.
+            sed -n "1,/^## \[/p" CHANGELOG.md | grep -nE "\b(${OLD_NAMES})\b" | sed 's#^#CHANGELOG.md:#'
+            [[ -f BRIEF.md ]] && grep -nE "\b(${OLD_NAMES})\b" BRIEF.md | sed 's#^#BRIEF.md:#'
+        } | grep -viE 'rename|~~' || true
+    )"
+fi
+
+if [[ -n "$STALE_DOCS" ]]; then
+    echo "error: documentation names a constant this plugin no longer defines." >&2
+    echo "$STALE_DOCS" | sed 's/^/       /' >&2
+    echo "       The plugin defines BCFD_*; D2G_* is only for lines describing the rename." >&2
+    exit 1
+fi
+
 VERSION="$HEADER_VERSION"
 ARCHIVE="dist/${SLUG}-${VERSION}.zip"
 

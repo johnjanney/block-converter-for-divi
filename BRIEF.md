@@ -205,9 +205,13 @@ Gutenberg block comment markup → `wp_update_post()`.
 | --- | --- |
 | `d2g_scan_pages` | Filtered, sorted, paginated list of posts/pages that contain Divi shortcodes **or** hold a backup |
 | `d2g_preview_conversion` | Convert in memory, return original + converted |
-| `d2g_convert_page` | Backup (optional), convert, save, detach builder meta |
+| `d2g_convert_page` | Backup (mandatory since 2.1.0 — there is no way to skip it), convert, save, detach builder meta |
 | `d2g_restore_page` | Restore `post_content` from `_d2g_divi_backup`, re-enable the Divi Builder |
 | `d2g_save_settings` | Persist the opt-in "delete backups on uninstall" preference |
+
+`d2g_convert_page` and `d2g_restore_page` both require a `source_hash` naming
+the version of the page the caller is replacing, and both refuse when it no
+longer matches.
 
 The scan deliberately matches on *"contains `[et_pb_` **or** has a backup"*. A
 converted page no longer contains Divi markup, so a content-only match would
@@ -384,11 +388,17 @@ than connected; see `OPENQUESTIONS.md` Q22.
    module loses its scripts and iframes to it. Conversion and restore now detect
    that and refuse, naming what would be removed, rather than writing damaged
    content and reporting success. See `OPENQUESTIONS.md` Q15.
-4. **Style fidelity is partial** and mostly unmapped — see §5.1 for the exact
-   matrix. Spacing, borders, shadows, fonts, and module custom CSS are lost.
-   Since 2.2.0 those losses are detected and named in the preview rather than
-   being silent, but detection is not the same as mapping: the settings still
-   have to be rebuilt by hand.
+4. **Style fidelity is partial** — see §5.1 for the exact matrix, which is the
+   only statement of this worth trusting. In summary, and only in summary:
+   spacing (`custom_padding`, `custom_margin`) is mapped on sections, rows and
+   columns since 2.4.0 and nowhere else; uniform borders and a uniform radius
+   are mapped on the same three since 2.6.0, while per-side widths and per-corner
+   radii are not; body typography is mapped wherever a module produces body
+   text, and heading typography only on the Text module. Shadows, font
+   families, gradients, positioning, hover states, per-breakpoint overrides and
+   module custom CSS are not mapped at all. Since 2.2.0 every one of those
+   losses is detected and named in the preview rather than being silent, but
+   detection is not mapping: those settings still have to be rebuilt by hand.
 5. ~~**Attribute values containing `]` can truncate a tag.**~~ Fixed in 2.2.0.
    The tokenizer is quote-aware: it scans from `[` to the closing `]` treating
    quoted values as opaque, so `title="Array[0]"` parses correctly.
@@ -397,10 +407,25 @@ than connected; see `OPENQUESTIONS.md` Q22.
 7. **The scan does not scale.** It uses a leading-wildcard `LIKE` over
    `post_content`, which cannot use an index. "All" is capped at 500 rows
    (`d2g_scan_hard_cap`) so it cannot exhaust memory, but a large site still
-   costs a full table scan per query. See `OPENQUESTIONS.md` Q11.
+   costs a full content scan per query — three of them on the first page of a
+   scan session (the total, the Divi 5 count, and the result query), because the
+   row cap bounds what is *returned* and not what has to be read. Pages 2..n
+   reuse the cached counts. No production-scale benchmark of this exists: the
+   timings recorded in the change log measure the converter, not the scan. See
+   `OPENQUESTIONS.md` Q11.
 8. **Portfolio conversion depends on Divi's `project` post type**, which stops
    existing when Divi is removed. The converted Query Loop is warned about but
    still points at it.
+9. **A conversion or restore can still lose a save made in the last instant
+   before it writes.** The source check runs on `pre_post_update`, the last hook
+   before core's `UPDATE`, so the window is microseconds wide rather than the
+   seconds a large page takes to convert — but two statements are not one
+   statement, and a save landing between them is overwritten. Closing it means
+   either bypassing core's write path (losing revisions, KSES and every other
+   plugin's save hooks) or holding a transaction open across those hooks, and
+   both cost more than the window is worth. `tests/live/run.php` measures the
+   window rather than assuming it. Convert in batches while the editors are
+   quiet.
 
 ### Closed in 2.1.0
 
@@ -447,7 +472,8 @@ than connected; see `OPENQUESTIONS.md` Q22.
 ## 8. Roadmap
 
 **Phase 1 — Release hygiene** *(largely delivered)*
-- ~~Adopt semantic versioning; bump `D2G_VERSION` + plugin header together~~ — done
+- ~~Adopt semantic versioning; bump the version constant + plugin header
+  together~~ — done (the constant was renamed to `BCFD_VERSION` in 2.0.0)
 - ~~Build and retain versioned ZIPs, tag each release~~ — done; `bin/build-zip.sh`
   reads the version from the plugin header and refuses to overwrite an archive
 - ~~Add `uninstall.php` and `LICENSE`~~ — done
@@ -464,7 +490,9 @@ than connected; see `OPENQUESTIONS.md` Q22.
   in 2.1.0 (Q16 resolved)
 - ~~Conversion report of lossy modules per page~~ — done in 2.1.0; shown in the
   preview
-- Resolve kses stripping for non-`unfiltered_html` users (Q15)
+- ~~Resolve kses stripping for non-`unfiltered_html` users (Q15)~~ — done in
+  2.2.0: conversion and restore detect what KSES would remove and refuse,
+  naming it, rather than writing damaged content and reporting success
 - Dry-run / preview-all mode across a whole batch
 
 **Phase 3 — UI completion** *(delivered in 1.1.0 and 2.1.0)*
@@ -481,11 +509,17 @@ than connected; see `OPENQUESTIONS.md` Q22.
 - ~~Fixture-based unit tests: known Divi input → expected block markup~~ — done
   in 2.1.0; `tests/run.php`, gating the build script
 - ~~Static block-consistency assertions (markup vs. attributes)~~ — done in 2.1.0
-- Run the canonical WordPress **JavaScript** block parser and validator against
-  every fixture, on each supported WordPress version — the remaining half of the
-  validity gate, and what `Tested up to` is blocked on (Q23)
-- CI matrix over supported WordPress and PHP versions
+- ~~Run the canonical WordPress **JavaScript** block parser and validator against
+  every fixture, on each supported WordPress version~~ — done in 2.2.0 for the
+  pinned block library (`tests/js/validate.mjs`, gating the build) and in 2.3.0
+  across the nine supported releases (`bin/block-library-matrix.sh`,
+  `bin/wp-matrix.sh`). Q23 is resolved; `Tested up to` now reflects a real run
+- ~~CI matrix over supported WordPress and PHP versions~~ — done in 2.3.0;
+  `bin/wp-matrix.sh` and the GitHub Actions workflow. The everyday gates run on
+  the WordPress version pinned in `.wp-env.json`
 - WP-CLI command for large-site batch migration
+- A resumable scan inventory, so a first scan of a large `wp_posts` stops
+  costing three full content scans (limit 7 above, Q11)
 
 ## 9. Success criteria
 

@@ -555,14 +555,22 @@ class D2G_Parser {
     }
 
     /**
-     * Check whether content contains a Divi shortcode this parser knows.
+     * Check whether content contains something this parser reads as a Divi tag.
      *
      * This is the gate the convert endpoint uses before it overwrites a post,
      * so a loose match is not harmless. Testing for the bare `[et_pb_` prefix
      * matched documentation, a code sample, or a support answer that merely
      * mentions a Divi tag, and pulled that post into a destructive flow. The
-     * match now requires a complete, known tag followed by a real terminator —
-     * whitespace, `]`, or `/]` — so `[et_pb_` on its own no longer qualifies.
+     * match requires a syntactically complete opening tag — `et_pb_` plus a
+     * name, followed by a real terminator: whitespace, `]`, or `/]` — so
+     * `[et_pb_` on its own no longer qualifies.
+     *
+     * Deliberately *not* limited to the 58 tags with renderers. `[et_pb_thing]`
+     * from a third-party module is Divi content, and a page made of nothing
+     * else is a page this plugin should offer to convert and report the loss
+     * on, rather than one it claims to see no Divi in. The check is "is this a
+     * tag", not "is this a tag we know" — see the `unlisted but well-formed`
+     * case in tests/run.php.
      */
     public static function has_divi_content( string $content ): bool {
         if ( false === strpos( $content, '[et_pb_' ) ) {

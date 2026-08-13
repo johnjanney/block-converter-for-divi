@@ -76,7 +76,7 @@ published under that version.
 ### Building a release ZIP
 
 From the repository root, use the build script. It reads the version from the
-plugin header, checks it against `D2G_VERSION` and the readme's `Stable tag`,
+plugin header, checks it against `BCFD_VERSION` and the readme's `Stable tag`,
 and refuses to overwrite an archive that already exists:
 
 ```bash
@@ -96,7 +96,97 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
-_Nothing yet._
+Answers to the fourth Codex review. Each finding, what reproducing it showed and
+what was done is in [`CODEX-REVIEW-RESPONSE.md`](CODEX-REVIEW-RESPONSE.md).
+
+### Fixed
+
+- **A video whose source WordPress refuses to store no longer keeps that source
+  in the block.** The HTML converter escaped the URL for the markup and stored
+  the raw value in the block's `src` attribute, so `<video src="javascript:…">`
+  produced an empty `src` in the visible markup and
+  `<!-- wp:video {"src":"javascript:alert(1)"} -->` in the block comment — and
+  the comment is what the editor rebuilds the markup from. The URL is now
+  sanitised before either use, and a source that does not survive that is kept
+  verbatim in a Custom HTML block, with a warning, rather than becoming a Video
+  block. Nothing is lost and nothing unsafe is stored as block data.
+
+- **`notyoutube.com` is not YouTube.** Both video paths decided the provider by
+  searching the URL for `youtube.com`, `youtu.be` or `vimeo.com` as a substring,
+  which is not a question about the URL: `https://notyoutube.com/embed/WRONG`
+  was rewritten to `https://www.youtube.com/watch?v=WRONG`, and
+  `https://notvimeo.com/video/123` to `https://vimeo.com/123` — somebody else's
+  video, silently substituted into a page. The host is now parsed and matched
+  against an allowlist on a dot boundary, in one shared function both paths
+  call, because the same defect existing twice is what two copies of a regex
+  buys you.
+
+- **A save that lands during a restore is no longer discarded.** Restore took no
+  source token, on the argument that the user is explicitly discarding what is
+  there. That is true of the version they were looking at and only of that
+  version; the plugin's lock does not stop an ordinary editor. Restore now names
+  the version it is replacing, exactly as conversion does, and a page that has
+  moved since is refused with the current token rather than overwritten. A
+  conversion also hands back a token for what it has just written, so the first
+  restore after a conversion is not refused as stale.
+
+### Changed
+
+- **The conversion guard is described accurately.** The source comparison runs
+  on `pre_post_update`, the last hook before core's `UPDATE`, which makes the
+  window microseconds wide instead of the seconds a large page takes to convert.
+  It is not a compare-and-swap, and a comment here said it was "part of the
+  write itself". A save landing between the comparison and core's `UPDATE` is
+  still lost. `tests/live/run.php` now writes into exactly that gap through a
+  second database connection and records what happens, so the residual window is
+  measured rather than assumed, and `BRIEF.md` lists it as a limit with the
+  reason it is not closed: both cures — bypassing core's write path, or holding
+  a transaction open across every other plugin's save hooks — cost more than the
+  window is worth.
+
+- **`bin/diagnose-encoding.php` asks before it writes, and deletes only what it
+  created.** The internal diagnostic is not shipped in the release ZIP, but it
+  tells an administrator to install it on the site with the problem, so it is
+  held to the same standard as the plugin. It ran everything — calling other
+  plugins' save filters, saving a post, importing two more — while WordPress
+  rendered its Tools page on an ordinary GET, which a link on another site can
+  cause. It now states exactly what it will do and does none of it until a POST
+  carrying an action-specific nonce arrives. Its import probes are drafts rather
+  than published posts, and the cleanup, which used to select `bcfd-import-probe-1`
+  by slug and force-delete whatever it found, now deletes only rows carrying a
+  random marker for that one run. A site with a page of that name would have
+  lost it permanently.
+
+- **The everyday test gates are reproducible.** `.wp-env.json` pins WordPress,
+  because with no pin wp-env asks WordPress.org for the current version and then
+  checks that tag out of a git mirror that can lag it — which failed a review run
+  on a 7.0.4 ref that did not exist yet. `bin/live-check.sh` and `bin/e2e.sh` now
+  start through the shared helper that clears the root-owned checkouts
+  `wp-env destroy` leaves behind, instead of calling `npx wp-env start` directly
+  and dying on them. `bin/wp-matrix.sh` still tests `latest` explicitly.
+
+- **`@wordpress/env` 10.39.0 → 11.13.0**, which drops the unpatched
+  `extract-zip` 1.7.0 (GHSA-jmr9-qjv8-65gv, symlink path traversal) that
+  `npm audit` had been reporting as two High findings. 11.13.0 unpacks with
+  `adm-zip` and pins a range below that library's own fix, so an `overrides`
+  entry takes `adm-zip` 0.6.0 (GHSA-xcpc-8h2w-3j85). `npm audit` is clean. None
+  of this ships in the plugin ZIP; all of it runs on a development machine.
+
+  The upgrade removed `wp-env install-path`, which the shared reset helper used
+  to find the checkouts it deletes — and an empty answer made that helper a
+  silent no-op that still reported success. It derives the path the way wp-env
+  does now, and a start whose retry fails returns a failure instead of letting
+  the caller test against nothing.
+
+- **Stale statements in the project documents.** The build instructions named
+  `D2G_VERSION`, renamed to `BCFD_VERSION` in 2.0.0 — `bin/build-zip.sh` now
+  fails a build when the instructions name a constant the plugin does not
+  define. `BRIEF.md` called the backup optional (it has been mandatory since
+  2.1.0), described spacing, borders and typography as lost after three releases
+  had mapped parts of them, and still listed the KSES work, the JavaScript
+  validator and the CI matrix as open. The parser's own comment claimed
+  `has_divi_content()` requires a *known* tag; it accepts any well-formed
+  `et_pb_*` tag, deliberately, and the comment now says why.
 
 ---
 

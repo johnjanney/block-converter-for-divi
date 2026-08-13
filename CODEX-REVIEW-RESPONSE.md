@@ -1,14 +1,486 @@
 # Response to the Codex Repository Reviews
 
-> **Round two is a historical checkpoint.** Everything from "Response to the
-> round-two review" down to the end of this file describes the repository as it
-> stood when 2.2.0 was cut, and its closing "what is not done" list has since
-> gone stale — live WordPress, endpoint, database, browser, multisite and
-> version-matrix suites all exist now. It is kept as written rather than
-> rewritten, because a response that quietly updates itself is not a record.
+> **Rounds two and three are historical checkpoints.** Everything from "Response
+> to the round-three review" down to the end of this file describes the
+> repository as it stood when 2.3.0 and 2.2.0 were cut. Both are kept as written
+> rather than rewritten, because a response that quietly updates itself is not a
+> record — one of them says something that turned out to be wrong, and the
+> correction is marked in place where the claim is, not applied over the top of
+> it.
 >
-> The current answer is [Response to the round-three review](#response-to-the-round-three-review),
-> at the top of this file. Read that first.
+> The current answer is [Response to the round-four review](#response-to-the-round-four-review),
+> immediately below. Read that first.
+
+---
+
+## Response to the round-four review
+
+**Repository:** Block Converter for Divi
+**Review answered:** `CODEX-REVIEW.md`, dated 2026-08-12
+**Reviewed revision:** `b751615` (`main`), tree `98ac284`
+**Response date:** 2026-08-12
+**Version at review:** `2.9.3`; this work is unreleased
+
+---
+
+### Summary
+
+**All ten findings are confirmed. None is a false positive, and one is
+understated.** Each was reproduced against the reviewed tree before anything was
+changed, except where the reproduction would itself have destroyed something —
+and R4-01, the High finding, was reproduced literally, by letting the old
+diagnostic delete a page it did not create.
+
+Nine are fixed. One — R4-08, the scan's leading-wildcard content search — is
+accepted and not fixed, for the same reason it was not fixed in round three: the
+honest answer is a resumable inventory, which is a feature rather than a repair.
+What has changed is that the documents now say what it costs precisely (three
+full content scans on the first page of a session, not "a full table scan") and
+say plainly that no production-scale benchmark exists.
+
+The understated one is R4-09. The review found that `bin/live-check.sh` and
+`bin/e2e.sh` bypass the shared wp-env helper. They do — and the helper they were
+bypassing did not work either. In the reviewed tree it returned success when a
+start had failed, because the last thing it ran was a `|| true`, so a caller
+would have gone on to test against nothing. And the moment the R4-07 upgrade
+landed, its reset became a silent no-op as well: wp-env 11 removed the
+`install-path` command it used to find the checkouts it deletes, and an empty
+answer skipped the removal *and* reported success. The second one is this
+response's own doing rather than the reviewed tree's, which is exactly why it is
+recorded here — an upgrade that removes a command a script depends on is the
+kind of breakage a passing test run hides.
+
+The review's central correction is accepted without reservation: **the
+conversion guard is not atomic and must not be called atomic.** The round-three
+response said the comparison was "part of the write". It is not. That claim is
+now marked wrong where it was made, the code comment that repeated it is
+rewritten, and `tests/live/run.php` writes into the remaining window through a
+second database connection so its existence is measured rather than argued
+about.
+
+---
+
+### R4-01 — Diagnostic cleanup can delete unrelated posts — **confirmed, reproduced, fixed**
+
+Reproduced on WordPress 7.0.4, because reading the code proves the query is
+ownership-blind but not that the consequence follows. A page holding the words
+"please do not delete me" was created with `post_name` `bcfd-import-probe-1` —
+an ordinary page, nothing to do with the diagnostic — and the reviewed version
+of `bin/diagnose-encoding.php` was run:
+
+```
+  imported 3 post(s), then deleted them
+  shortcode attributes encoded after import : no
+  real HTML attributes left alone           : NO
+
+victim page 67 still exists: NO
+```
+
+Permanently gone, with no revision and no trash, from a tool whose own header
+says "no existing post". The review is right, and its severity is right.
+
+Note the third line as well. The stranger's page was read as one of the probes,
+it contains no `href`, so the diagnostic reported that the import had eaten the
+HTML attributes it was checking. An ownership-blind query does not only delete
+the wrong row; it answers the question wrongly too.
+
+Fixed as the review asked, and by ownership rather than by name, which is the
+part that matters:
+
+- Each run generates a random identifier. Every probe it imports carries that
+  identifier in `_bcfd_probe_run` post meta.
+- The cleanup selects by that meta value, not by slug, and re-checks each row's
+  marker through `get_post_meta()` immediately before deleting it.
+- Anything without the marker is left where it is and named in the report.
+- The probes are drafts, not published posts.
+
+The same run after the fix, with the same page in place first:
+
+```
+  imported 2 post(s), then deleted 2 of them
+  shortcode attributes encoded after import : no
+  real HTML attributes left alone           : yes
+
+victim page still exists: yes
+probe posts left behind: 0
+orphan probe markers: 0
+victim intact: please do not delete me
+```
+
+`bin/diagnose-encoding.php`
+
+---
+
+### R4-02 — The diagnostic performs write actions on nonce-free GET requests — **confirmed, fixed**
+
+Confirmed. Rendering the Tools page ran everything: the filter walk, the write
+probe, and a full import. `/wp-admin/?bcfd-diagnose=1` did the same. Both are
+GETs, neither checked a nonce, and a capability check answers a different
+question — it says who you are, not that you asked.
+
+The review is also right that the header's "nothing else is touched" was too
+strong once the tool grew an import. Calling another plugin's `save_post` filter
+is calling another plugin's code, and importing a post fires every hook an
+ordinary import fires.
+
+Fixed:
+
+- The Tools page now renders a read-only explanation listing all three kinds of
+  side effect, including that the callbacks belong to other plugins and this
+  file cannot know what they do. Nothing runs until the button is pressed.
+- The button is a POST carrying `wp_nonce_field( 'bcfd-diagnose-run' )`, checked
+  with `check_admin_referer()`, on top of the `manage_options` check.
+- The plain-text URL takes the same nonce. Without one it prints why it did not
+  run and where the token comes from — silence is the one answer this file must
+  never give, because that is the confusion it exists to end.
+- Probes are drafts.
+- The header docblock now states exactly what runs and what it can touch.
+
+One part of the review's correction is not implemented as written: it asks that
+arbitrary callbacks be called only if the administrator selects *that* test
+specifically. There is one button, not three. The filter walk, the write probe
+and the import are one investigation — the import step only exists because the
+first two came back clean, and reading the report of one without the others
+would mislead — so what the button buys is stated in full above it instead, in
+the same words as this response, and the page says the callbacks belong to other
+plugins and that this file cannot know what they do.
+
+Script mode (`wp eval-file`) still runs immediately. A command typed at a shell
+is not a cross-site request.
+
+Checked by rendering the Tools page as an administrator with no submission, on
+the same WordPress the rest of this was verified on:
+
+```
+rendered 1614 bytes
+has the button      : yes
+has a nonce field   : yes
+ran the report      : no
+rows written        : 0
+```
+
+`bin/diagnose-encoding.php`
+
+---
+
+### R4-03 — The conversion source check is still not atomic — **confirmed; the claim is fixed, the window is documented**
+
+Confirmed, and this is the finding that mattered most, because the error was in
+what the project *said* about itself.
+
+The review's reasoning is exactly right: `pre_post_update` fires, then core runs
+a separate `$wpdb->update()`. The guard's `SELECT` is not a condition of that
+statement. The existing test writes at priority 1 — before the guard — and
+proves only that ordering.
+
+Measured rather than argued. `tests/live/run.php` now hooks the `query` filter,
+recognises core's `UPDATE` on the row before it executes, and writes through a
+**second database connection** — a genuinely concurrent writer, not a re-entrant
+call on the connection that is mid-statement:
+
+```
+ok    the intruding write really did land inside the gap
+ok    a save landing between the guard and core's UPDATE is still lost — the documented residual window
+```
+
+The first assertion is there so the second cannot pass vacuously. The second
+asserts the *documented* behaviour, and says in its own comment that if it ever
+fails, the window has been closed and the comments must be updated.
+
+Not closed, and the reason is written down rather than implied. Both cures cost
+more than the window is worth:
+
+- A conditional `$wpdb->update()` is a real compare-and-swap and also a write
+  that skips revisions, KSES, and every hook another plugin has registered on a
+  post save.
+- A transaction holding `SELECT … FOR UPDATE` across core's write puts every
+  `save_post` callback on the site inside a transaction this plugin opened,
+  where another plugin's own `COMMIT` — or a fatal error — decides what happens
+  to somebody else's data. It also does nothing on MyISAM.
+
+So: the round-three claim is marked wrong where it was made, the doc comment on
+`guarded_update()` now states plainly that this is not a compare-and-swap and
+what remains open, and `BRIEF.md` lists the window as a known limit with the
+advice the review asked for — convert in batches while the editors are quiet.
+
+`block-converter-for-divi.php`, `tests/live/run.php`, `BRIEF.md`,
+[C-02 above](#c-02--the-final-write-is-not-an-atomic-source-comparison--fixed)
+
+---
+
+### R4-04 — Restore can overwrite an edit that arrives during restore — **confirmed, fixed**
+
+Confirmed, and the review's argument is the one that settles it: the user
+authorises discarding the version they were looking at. A save that arrives
+after that was never on screen and was never consented to, and the plugin's lock
+does not stop an ordinary editor. The old comment in the source — that restore
+does not need a token because the user is explicitly discarding what is there —
+was reasoning about the wrong moment.
+
+Fixed by making restore work the way conversion already does:
+
+- `d2g_restore_page` requires a `source_hash` naming the version being replaced,
+  re-reads the row under the lock, and refuses on a mismatch — handing back the
+  current token so a second, deliberate Restore can go through afterwards.
+- Half of the review's correction, literally read, is not done: the refusal does
+  not *show* the new state. It says the page was saved after it was scanned,
+  that nothing was written, and to check what it holds now before restoring
+  again. This screen lists titles, not content, and its one content panel is the
+  conversion preview; building a second diff view to answer "what changed" is a
+  feature, and the honest thing is to say so rather than to describe a message
+  as a display.
+- The final write goes through `guarded_update()`, so restore gets the same
+  last-instant check (and the same documented residual window as R4-03).
+- Deliberately *not* auto-retried the way a stale conversion is. A conversion
+  retry converts the current content, which is still what the user asked for; a
+  restore replaces it, and nobody asked for the new thing to go. The second
+  Restore has to be pressed.
+- `d2g_convert_page` now returns a token for what it has just written, read back
+  from the database rather than assumed, so the first restore after a conversion
+  is not refused as stale. The admin script stores it.
+
+```
+ok    a conversion hands back a token for what it just wrote
+ok    a restore that names no version is refused
+ok    a restore whose version has been saved over is refused
+ok    and the edit it would have discarded is still there
+ok    the token the refusal hands back makes a second, deliberate restore work
+ok    a save that lands mid-restore is not overwritten
+ok    the save that landed mid-restore survives intact
+```
+
+`block-converter-for-divi.php`, `admin/js/admin.js`, `tests/live/run.php`
+
+---
+
+### R4-05 — The HTML video path stores a rejected URL in block attributes — **confirmed, fixed**
+
+Confirmed exactly as described. The probe in the review reproduces against the
+reviewed tree:
+
+```
+- missing expected markup: <!-- wp:html -->
+- output contains forbidden markup: "src":"javascript
+```
+
+The markup half was escaped and the data half was not, which is the wrong way
+round: the block attribute is what the editor regenerates markup from, so the
+value that survived was the dangerous one. This is the same defect C-03 fixed
+for module attributes in 2.3.0, in the one path that reads a URL out of authored
+HTML rather than out of a Divi attribute.
+
+Fixed: the URL goes through `D2G_Block_Builder::url()` before either use. A
+source that does not survive sanitising is not a video source, so the tag is
+kept verbatim in a Custom HTML block — which is what an unrecognised `<iframe>`
+has always got — and a warning names the loss. Nothing is dropped, and no unsafe
+value is stored as block data. Two fixtures: the review's probe, confirmed
+failing before the fix on every one of its five assertions, and a positive
+control so "no video block" cannot become the new bug.
+
+`includes/class-d2g-html-converter.php`, `tests/fixtures.php`
+
+---
+
+### R4-06 — Video provider detection accepts unrelated host names — **confirmed, fixed**
+
+Confirmed, both halves, with the review's own probes:
+
+```
+https://notyoutube.com/embed/WRONG  ->  https://www.youtube.com/watch?v=WRONG
+https://notvimeo.com/video/123      ->  https://vimeo.com/123
+```
+
+A page that embedded one site's player came out embedding another's. The review
+is right that this is content integrity rather than a security bug, and right
+that the duplicated regex in two files is why the same defect existed twice.
+
+Fixed with one shared classifier, `D2G_Block_Builder::video_provider()`, that
+both paths call. It parses the host, lowercases it, drops a trailing dot, and
+matches an allowlist on a **dot boundary** — exact host or true subdomain, which
+is what makes `notyoutube.com`, `notvimeo.com` and `youtube.com.example.org` all
+non-matches while `www.youtube-nocookie.com` and `player.vimeo.com` still work.
+Identifiers come from the path or the `v` query parameter, and a host that
+matches with no identifier falls through to a Custom HTML block rather than
+being guessed at.
+
+Five fixtures, including both of the review's hostile hosts. Three fail against
+the reviewed tree. Of the other two, one is a positive control — the real
+subdomains must still convert — and `youtube.com.example.org` passed before by
+luck, because the old regex looked for the literal `youtube.com/embed/`; it
+guards the replacement's boundary rule instead, which its comment says.
+
+`includes/class-d2g-block-builder.php`, `includes/class-d2g-html-converter.php`,
+`includes/renderers/class-d2g-renderer-media.php`, `tests/fixtures.php`
+
+---
+
+### R4-07 — A High-severity vulnerable development dependency is locked — **confirmed, fixed, and it was worse than a single upgrade**
+
+Confirmed: `npm audit` reported two High findings through
+`@wordpress/env` 10.39.0 → `extract-zip` 1.7.0 (GHSA-jmr9-qjv8-65gv, symlink
+path traversal, with no patched `extract-zip` release — the review is right
+about that too).
+
+Upgraded to `@wordpress/env` 11.13.0, which drops `extract-zip` entirely. That
+alone did not fix it: 11.13.0 unpacks with `adm-zip` and pins `^0.5.9`, and
+`adm-zip` below 0.6.0 carries GHSA-xcpc-8h2w-3j85. An `overrides` entry takes
+0.6.0, whose `extractAllToAsync` signature wp-env uses is unchanged and was
+exercised end to end by a fresh WordPress download. `npm audit` reports zero
+across the tree.
+
+The upgrade is a major version, and it broke something quietly, which is worth
+recording because it is the kind of breakage a passing test run hides: wp-env 11
+removed the `install-path` command. `d2g_wp_env_reset()` used it to find the
+root-owned checkouts `wp-env destroy` leaves behind, and an empty answer made
+the whole removal a no-op that still reported success. The helper now derives
+the path the way wp-env does — an md5 of the config file path under
+`~/.wp-env`, or the descriptive `wp-env-<dir>-<hash>` name — and
+`d2g_wp_env_start` returns a failure when its retry fails instead of returning
+whatever the `|| true` database-upgrade call returned.
+
+`package.json`, `package-lock.json`, `bin/_wp-env.sh`
+
+---
+
+### R4-08 — A first scan still performs multiple full content scans — **confirmed; accepted and not fixed**
+
+Confirmed, and the count is right: three unindexed content searches on page 1 —
+the total, the Divi 5 count, and the result query — of which only the last is
+bounded by `LIMIT`. The cache removes the recount on pages 2..n and does nothing
+for the first page.
+
+Not fixed, for the reason the review itself gives in its required correction:
+the answer is a resumable inventory keyed by post ID and content version, with
+progress and per-row invalidation. That is a feature, and building it inside a
+review response is how a review response becomes a rewrite. It is on the
+roadmap.
+
+What did change is the accuracy of the disclosure. `BRIEF.md` said "a full table
+scan per query"; it now says three content scans on the first page of a session,
+explains that the row cap bounds what is returned rather than what is read, and
+states that **no production-scale benchmark exists** — the timings in the change
+log measure the converter, not the scan, which is precisely the "not found in
+documents" note the review made.
+
+`BRIEF.md`
+
+---
+
+### R4-09 — The default live and browser test start is not reproducible — **confirmed, understated, fixed**
+
+Confirmed on both counts, and the first one is now impossible to argue with: the
+tag the review's run could not find, `7.0.4`, exists today. The failure was a
+race between WordPress.org announcing a release and the `WordPress/WordPress`
+git mirror tagging it — wp-env asks the first and checks out from the second.
+Nothing to do with this plugin, on the default gate, on a schedule nobody
+controls.
+
+Fixed:
+
+- `.wp-env.json` pins `core` to `WordPress/WordPress#7.0.4`. It is a dependency
+  version like any other now: bumped deliberately, with the matrix run when it
+  moves. `bin/wp-matrix.sh` still tests `latest` explicitly, by writing
+  `"core": null` rather than by leaving the pin alone, and its comment says that
+  entry is the one that can fail for reasons that are not the plugin.
+- `bin/live-check.sh` and `bin/e2e.sh` start through `d2g_wp_env_start`.
+
+The understatement: the helper those two were bypassing was itself broken in two
+ways, described in R4-07. A run of `bin/live-check.sh` during this work hit the
+exact stale root-owned checkout the review describes, the helper reported
+success without starting anything, and the reason it did was visible only
+because the retry was made to fail loudly.
+
+One thing found while fixing this and worth its own line: with core pinned, the
+browser gate started failing on `Automatic updates starting...` in
+`wp-content/debug.log` — core's own housekeeping, failing a gate that exists to
+catch this plugin's notices. `AUTOMATIC_UPDATER_DISABLED` is now set in the same
+config as the pin, because a background updater on a pinned core is a
+contradiction, and a gate that fails for someone else's housekeeping teaches
+people to ignore it.
+
+`.wp-env.json`, `bin/_wp-env.sh`, `bin/live-check.sh`, `bin/e2e.sh`,
+`bin/wp-matrix.sh`
+
+---
+
+### R4-10 — Project documentation contains stale technical statements — **confirmed, all five fixed**
+
+All five reproduce.
+
+1. **`D2G_VERSION` in the build instructions.** Renamed to `BCFD_VERSION` in
+   2.0.0. Fixed — and given a check, because the release *requirements* section
+   three paragraphs above had been corrected in 2.7.0 while the build
+   instructions were not, which is what documentation without a test looks like.
+   `bin/build-zip.sh` now fails the build if the release procedure at the top of
+   `CHANGELOG.md`, or `BRIEF.md`, names a `D2G_*` constant on a line that is not
+   describing the rename or struck through as history.
+2. **Backup called optional in the endpoint table.** Mandatory since 2.1.0, and
+   the write path says so. Fixed, with the version it changed in.
+3. **"Spacing, borders, shadows, fonts and custom CSS are lost."** Three
+   releases mapped parts of the first three. Replaced with a precise
+   partial-support summary that defers to the §5.1 matrix, which was already
+   correct — the review is right that the matrix should be the single source.
+4. **Completed work still listed as open in the roadmap.** KSES (2.2.0), the
+   JavaScript validator (2.2.0/2.3.0) and the CI matrix (2.3.0) are struck
+   through with what delivered them. The resumable inventory from R4-08 is added
+   as open, because it is.
+5. **`has_divi_content()` "requires a known tag".** It does not: any
+   syntactically valid `et_pb_*` opening tag qualifies, and the suite has a
+   `unlisted but well-formed` case asserting exactly that. The behaviour is
+   right — a third-party module's tag is Divi content, and a page made of
+   nothing else should be offered for conversion with its losses reported — so
+   the comment is corrected to describe it and say why.
+
+`CHANGELOG.md`, `BRIEF.md`, `bin/build-zip.sh`, `includes/class-d2g-parser.php`
+
+---
+
+### Verification
+
+Everything below was run on the fixed tree.
+
+| Check | Result |
+| --- | --- |
+| Offline PHP suite | **219 passed, 0 failed**; 574 blocks checked by core's own validator (212/566 before) |
+| Live WordPress suite, WordPress 7.0.4 | **60 passed, 0 failed**; 200 stored conversions, 565 blocks validated, debug log empty |
+| Browser suite (Playwright) | **10 passed**, debug log empty |
+| Multisite suite, WordPress 7.0.4 network | **12 passed, 0 failed**, debug log empty |
+| Block-library matrix | every mapped release from 6.1 to 7.0.2 accepts the markup: 200/200 fixtures, 574 blocks, nine block libraries |
+| `npm audit`, root | **0 vulnerabilities** (2 High before) |
+| `npm audit`, `tests/js` | 0 vulnerabilities |
+| PHP syntax | every tracked PHP file passes `php -l` |
+| JavaScript syntax | admin, validator and canonicalizer pass `node --check` |
+| Shell syntax | every tracked script passes `bash -n` |
+| Old-constant documentation check | passes (and fails on the defect it was written for) |
+
+The seven new golden snapshots are the only ones that changed: no existing
+fixture's byte-exact output moved, which is what says the video and provider
+fixes are corrections rather than rewrites.
+
+`bin/wp-matrix.sh`, which runs the whole live suite on six WordPress releases in
+six rebuilt environments, was **not** re-run. The block-library matrix above
+covers the part of this work that is version-sensitive — whether each release's
+`save()` accepts the converted markup — and the endpoint changes use no API
+newer than the declared floor. It is a gap in this verification all the same,
+and it is named rather than glossed.
+
+---
+
+### What this response does not do
+
+- **R4-08 is not fixed.** See above. The disclosure is accurate now; the scan
+  still costs what it costs.
+- **No production-scale scan benchmark** was taken. The review noted its
+  absence; this response notes it too rather than pretending otherwise.
+- **No visual comparison of the corpus**, and **no live uninstall test** with
+  both retention settings. Both were "not found in documents" in the review and
+  both are still not found. They are real gaps and they are not review findings
+  this response can close by writing prose.
+- **The provenance of the quote encoding is still unknown.** The diagnostic is
+  now safe to install and safe to run, which is what R4-01 and R4-02 were about.
+  It has not been run on the site that has the problem.
+- **No version bump and no release.** This work sits unreleased on `main` with a
+  `[Unreleased]` section in the change log, as the last few rounds of work have.
 
 ---
 
@@ -169,6 +641,17 @@ the reviewed tree.
 ---
 
 ### C-02 — The final write is not an atomic source comparison — **fixed**
+
+> **Corrected by the round-four review, and the correction is upheld.** "The
+> comparison is now part of the write" below is not true, and calling this
+> heading *fixed* claims more than the code does. `pre_post_update` fires
+> immediately before core's `UPDATE`, but immediately before is still before:
+> two statements are not one, and a save landing between them is overwritten.
+> The window went from seconds to microseconds, which is a real improvement and
+> not the same as closing it. See R4-03 in the
+> [round-four response](#response-to-the-round-four-review), which measures the
+> remaining window rather than reasoning about it. Left as written below,
+> because a response that quietly corrects itself is not a record.
 
 The review's recommendation was a final compare-and-swap that does not bypass
 revisions, hooks or KSES. Re-reading and comparing immediately before
