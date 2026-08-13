@@ -1,0 +1,6 @@
+<!-- wp:html -->
+<video src="javascript:alert(1)"></video>
+<!-- /wp:html -->
+
+===== WARNINGS =====
+[video] A video tag had a source WordPress will not store as a URL — a "javascript:" address, for example. The tag was kept exactly as written, in a Custom HTML block, rather than becoming a Video block.

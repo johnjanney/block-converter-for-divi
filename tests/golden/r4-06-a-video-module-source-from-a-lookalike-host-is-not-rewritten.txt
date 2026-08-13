@@ -1,0 +1,3 @@
+<!-- wp:video {"src":"https://notyoutube.com/embed/WRONG"} -->
+<figure class="wp-block-video"><video controls src="https://notyoutube.com/embed/WRONG"></video></figure>
+<!-- /wp:video -->

@@ -1396,6 +1396,66 @@ line two</pre>[/et_pb_text]',
         ],
     ],
 
+    // ---------------------------------------------------------------- R4-05 --
+    //
+    // The block comment is the half that matters: esc_url() emptied the visible
+    // src while `{"src":"javascript:alert(1)"}` stayed in the attributes, and
+    // the attributes are what the editor rebuilds the markup from.
+    'R4-05 an unsafe video source is stored in neither half of a block' => [
+        'divi'   => '[et_pb_text]<video src="javascript:alert(1)"></video>[/et_pb_text]',
+        'expect' => [ '<!-- wp:html -->', '<video src="javascript:alert(1)"></video>' ],
+        'reject' => [ '<!-- wp:video', '"src":"javascript' ],
+        'warns'  => [ 'video' ],
+    ],
+
+    'R4-05 a real video source still becomes a video block' => [
+        'divi'   => '[et_pb_text]<video src="https://example.com/a.mp4"></video>[/et_pb_text]',
+        'expect' => [ '<!-- wp:video {"src":"https://example.com/a.mp4"} -->' ],
+        'rejectWarnings' => [ 'video' ],
+    ],
+
+    // ---------------------------------------------------------------- R4-06 --
+    //
+    // Substring matching on "youtube.com" and "vimeo.com" made every one of
+    // these a rewrite to somebody else's video.
+    'R4-06 a host that merely contains youtube.com is not YouTube' => [
+        'divi'   => '[et_pb_text]<iframe src="https://notyoutube.com/embed/WRONG"></iframe>[/et_pb_text]',
+        'expect' => [ '<!-- wp:html -->', 'notyoutube.com/embed/WRONG' ],
+        'reject' => [ 'www.youtube.com/watch', 'providerNameSlug' ],
+    ],
+
+    'R4-06 a host that merely contains vimeo.com is not Vimeo' => [
+        'divi'   => '[et_pb_text]<iframe src="https://notvimeo.com/video/123"></iframe>[/et_pb_text]',
+        'expect' => [ '<!-- wp:html -->', 'notvimeo.com/video/123' ],
+        'reject' => [ 'https://vimeo.com/123', 'providerNameSlug' ],
+    ],
+
+    // The one case here the old substring match got right by accident. It
+    // guards the replacement instead: a host check written as "contains
+    // youtube.com" rather than "ends with .youtube.com" fails this.
+    'R4-06 a subdomain boundary is a dot, not a prefix' => [
+        'divi'   => '[et_pb_text]<iframe src="https://youtube.com.example.org/embed/WRONG"></iframe>[/et_pb_text]',
+        'expect' => [ '<!-- wp:html -->', 'youtube.com.example.org/embed/WRONG' ],
+        'reject' => [ 'www.youtube.com/watch', 'providerNameSlug' ],
+    ],
+
+    'R4-06 a video module source from a lookalike host is not rewritten' => [
+        'divi'   => '[et_pb_video src="https://notyoutube.com/embed/WRONG" /]',
+        'expect' => [ 'notyoutube.com/embed/WRONG' ],
+        'reject' => [ 'www.youtube.com/watch', 'wp:embed' ],
+    ],
+
+    'R4-06 real provider subdomains still convert' => [
+        'divi'   => '[et_pb_text]<iframe src="https://www.youtube-nocookie.com/embed/RIGHT"></iframe>'
+            . '<iframe src="https://player.vimeo.com/video/456"></iframe>[/et_pb_text]',
+        'expect' => [
+            'https://www.youtube.com/watch?v=RIGHT',
+            'https://vimeo.com/456',
+            '"providerNameSlug":"youtube"',
+            '"providerNameSlug":"vimeo"',
+        ],
+    ],
+
     'deeply nested source does not blow up' => [
         'divi'   => str_repeat( '[et_pb_section]', 60 ) . '[et_pb_text]Deep[/et_pb_text]' . str_repeat( '[/et_pb_section]', 60 ),
         'expect' => [ 'Deep' ],

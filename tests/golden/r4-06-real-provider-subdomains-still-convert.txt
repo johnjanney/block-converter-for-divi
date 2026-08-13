@@ -1,0 +1,11 @@
+<!-- wp:embed {"url":"https://www.youtube.com/watch?v=RIGHT","type":"video","providerNameSlug":"youtube"} -->
+<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube"><div class="wp-block-embed__wrapper">
+https://www.youtube.com/watch?v=RIGHT
+</div></figure>
+<!-- /wp:embed -->
+
+<!-- wp:embed {"url":"https://vimeo.com/456","type":"video","providerNameSlug":"vimeo"} -->
+<figure class="wp-block-embed is-type-video is-provider-vimeo wp-block-embed-vimeo"><div class="wp-block-embed__wrapper">
+https://vimeo.com/456
+</div></figure>
+<!-- /wp:embed -->

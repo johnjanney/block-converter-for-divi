@@ -181,6 +181,107 @@ class D2G_Block_Builder {
     }
 
     /**
+     * Hosts that really are YouTube or Vimeo, and the provider each one is.
+     *
+     * A host matches when it is one of these exactly, or a subdomain of one —
+     * `player.vimeo.com` and `www.youtube.com` are matched by the second rule.
+     * The boundary is the dot: that is what makes `notyoutube.com` and
+     * `youtube.com.example.org` non-matches.
+     */
+    const VIDEO_PROVIDER_HOSTS = [
+        'youtube.com'          => 'youtube',
+        'youtube-nocookie.com' => 'youtube',
+        'youtu.be'             => 'youtube',
+        'vimeo.com'            => 'vimeo',
+    ];
+
+    /**
+     * Decide whether a URL is a YouTube or Vimeo address, and which video.
+     *
+     * Both video paths used to ask this with a substring match — `#vimeo\.com/
+     * (?:video/)?(\d+)#` and friends — which is not a question about the URL at
+     * all. `https://notvimeo.com/video/123` contains "vimeo.com/123"'s pattern
+     * and was rewritten to `https://vimeo.com/123`: a different site's video,
+     * silently substituted into somebody's page. `notyoutube.com/embed/X`
+     * became a YouTube watch URL the same way.
+     *
+     * So the host is parsed and compared against an allowlist, on a dot
+     * boundary, and the two call sites share this one answer rather than
+     * carrying a regex each — the drift between those two copies is what let
+     * the same defect exist twice.
+     *
+     * @param string $url URL from a Divi attribute or an iframe src.
+     * @return array{provider: string, id: string, watch: string, is_embed: bool}|array{}
+     *         Empty when the URL is not one of these providers.
+     */
+    public static function video_provider( $url ): array {
+        $url  = trim( (string) $url );
+        $host = strtolower( (string) parse_url( $url, PHP_URL_HOST ) );
+
+        if ( '' === $host ) {
+            return [];
+        }
+
+        // A trailing dot is a fully qualified host name and the same host.
+        $host     = rtrim( $host, '.' );
+        $provider = '';
+
+        foreach ( self::VIDEO_PROVIDER_HOSTS as $known => $name ) {
+            if ( $host === $known || substr( $host, -strlen( '.' . $known ) ) === '.' . $known ) {
+                $provider = $name;
+                break;
+            }
+        }
+
+        if ( '' === $provider ) {
+            return [];
+        }
+
+        $path  = (string) parse_url( $url, PHP_URL_PATH );
+        $query = [];
+        parse_str( (string) parse_url( $url, PHP_URL_QUERY ), $query );
+
+        $id       = '';
+        $is_embed = false;
+
+        if ( 'youtube' === $provider ) {
+            if ( 'youtu.be' === $host || substr( $host, -strlen( '.youtu.be' ) ) === '.youtu.be' ) {
+                // youtu.be/<id> — the whole path is the identifier.
+                if ( preg_match( '#^/([a-zA-Z0-9_-]+)#', $path, $m ) ) {
+                    $id = $m[1];
+                }
+            } elseif ( preg_match( '#^/(?:embed|v|shorts)/([a-zA-Z0-9_-]+)#', $path, $m ) ) {
+                // The form Divi stores, and the one core's embed block cannot
+                // resolve on its own.
+                $id       = $m[1];
+                $is_embed = true;
+            } elseif ( isset( $query['v'] ) && preg_match( '#^[a-zA-Z0-9_-]+$#', (string) $query['v'] ) ) {
+                $id = (string) $query['v'];
+            }
+
+            return [
+                'provider' => 'youtube',
+                'id'       => $id,
+                'watch'    => '' === $id ? '' : 'https://www.youtube.com/watch?v=' . $id,
+                'is_embed' => $is_embed,
+            ];
+        }
+
+        // Vimeo identifiers are numeric: /123456789 and player.vimeo.com/video/123456789.
+        if ( preg_match( '#^/(?:video/)?(\d+)#', $path, $m ) ) {
+            $id       = $m[1];
+            $is_embed = ( 0 === strpos( $path, '/video/' ) ) || ( 0 === strpos( $host, 'player.' ) );
+        }
+
+        return [
+            'provider' => 'vimeo',
+            'id'       => $id,
+            'watch'    => '' === $id ? '' : 'https://vimeo.com/' . $id,
+            'is_embed' => $is_embed,
+        ];
+    }
+
+    /**
      * Emit a core/paragraph block, or nothing when there is nothing to say.
      */
     public static function paragraph( string $inner_html, array $attrs ): string {

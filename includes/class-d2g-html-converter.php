@@ -170,20 +170,18 @@ class D2G_HTML_Converter {
     public function embed_tag( string $tag_html ): string {
         // Try to extract src from iframe.
         if ( preg_match( '#<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $tag_html, $m ) ) {
-            $src = $m[1];
+            // Whose player is this? The host is parsed and checked against an
+            // allowlist rather than searched for as a substring, so an iframe
+            // pointing at notvimeo.com is no longer rewritten into a Vimeo
+            // embed of a video somebody else owns. See
+            // D2G_Block_Builder::video_provider().
+            $provider = D2G_Block_Builder::video_provider( $m[1] );
 
-            // YouTube embed.
-            if ( preg_match( '#(?:youtube\.com/embed/|youtube-nocookie\.com/embed/)([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
-                $watch_url = 'https://www.youtube.com/watch?v=' . $ym[1];
-                $html = '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $watch_url ) . "\n" . '</div></figure>';
-                return D2G_Block_Builder::block( 'embed', [ 'url' => $watch_url, 'type' => 'video', 'providerNameSlug' => 'youtube' ], $html );
-            }
-
-            // Vimeo embed.
-            if ( preg_match( '#vimeo\.com/(?:video/)?(\d+)#', $src, $vm ) ) {
-                $vimeo_url = 'https://vimeo.com/' . $vm[1];
-                $html = '<figure class="wp-block-embed is-type-video is-provider-vimeo wp-block-embed-vimeo"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $vimeo_url ) . "\n" . '</div></figure>';
-                return D2G_Block_Builder::block( 'embed', [ 'url' => $vimeo_url, 'type' => 'video', 'providerNameSlug' => 'vimeo' ], $html );
+            if ( $provider && '' !== $provider['watch'] ) {
+                $name = $provider['provider'];
+                $url  = $provider['watch'];
+                $html = '<figure class="wp-block-embed is-type-video is-provider-' . $name . ' wp-block-embed-' . $name . '"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $url ) . "\n" . '</div></figure>';
+                return D2G_Block_Builder::block( 'embed', [ 'url' => $url, 'type' => 'video', 'providerNameSlug' => $name ], $html );
             }
 
             // Other iframe embeds — preserve as HTML block.
@@ -191,10 +189,27 @@ class D2G_HTML_Converter {
         }
 
         // Video tag with src.
+        //
+        // The URL is sanitised before either use. It used to be escaped for the
+        // markup and stored raw in the block attribute, which is the wrong way
+        // round: esc_url() emptied the visible src while the attribute kept
+        // `javascript:alert(1)`, and the attribute is what the block editor
+        // regenerates the markup from. A URL that does not survive sanitising
+        // is not a video source, so the tag is kept verbatim in a Custom HTML
+        // block instead — nothing is lost, and nothing unsafe is stored as
+        // block data.
         if ( preg_match( '#<video\b[^>]*\bsrc=["\']([^"\']+)["\']#i', $tag_html, $m ) ) {
-            $src = $m[1];
-            $html = '<figure class="wp-block-video"><video controls src="' . esc_url( $src ) . '"></video></figure>';
-            return D2G_Block_Builder::block( 'video', [ 'src' => $src ], $html );
+            $src = D2G_Block_Builder::url( $m[1] );
+
+            if ( '' !== $src ) {
+                $html = '<figure class="wp-block-video"><video controls src="' . esc_url( $src ) . '"></video></figure>';
+                return D2G_Block_Builder::block( 'video', [ 'src' => $src ], $html );
+            }
+
+            $this->context->add_warning(
+                'video',
+                __( 'A video tag had a source WordPress will not store as a URL — a "javascript:" address, for example. The tag was kept exactly as written, in a Custom HTML block, rather than becoming a Video block.', 'block-converter-for-divi' )
+            );
         }
 
         // Fallback: preserve as custom HTML block.

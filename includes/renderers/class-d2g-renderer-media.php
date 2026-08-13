@@ -183,16 +183,21 @@ class D2G_Renderer_Media extends D2G_Module_Renderer {
             return '';
         }
 
-        // Normalize YouTube embed URLs to watch URLs.
-        if ( preg_match( '#youtube\.com/embed/([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
-            $src = 'https://www.youtube.com/watch?v=' . $ym[1];
-        } elseif ( preg_match( '#youtube-nocookie\.com/embed/([a-zA-Z0-9_-]+)#', $src, $ym ) ) {
-            $src = 'https://www.youtube.com/watch?v=' . $ym[1];
-        }
+        // Is this really YouTube or Vimeo? The host is parsed and checked
+        // against an allowlist rather than searched for as a substring — see
+        // D2G_Block_Builder::video_provider(), and the site called
+        // notyoutube.com whose embed this used to hand to YouTube.
+        $video_host = D2G_Block_Builder::video_provider( $src );
 
-        // Check if it's a YouTube/Vimeo URL.
-        if ( preg_match( '#(?:youtube\.com|youtu\.be|vimeo\.com)#', $src ) ) {
-            $provider = strpos( $src, 'vimeo' ) !== false ? 'vimeo' : 'youtube';
+        if ( $video_host ) {
+            // Divi stores YouTube as an /embed/ URL and core's embed block
+            // resolves a watch URL, so that one form is rewritten. Every other
+            // address is left as the author wrote it, query string and all.
+            if ( $video_host['is_embed'] && '' !== $video_host['watch'] ) {
+                $src = $video_host['watch'];
+            }
+
+            $provider = $video_host['provider'];
             $provider_class = 'is-provider-' . $provider . ' wp-block-embed-' . $provider;
             $html = '<figure class="wp-block-embed is-type-video ' . $provider_class . '"><div class="wp-block-embed__wrapper">' . "\n" . esc_url( $src ) . "\n" . '</div></figure>';
             return D2G_Block_Builder::block( 'embed', [ 'url' => $src, 'type' => 'video', 'providerNameSlug' => $provider ], $html );
