@@ -1020,7 +1020,12 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             wp_send_json_error( self::kses_refusal( $losses ) );
         }
 
-        $update = self::guarded_update( $post_id, $converted, $expected_hash );
+        $update = self::guarded_update(
+            $post_id,
+            $converted,
+            $expected_hash,
+            __( 'This post was saved by someone else while it was being converted. Nothing was changed. Scan again, re-check the preview, and convert.', 'block-converter-for-divi' )
+        );
 
         if ( is_wp_error( $update ) ) {
             self::abandon_conversion( $post_id, $lock, $backup_undo );
@@ -1045,6 +1050,12 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             'has_backup'  => true,
             'backup_date' => get_post_meta( $post_id, '_d2g_backup_date', true ),
             'warnings'    => $converter->get_warnings(),
+            // A token for what the row holds *now*. Restore checks one the same
+            // way conversion does, and the only version of this page the caller
+            // has seen since is the one it has just written — read back rather
+            // than assumed, because a save filter may have changed it on the
+            // way in.
+            'source_hash' => md5( (string) get_post( $post_id )->post_content ),
         ] );
     }
 
@@ -1059,30 +1070,51 @@ Backups are the only way to restore a converted page. Once the plugin is removed
      * editor and have their save silently overwritten by a conversion of the
      * content they had just replaced.
      *
-     * Re-reading and comparing before calling wp_update_post() would only make
-     * the window smaller. This makes the comparison part of the write itself:
-     * `pre_post_update` is the last hook core fires before the UPDATE statement,
-     * so a read of the live row from inside it sees exactly what that statement
-     * is about to overwrite. If it is not what was converted, the write is
-     * abandoned there — before the row is touched, before the revision is
-     * saved, before any of the after-update hooks run.
+     * Re-reading and comparing before calling wp_update_post() would leave that
+     * whole window open. This closes all but the last instant of it:
+     * `pre_post_update` is the last hook core fires before the UPDATE
+     * statement, so a read of the live row from inside it sees what that
+     * statement is about to overwrite, and if it is not what was converted the
+     * write is abandoned there — before the row is touched, before the revision
+     * is saved, before any of the after-update hooks run.
      *
      * The abandonment is an exception rather than a return value because core
      * gives an action no way to say no. It is caught immediately below, so it
      * never escapes this method.
      *
-     * Deliberately not implemented as a conditional `$wpdb->update()`: that
-     * would be a genuine compare-and-swap, and it would also skip revisions,
-     * KSES, and every hook another plugin has registered on a post save. The
-     * point of this plugin is not to lose content, and bypassing core's write
-     * path is a good way to start.
+     * **This is not a compare-and-swap, and must not be described as one.** The
+     * comparison and core's `$wpdb->update()` are two statements, not one, so a
+     * save that lands between them is still lost. What remains is the gap
+     * between the SELECT below and the UPDATE a few lines of core later —
+     * microseconds rather than the seconds a large page takes to parse, convert
+     * and KSES-check, which is the reduction that matters in practice, but not
+     * zero. tests/live/run.php holds a test that writes into exactly that gap
+     * and records what happens, so the residual window is a measured fact here
+     * rather than an assumption.
      *
-     * @param int    $post_id       Post being converted.
-     * @param string $converted     The converted block markup.
-     * @param string $expected_hash MD5 of the Divi source it was converted from.
+     * Closing it entirely means one of two things, and both cost more than they
+     * are worth:
+     *
+     *   - A conditional `$wpdb->update()` — a real compare-and-swap, and also a
+     *     write that skips revisions, KSES, and every hook another plugin has
+     *     registered on a post save. The point of this plugin is not to lose
+     *     content, and bypassing core's write path is a good way to start.
+     *   - A transaction holding `SELECT … FOR UPDATE` across core's write. That
+     *     puts every `save_post` callback on the site inside a transaction this
+     *     plugin opened, where another plugin's own COMMIT — or a fatal error —
+     *     decides what happens to somebody else's data. It also does nothing on
+     *     MyISAM.
+     *
+     * So the window is documented rather than closed: see BRIEF.md, which asks
+     * for a quiet editor during a batch conversion for this reason.
+     *
+     * @param int    $post_id       Post being written.
+     * @param string $converted     The markup to store.
+     * @param string $expected_hash MD5 of the content this write was built from.
+     * @param string $conflict      Message for the caller's refusal.
      * @return int|WP_Error
      */
-    private static function guarded_update( $post_id, $converted, $expected_hash ) {
+    private static function guarded_update( $post_id, $converted, $expected_hash, $conflict ) {
         global $wpdb;
 
         $guard = static function ( $updating_id ) use ( $post_id, $expected_hash, $wpdb ) {
@@ -1113,10 +1145,7 @@ Backups are the only way to restore a converted page. Once the plugin is removed
                 'post_content' => $converted,
             ] ), true );
         } catch ( D2G_Source_Changed $e ) {
-            return new WP_Error(
-                'd2g_source_changed',
-                __( 'This post was saved by someone else while it was being converted. Nothing was changed. Scan again, re-check the preview, and convert.', 'block-converter-for-divi' )
-            );
+            return new WP_Error( 'd2g_source_changed', $conflict );
         } finally {
             remove_action( 'pre_post_update', $guard, PHP_INT_MAX );
         }
@@ -1324,6 +1353,16 @@ Backups are the only way to restore a converted page. Once the plugin is removed
      *
      * The backup meta is deliberately left in place afterwards so a restore can
      * be repeated, and so converting again does not lose the original.
+     *
+     * Restore takes a source token for the same reason conversion does. It used
+     * to argue that it did not need one — the user is explicitly discarding
+     * what is on the page in favour of a snapshot they asked for by name, so
+     * there is nothing to protect. That is true of the version they were
+     * looking at when they pressed Restore, and only of that version. A save
+     * made after that point was never on screen and was never consented to, and
+     * the plugin's lock does not stop an ordinary editor. So the caller says
+     * which version it is discarding, exactly as conversion does, and a page
+     * that moved is refused with the new token rather than overwritten.
      */
     public function ajax_restore_page() {
         check_ajax_referer( 'd2g_nonce', 'nonce' );
@@ -1343,9 +1382,42 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             wp_send_json_error( __( 'No backup found for this page.', 'block-converter-for-divi' ) );
         }
 
+        $expected_hash = isset( $_POST['source_hash'] ) ? sanitize_key( wp_unslash( $_POST['source_hash'] ) ) : '';
+        if ( '' === $expected_hash ) {
+            wp_send_json_error( __( 'This request did not identify which version of the page it was replacing. Scan again, then restore.', 'block-converter-for-divi' ) );
+        }
+
         $lock = self::acquire_lock( $post_id );
         if ( ! $lock ) {
             wp_send_json_error( __( 'Another operation on this post is already running.', 'block-converter-for-divi' ) );
+        }
+
+        // Re-read under the lock, then compare. Everything above was read
+        // before the lock existed.
+        $post = get_post( $post_id );
+
+        if ( ! $post ) {
+            self::release_lock( $post_id, $lock );
+            wp_send_json_error( __( 'That page no longer exists.', 'block-converter-for-divi' ) );
+        }
+
+        if ( ! hash_equals( md5( $post->post_content ), $expected_hash ) ) {
+            self::release_lock( $post_id, $lock );
+
+            // The current token comes back with the refusal, so a second,
+            // deliberate Restore can go through once the user has looked at
+            // what the page holds now — which the message asks them to do,
+            // because this screen shows titles rather than content and the
+            // Preview panel is about conversion. Deliberately not retried
+            // automatically the way a stale conversion is: a conversion retry
+            // re-reads and converts the current content, which is still the
+            // content the user asked to convert, while a restore replaces
+            // whatever is there — and nobody asked for the new thing to go.
+            wp_send_json_error( [
+                'message'     => __( 'This page was saved after it was scanned, so it was not restored. Nothing was written. Check what it holds now, then restore again if that is still what you want.', 'block-converter-for-divi' ),
+                'stale_token' => true,
+                'source_hash' => md5( $post->post_content ),
+            ] );
         }
 
         // A restore writes the original Divi content, which can hold scripts in
@@ -1358,23 +1430,23 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             wp_send_json_error( self::kses_refusal( $losses ) );
         }
 
-        // Slashed for the same reason as the conversion write: wp_update_post()
-        // unslashes, so an unslashed restore would hand back content that is
-        // not byte-identical to the backup.
-        $update = wp_update_post( wp_slash( [
-            'ID'           => $post_id,
-            'post_content' => $backup,
-        ] ), true );
+        // Written through the same guard as a conversion, so a save that lands
+        // between the check above and the write is refused rather than
+        // discarded. Slashing is for the same reason as the conversion write:
+        // wp_update_post() unslashes, so an unslashed restore would hand back
+        // content that is not byte-identical to the backup.
+        $update = self::guarded_update(
+            $post_id,
+            $backup,
+            $expected_hash,
+            __( 'This page was saved by someone else while it was being restored. Nothing was changed. Scan again, then restore.', 'block-converter-for-divi' )
+        );
 
         if ( is_wp_error( $update ) ) {
             self::release_lock( $post_id, $lock );
             wp_send_json_error( $update->get_error_message() );
         }
 
-        // Restore does not take a source token. Conversion needs one because it
-        // rewrites content the user has only seen a summary of; restore is the
-        // user explicitly discarding whatever is there now in favour of a
-        // snapshot they asked for by name. The lock still applies.
         self::restore_builder_meta( $post_id );
 
         self::release_lock( $post_id, $lock );
@@ -1388,8 +1460,10 @@ Backups are the only way to restore a converted page. Once the plugin is removed
             ),
             // The row is convertible again, so hand back a token for what it
             // now holds — otherwise converting straight after a restore would
-            // be refused for having no token.
-            'source_hash' => md5( $backup ),
+            // be refused for having no token. Read back rather than assumed to
+            // be md5( $backup ): a save filter may have changed it on the way
+            // in, and a token that does not match the row is worse than none.
+            'source_hash' => md5( (string) get_post( $post_id )->post_content ),
         ] );
     }
 }

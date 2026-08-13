@@ -475,6 +475,179 @@ d2g_ok(
 
 wp_delete_post( $race_id, true );
 
+// ------------------------------- the window the guard does not close --------
+//
+// The test above writes *before* the guard and proves it refuses. That is one
+// ordering, and it is not the only one. `pre_post_update` fires immediately
+// before core's `$wpdb->update()`, but "immediately before" is still before:
+// the comparison and the write are two statements, so a write that lands
+// between them passes unnoticed. That gap is microseconds wide where the one
+// above was seconds, which is the reduction that matters — but a comment
+// claiming the check is "part of the write" was overstating it, and the honest
+// way to hold a claim to its size is to measure it.
+//
+// So this writes into the gap itself: the `query` filter sees core's UPDATE
+// before it executes, and a second database connection makes the intruding
+// write genuinely concurrent rather than a re-entrant call on the connection
+// that is mid-statement.
+//
+// It asserts the *documented* behaviour. If it ever fails, the window has been
+// closed — update the comment on guarded_update() and BRIEF.md's limits
+// section, and turn this into the assertion it deserves to be.
+
+$gap_id  = d2g_make_post( '[et_pb_text]<p>Original</p>[/et_pb_text]', 'gap' );
+$gap_src = get_post( $gap_id )->post_content;
+$gap_hit = false;
+
+$in_the_gap = static function ( $query ) use ( $gap_id, &$gap_hit ) {
+    if ( $gap_hit
+        || 0 !== stripos( ltrim( (string) $query ), 'UPDATE' )
+        || false === strpos( (string) $query, 'post_content' )
+        || ! preg_match( '#ID`?\s*=\s*' . $gap_id . '\b#i', (string) $query ) ) {
+        return $query;
+    }
+
+    $gap_hit = true;
+
+    global $wpdb;
+    $other = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+    $other->set_prefix( $wpdb->prefix );
+    $other->update(
+        $other->posts,
+        [ 'post_content' => '[et_pb_text]<p>Edited inside the gap</p>[/et_pb_text]' ],
+        [ 'ID' => $gap_id ]
+    );
+
+    return $query;
+};
+
+add_filter( 'query', $in_the_gap );
+$gapped = d2g_call( 'd2g_convert_page', [
+    'post_id' => $gap_id, 'source_hash' => md5( $gap_src ),
+] );
+remove_filter( 'query', $in_the_gap );
+clean_post_cache( $gap_id );
+
+d2g_ok(
+    'the intruding write really did land inside the gap',
+    $gap_hit,
+    'core\'s UPDATE was never seen, so the test below proves nothing'
+);
+
+d2g_ok(
+    'a save landing between the guard and core\'s UPDATE is still lost — the documented residual window',
+    $gap_hit && ! empty( $gapped['success'] )
+        && false === strpos( get_post( $gap_id )->post_content, 'Edited inside the gap' ),
+    'the window may have been closed; if so this is good news and the comments must be updated'
+);
+
+wp_delete_post( $gap_id, true );
+
+// --------------------------------- restore names the version it replaces ----
+//
+// Restore used to take no source token, on the argument that the user is
+// explicitly discarding what is there. That is true of the version they were
+// looking at, and only of that version: a save made after they pressed Restore
+// was never on screen, and the plugin's lock does not stop an editor.
+
+$undo_divi = '[et_pb_text]<p>The original Divi</p>[/et_pb_text]';
+$undo_id   = d2g_make_post( $undo_divi, 'restore token' );
+$undo_conv = d2g_call( 'd2g_convert_page', [
+    'post_id' => $undo_id, 'source_hash' => md5( $undo_divi ),
+] );
+
+d2g_ok( 'the page converts before the restore checks begin', ! empty( $undo_conv['success'] ) );
+
+d2g_ok(
+    'a conversion hands back a token for what it just wrote',
+    isset( $undo_conv['data']['source_hash'] )
+        && $undo_conv['data']['source_hash'] === md5( get_post( $undo_id )->post_content ),
+    'without this the first restore after a conversion would be refused as stale'
+);
+
+$undo_none = d2g_call( 'd2g_restore_page', [ 'post_id' => $undo_id ] );
+d2g_ok(
+    'a restore that names no version is refused',
+    isset( $undo_none['success'] ) && false === $undo_none['success']
+);
+
+// Somebody edits the converted page. The token the screen holds now names a
+// version that is no longer there.
+global $wpdb;
+$wpdb->update(
+    $wpdb->posts,
+    [ 'post_content' => '<!-- wp:paragraph --><p>Edited after the conversion</p><!-- /wp:paragraph -->' ],
+    [ 'ID' => $undo_id ]
+);
+clean_post_cache( $undo_id );
+
+$undo_stale = d2g_call( 'd2g_restore_page', [
+    'post_id' => $undo_id, 'source_hash' => $undo_conv['data']['source_hash'] ?? 'x',
+] );
+
+d2g_ok(
+    'a restore whose version has been saved over is refused',
+    isset( $undo_stale['success'] ) && false === $undo_stale['success']
+        && ! empty( $undo_stale['data']['stale_token'] ),
+    'endpoint reported: ' . wp_json_encode( $undo_stale['data'] ?? null )
+);
+
+d2g_ok(
+    'and the edit it would have discarded is still there',
+    false !== strpos( get_post( $undo_id )->post_content, 'Edited after the conversion' )
+);
+
+$undo_again = d2g_call( 'd2g_restore_page', [
+    'post_id' => $undo_id, 'source_hash' => $undo_stale['data']['source_hash'] ?? 'x',
+] );
+
+d2g_ok(
+    'the token the refusal hands back makes a second, deliberate restore work',
+    ! empty( $undo_again['success'] ) && $undo_divi === get_post( $undo_id )->post_content,
+    'post_content is now: ' . substr( get_post( $undo_id )->post_content, 0, 120 )
+);
+
+// And the same mid-write race the conversion path is tested for.
+$undo_conv2 = d2g_call( 'd2g_convert_page', [
+    'post_id' => $undo_id, 'source_hash' => md5( $undo_divi ),
+] );
+
+$undo_race = static function ( $id ) use ( $undo_id ) {
+    static $done = false;
+    if ( $done || (int) $id !== (int) $undo_id ) {
+        return;
+    }
+    $done = true;
+
+    global $wpdb;
+    $wpdb->update(
+        $wpdb->posts,
+        [ 'post_content' => '<!-- wp:paragraph --><p>Saved mid-restore</p><!-- /wp:paragraph -->' ],
+        [ 'ID' => $undo_id ]
+    );
+    clean_post_cache( $undo_id );
+};
+
+add_action( 'pre_post_update', $undo_race, 1 );
+$undo_raced = d2g_call( 'd2g_restore_page', [
+    'post_id' => $undo_id, 'source_hash' => $undo_conv2['data']['source_hash'] ?? 'x',
+] );
+remove_action( 'pre_post_update', $undo_race, 1 );
+
+d2g_ok(
+    'a save that lands mid-restore is not overwritten',
+    isset( $undo_raced['success'] ) && false === $undo_raced['success'],
+    'endpoint reported: ' . wp_json_encode( $undo_raced['data'] ?? null )
+);
+
+d2g_ok(
+    'the save that landed mid-restore survives intact',
+    false !== strpos( get_post( $undo_id )->post_content, 'Saved mid-restore' ),
+    'post_content is now: ' . substr( get_post( $undo_id )->post_content, 0, 120 )
+);
+
+wp_delete_post( $undo_id, true );
+
 // ----------------------------------- the standalone attribute encoder is right --
 //
 // D2G_Block_Builder falls back to its own copy of serialize_block_attributes()
@@ -690,7 +863,9 @@ foreach ( $fixtures as $name => $fixture ) {
     $collect( parse_blocks( $stored ) );
 
     // Restore has to return the original bytes.
-    $restore  = d2g_call( 'd2g_restore_page', [ 'post_id' => $id ] );
+    $restore  = d2g_call( 'd2g_restore_page', [
+        'post_id' => $id, 'source_hash' => md5( $stored ),
+    ] );
     $restored = get_post( $id )->post_content;
     if ( empty( $restore['success'] ) || $restored !== $fixture['divi'] ) {
         $mismatch[] = $name . ' — restore was not byte-identical';

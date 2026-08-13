@@ -659,6 +659,14 @@
         $row.find('.d2g-preview-btn').prop('disabled', true);
         $row.find('.d2g-convert-btn').text(t('converted')).prop('disabled', true);
 
+        // The row holds the conversion now, and Restore has to name the version
+        // it is replacing. Without this the token would still be the Divi
+        // content that has just been overwritten, and the first Restore after a
+        // conversion would be refused as stale.
+        if (data && data.source_hash) {
+            sourceHash[postId] = data.source_hash;
+        }
+
         if (data && data.has_backup) {
             if (!$row.find('.d2g-restore-btn').length) {
                 $row.find('.d2g-actions')
@@ -691,14 +699,28 @@
         $.post(d2g.ajax_url, {
             action: 'd2g_restore_page',
             nonce: d2g.nonce,
-            post_id: postId
+            post_id: postId,
+            // Which version this restore is replacing. The server refuses if
+            // the page has been saved since.
+            source_hash: sourceHash[postId] || ''
         }, function (res) {
             setRowBusy(postId, false);
             $btn.text(t('restore'));
 
             if (!res.success) {
+                var data = res.data;
+                var detail = (data && typeof data === 'object') ? data.message : data;
+
+                // The page was saved after it was scanned. Take the new token
+                // so a second, deliberate Restore can go through — but do not
+                // retry on the user's behalf, because what would be discarded
+                // is something they have not seen.
+                if (data && typeof data === 'object' && data.stale_token && data.source_hash) {
+                    sourceHash[postId] = data.source_hash;
+                }
+
                 $row.addClass('d2g-row-error');
-                showStatus(fmt(t('restoreError'), postId, res.data || t('unknownError')), 'error');
+                showStatus(fmt(t('restoreError'), postId, detail || t('unknownError')), 'error');
                 return;
             }
 

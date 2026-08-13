@@ -101,6 +101,13 @@ button, but a plugin-level backup is not a substitute for a database backup.
 Test on a staging copy of your site first, and convert one page and check the
 result before running a batch.
 
+**Convert while the editors are quiet.** Both conversion and restore refuse to
+write over a page that was saved after you scanned it, so an edit made while you
+work is not silently overwritten. The check runs at the last moment WordPress
+allows, immediately before the write — which leaves a gap of microseconds in
+which a save could still land and be lost. It is a small risk and it is not
+zero; running a batch while nobody is editing removes it.
+
 == Installation ==
 
 **Upgrading from "Divi to Gutenberg Converter"? Remove it first.** This plugin
@@ -140,6 +147,11 @@ back and re-enables the Divi Builder for that page. The copy is written before
 anything is overwritten, and a conversion never replaces it with converted
 content — so what comes back is always the Divi version of the page, never a
 copy of the blocks it became.
+
+Restore replaces what is on the page, so it checks first that the page is still
+the version you were shown. If somebody saved it after your last scan, the
+restore is refused and nothing is written: look at what the page holds now, then
+press Restore again if that is still what you want.
 
 = Will my pages look identical afterwards? =
 
