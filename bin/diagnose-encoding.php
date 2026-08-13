@@ -2,11 +2,17 @@
 /**
  * Plugin Name: Divi quote-encoding diagnostic
  * Description: One-off diagnostic. Activate, then visit Tools → Divi quote-encoding diagnostic. Delete when finished. Does nothing until an administrator asks it to.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      John Janney
  * License:     GPL-2.0-or-later
  *
  * Find what turns a Divi shortcode's attribute quotes into `&quot;` (Q43).
+ *
+ * If you have a copy of 1.0.0, delete it and use this one. That version cleaned
+ * up after its import by deleting every post whose slug was
+ * `bcfd-import-probe-1` or `-2`, which is not the same question as "did this run
+ * create it" — on a site with a page of that name, it deleted the page.
+ * Permanently, with no trash and no revision.
  *
  * Some sites store `[et_pb_section fb_built=&quot;1&quot;]` where the export
  * they were built from holds `fb_built="1"`. Until 2.7.0 that voided every
