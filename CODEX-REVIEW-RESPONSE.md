@@ -468,6 +468,14 @@ and it is named rather than glossed.
 
 ### What this response does not do
 
+> **One of the two gaps below has since been closed, and the claim is left as
+> written.** `tests/live/uninstall.php` now covers both retention settings
+> against a real database, and `bin/live-check.sh` runs it — so "no live
+> uninstall test" was true when this was written and is not true now. The
+> visual comparison of the corpus is still absent. Marked here rather than
+> edited out below, because a response that quietly corrects itself is not a
+> record.
+
 - **R4-08 is not fixed.** See above. The disclosure is accurate now; the scan
   still costs what it costs.
 - **No production-scale scan benchmark** was taken. The review noted its

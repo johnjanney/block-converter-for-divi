@@ -96,7 +96,43 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **The uninstall path has a test.** It is the one path in this plugin whose
+  whole job is to destroy things, and it was the only one with no coverage at
+  all — a gap two consecutive reviews named and the last response could not
+  close. `tests/live/uninstall.php` does what core's `uninstall_plugin()` does
+  minus the part that removes the files: define `WP_UNINSTALL_PLUGIN` and
+  include it, against a real database with real backups on real posts.
+  `wp plugin delete` is deliberately not used — wp-env maps the working tree in
+  as the plugin directory, so the obvious test would delete the repository it is
+  testing. Both settings are checked, in a process each, because "backups
+  survive by default" and "backups go when you asked for that" are two
+  different promises and only one of them is dangerous to get wrong: nineteen
+  assertions across the two, covering the backup, the backup date, the
+  builder-meta snapshot, the preference row, a stale conversion lock, another
+  plugin's meta and options, the converted page's own survival, and that the
+  file does nothing when included without the constant. `bin/live-check.sh`
+  runs both passes and fails on either.
+
+  Every assertion reads the database directly rather than through
+  `get_post_meta()`. `uninstall.php` deletes with raw `$wpdb`, which leaves the
+  object cache alone — correct, because the real request ends a moment later,
+  but it means a test written the ordinary way reports what its own process read
+  earlier. The first version did exactly that and passed against an
+  `uninstall.php` with the keep-the-backups branch deleted: every "survives"
+  assertion green while the rows were gone.
+
+### Changed
+
+- **`nanoid` 3.3.17 → 3.3.18** in `tests/js/package-lock.json`, clearing the
+  High Dependabot alert for the infinite loop in `customAlphabet` and
+  `customRandom` when they are handed a size of zero. Nothing here calls
+  `nanoid`; it arrives under `@wordpress/block-library` by way of `postcss`,
+  which asks for `^3.3.16`, so the patched release drops in without a
+  dependency range changing. Only the lockfile moves — the block-library pin
+  the golden snapshots were generated against is untouched. As with the
+  `extract-zip` upgrade in 2.10.0, none of this ships in the plugin ZIP.
 
 ---
 

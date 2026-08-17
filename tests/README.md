@@ -242,6 +242,16 @@ therefore cannot be checked offline:
   offline conversion. `wp_slash()`, KSES and MySQL all sit in that gap, and the
   worst defect this plugin ever shipped lived there.
 - **Restore byte-identity**, on every fixture.
+- **What deleting the plugin does to the data** — `uninstall.php` is the one
+  path here whose whole job is to destroy things, and both of its promises are
+  checked: backups survive by default, and backups go when the setting asked
+  for that. Under either setting another plugin's meta and options are
+  untouched and the converted page itself still exists. Included without
+  `WP_UNINSTALL_PLUGIN` the file must do nothing at all. Every assertion reads
+  the database directly, because `uninstall.php` deletes with raw `$wpdb` and
+  leaves the object cache holding rows that are gone. `wp plugin delete` is
+  deliberately not used: wp-env maps the working tree in as the plugin
+  directory, so the obvious test would delete this repository.
 - **Real block validation of stored content** — what comes back *out of the
   database* is fed to `js/validate.mjs`, not what the converter emitted.
 - **The write guard** — a save made from inside `pre_post_update`, which is the
