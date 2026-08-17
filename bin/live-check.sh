@@ -83,6 +83,26 @@ if ! npx wp-env run cli wp eval-file "${PLUGIN_PATH}/tests/live/run.php"; then
     exit 1
 fi
 
+# ---- What deleting the plugin does to the data it stored --------------------
+#
+# Two passes because uninstall.php declares a function at the top level, so
+# including it twice in one process is a redeclaration fatal — and because
+# WordPress runs it exactly once, in a process that then ends. One setting per
+# process is both the only way it works and the closer imitation.
+#
+# Deliberately not `wp plugin delete`: wp-env maps the working tree in as the
+# plugin directory, so the obvious test would delete this repository.
+
+echo
+echo "== Uninstall: what deleting the plugin does to the data =="
+for PHASE in keep delete; do
+    if ! npx wp-env run cli wp eval-file "${PLUGIN_PATH}/tests/live/uninstall.php" "$PHASE"; then
+        echo >&2
+        echo "error: the uninstall suite failed on the '${PHASE}' setting." >&2
+        exit 1
+    fi
+done
+
 # ---- Validate what the database actually holds -----------------------------
 
 STORED="tests/live/stored-output.json"
