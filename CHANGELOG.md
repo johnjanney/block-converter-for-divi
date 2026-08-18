@@ -134,6 +134,21 @@ gh release create "v${VERSION}" "dist/block-converter-for-divi-${VERSION}.zip" \
   the golden snapshots were generated against is untouched. As with the
   `extract-zip` upgrade in 2.10.0, none of this ships in the plugin ZIP.
 
+### Security
+
+- **The test workflow declares a read-only token.** `.github/workflows/tests.yml`
+  set no `permissions` at all, so each of its eight jobs inherited the
+  repository default — which for a repository created before GitHub changed that
+  default is write access to contents, issues and packages. CodeQL raised it
+  once per job. It is now `permissions: contents: read` at the top of the file,
+  covering every job: `actions/checkout` needs contents to clone and nothing
+  here pushes, tags, comments or reads a secret. `upload-artifact` and `cache`
+  are unaffected — they authenticate against the Actions runtime with a separate
+  credential. This matters more than the empty token would suggest, because
+  three of these jobs run `npm ci` and two pull containers, so the scope was
+  reachable from a dependency rather than only from this repository's code.
+  Nothing ships in the plugin ZIP.
+
 ---
 
 ## [2.10.0] — 2026-08-12

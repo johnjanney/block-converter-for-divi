@@ -11,6 +11,22 @@ on:
         type: boolean
         default: false
 
+# Read-only for the whole file. Without this a job inherits whatever the
+# repository default is, which for older repositories is write access to
+# contents, issues, packages and the rest — handed to every job, including the
+# ones that run third-party code from a lockfile. Nothing here pushes, tags or
+# comments; the only thing the token is used for is `actions/checkout` cloning
+# this repository, which needs contents: read and nothing else.
+#
+# upload-artifact and cache do not read this: they authenticate against the
+# Actions runtime with ACTIONS_RUNTIME_TOKEN, which is a separate credential.
+#
+# A job that later needs to write something should declare its own `permissions`
+# block rather than widening this one — that keeps the extra scope on the one
+# job that earns it.
+permissions:
+  contents: read
+
 # Third-party actions are pinned to commit SHAs, not to tags. A tag is a
 # mutable pointer: whoever controls the action repository can move v4 to a new
 # commit, and every workflow that trusts the tag runs that commit with this
